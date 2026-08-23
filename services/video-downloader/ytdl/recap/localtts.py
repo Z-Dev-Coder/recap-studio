@@ -29,6 +29,10 @@ _model_id = ""
 
 DEFAULT_MODEL = "openbmb/VoxCPM2"
 
+# Only a fallback: the real rate is read off the loaded model, because the
+# model decides it and a wrong header plays the narration at the wrong speed.
+SAMPLE_RATE = 24000
+
 
 class LocalTTSError(RuntimeError):
     """VoxCPM is missing or refused to speak, phrased for the person reading."""
@@ -200,21 +204,27 @@ def speak(
             kwargs["prompt_text"] = reference_text.strip()
 
     try:
-        result = model.generate(**kwargs)
+        audio = model.generate(**kwargs)
     except TypeError:
         # older signatures take the reference differently; retry plain rather
         # than failing the whole narration over a keyword name
-        result = model.generate(text=text)
+        audio = model.generate(text=text)
     except Exception as exc:      # noqa: BLE001
         raise LocalTTSError(f"VoxCPM could not speak that line: {exc}") from exc
 
-    audio, rate = result, 24000
-    if isinstance(result, tuple) and len(result) == 2:
-        first, second = result
-        # some builds return (audio, rate), others (rate, audio)
-        if isinstance(first, int):
-            rate, audio = first, second
-        else:
-            audio, rate = first, second
-    rate = int(getattr(model, "sample_rate", 0) or rate or 24000)
-    return _to_wav(audio, rate)
+    return _to_wav(audio, sample_rate(model))
+
+
+def sample_rate(model) -> int:
+    """
+    The rate the model actually produced, read from the model itself.
+
+    Guessing here is not harmless: writing a 24kHz header onto 16kHz samples
+    plays the narration fast and high, which sounds like a broken voice rather
+    than a wrong number.
+    """
+    for owner in (getattr(model, "tts_model", None), model):
+        rate = getattr(owner, "sample_rate", None)
+        if isinstance(rate, (int, float)) and rate > 1000:
+            return int(rate)
+    return SAMPLE_RATE
