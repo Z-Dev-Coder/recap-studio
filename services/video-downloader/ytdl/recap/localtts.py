@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import io
 import struct
+import sys
 import threading
+import types
 import wave
 from pathlib import Path
 
@@ -34,9 +36,9 @@ class LocalTTSError(RuntimeError):
 
 def available() -> bool:
     try:
-        import voxcpm  # noqa: F401
-        return True
-    except ImportError:
+        import importlib.util
+        return importlib.util.find_spec("voxcpm") is not None
+    except (ImportError, ValueError):
         return False
 
 
@@ -52,20 +54,73 @@ def install_hint() -> str:
     )
 
 
+_device_note = ""
+
+
 def device_note() -> str:
-    """What it will actually run on, so nobody is surprised by the speed."""
+    """
+    What it will actually run on, so nobody is surprised by the speed.
+
+    Memoised: importing torch takes seconds, and this is asked for on every
+    page load. Without the cache the whole UI waits on it.
+    """
+    global _device_note
+    if _device_note:
+        return _device_note
     try:
         import torch
     except ImportError:
-        return "PyTorch is not installed"
+        _device_note = "PyTorch is not installed"
+        return _device_note
     if torch.cuda.is_available():
         name = torch.cuda.get_device_name(0)
         gb = torch.cuda.get_device_properties(0).total_memory / 1e9
         note = f"{name} ({gb:.0f}GB)"
         if gb < 7.5:
             note += " -- below the 8GB VoxCPM asks for, so it may fall back to CPU"
-        return note
-    return "CPU only -- expect roughly 15-30 seconds per line"
+    else:
+        note = "CPU only -- expect roughly 15-30 seconds per line"
+    _device_note = note
+    return note
+
+
+def _stand_in_for_wetext() -> None:
+    """
+    Let VoxCPM import without wetext.
+
+    VoxCPM's text normaliser imports wetext, which drags in kaldifst -- a
+    package that publishes no wheel for this Python and cannot be built here
+    without a C++ toolchain. wetext is used in exactly one place, to expand
+    Chinese and English numbers into words. Burmese narration never needs it,
+    so rather than lose the whole engine over a number formatter, a
+    pass-through stands in.
+
+    The cost is that English narration will read "1990" as digits rather than
+    "nineteen ninety". Nothing else changes.
+    """
+    if "wetext" in sys.modules:
+        return
+    try:
+        import wetext  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    shim = types.ModuleType("wetext")
+
+    class Normalizer:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def normalize(self, text):
+            return text
+
+        def __call__(self, text):
+            return text
+
+    shim.Normalizer = Normalizer
+    shim.__doc__ = "pass-through stand-in installed by Recap Studio"
+    sys.modules["wetext"] = shim
 
 
 def load(model_id: str = DEFAULT_MODEL):
@@ -74,6 +129,7 @@ def load(model_id: str = DEFAULT_MODEL):
         raise LocalTTSError(install_hint())
     with _model_lock:
         if _model is None or _model_id != model_id:
+            _stand_in_for_wetext()
             from voxcpm import VoxCPM
             try:
                 _model = VoxCPM.from_pretrained(model_id)

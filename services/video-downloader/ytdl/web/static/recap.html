@@ -306,6 +306,55 @@
                 give up their seconds first, so the best of it is what remains.
               </div>
             </div>
+
+            <div class="card">
+              <h3>Look</h3>
+              <div class="row">
+                <div class="field" style="max-width:180px">
+                  <label class="f">Shape</label>
+                  <select id="shapeSel">
+                    <option value="">follow the format</option>
+                    <option value="reels">9:16 vertical</option>
+                    <option value="portrait">4:5 portrait</option>
+                    <option value="square">1:1 square</option>
+                  </select>
+                </div>
+                <div class="field" style="max-width:200px">
+                  <label class="f">Fitting</label>
+                  <select id="framingSel">
+                    <option value="blur">Blurred bars (keep it all)</option>
+                    <option value="crop">Crop to fill (lose the edges)</option>
+                  </select>
+                </div>
+              </div>
+              <label class="note" style="display:block;margin-top:14px">
+                <input type="checkbox" id="burnCaps"> Burn captions into the picture
+              </label>
+              <div class="row" id="capOpts" style="margin-top:10px">
+                <div class="field" style="max-width:170px">
+                  <label class="f">Caption style</label>
+                  <select id="capStyle">
+                    <option value="clean">Clean</option>
+                    <option value="boxed">Boxed</option>
+                    <option value="bold-yellow">Bold yellow</option>
+                    <option value="neon">Neon</option>
+                  </select>
+                </div>
+                <div class="field" style="max-width:170px">
+                  <label class="f">Caption language</label>
+                  <select id="capLang">
+                    <option value="">same as narration</option>
+                    <option value="my">&#4119;&#4156;&#4116;&#4121;&#4140; Burmese</option>
+                    <option value="en">English</option>
+                  </select>
+                </div>
+              </div>
+              <div class="tiny" style="margin-top:8px">
+                Any change here needs the cut rebuilding. Burmese burns in
+                correctly &mdash; the subtitle renderer shapes Myanmar script
+                properly, unlike the thumbnail overlay.
+              </div>
+            </div>
           </section>
 
           <section data-panel="script" class="hide">
@@ -315,6 +364,11 @@
                 <span class="saved" id="beatsSaved">Saved</span>
                 <span class="note" id="scriptNote"></span>
                 <button class="sm" id="regenScript">Regenerate</button>
+              </div>
+              <div id="hookBox" class="hide"
+                   style="background:var(--accent-soft);border-radius:var(--r-sm);padding:11px 13px;margin-bottom:12px">
+                <div class="tiny" style="margin-bottom:3px">Opening hook &mdash; the line that stops the scroll</div>
+                <div id="hookText" style="font-weight:600"></div>
               </div>
               <div class="scroll" id="beatRows"></div>
               <div class="row" style="margin-top:14px">
@@ -374,6 +428,13 @@
                 <div id="voiceReason" class="tiny" style="margin-bottom:10px"></div>
 
                 <div class="row">
+                  <div class="field" style="max-width:190px">
+                    <label class="f">Engine</label>
+                    <select id="voiceEngine">
+                      <option value="gemini">Gemini (cloud)</option>
+                      <option value="voxcpm">VoxCPM (local, no quota)</option>
+                    </select>
+                  </div>
                   <div class="field" style="max-width:150px">
                     <label class="f">Narrate in</label>
                     <select id="voiceLang">
@@ -752,6 +813,7 @@ function renderProject() {
   $('projMeta').textContent =
     `${fmt(p.duration)} · ${p.mode === 'reels' ? 'Short / Reel' : 'Long form'}` +
     (p.uploader ? ' · ' + p.uploader : '') +
+    (p.video_type ? ` · ${p.video_type}${p.pacing ? ', ' + p.pacing + ' paced' : ''}` : '') +
     (p.coverage ? ` · script spans ${Math.round(p.coverage * 100)}%` : '');
 
   $('steps').innerHTML = Object.entries(p.steps || {}).map(([name, s]) => `
@@ -779,6 +841,17 @@ function renderProject() {
   $('lenMin').textContent = fmt(floor);
   $('lenMax').textContent = fmt(full) + ' (full)';
   paintLength();
+  if (document.activeElement !== $('shapeSel')) $('shapeSel').value = p.shape || '';
+  if (document.activeElement !== $('framingSel')) $('framingSel').value = p.framing || 'blur';
+  $('burnCaps').checked = !!p.burn_captions;
+  $('capStyle').value = p.caption_style || 'clean';
+  $('capLang').value = p.caption_lang || '';
+  $('capOpts').classList.toggle('hide', !p.burn_captions);
+
+  const hook = (p.hook || {})[lang] || '';
+  $('hookBox').classList.toggle('hide', !hook);
+  $('hookText').textContent = hook;
+
   $('videoNote').textContent = p.timeline && p.timeline.length
     ? `${p.timeline.length} clips · ${fmt(p.timeline[p.timeline.length - 1].recap_end)}`
     : 'not built yet';
@@ -834,6 +907,9 @@ function renderVoice(p) {
 
   if (document.activeElement !== $('voiceStyle')) $('voiceStyle').value = p.voice_style || '';
   $('voiceLang').value = p.voice_lang || 'my';
+  $('voiceEngine').value = p.voice_engine || 'gemini';
+  // the voice list only means anything for the cloud engine
+  $('voiceList').classList.toggle('hide', p.voice_engine === 'voxcpm');
   $('voiceReason').textContent = p.voice_reason || '';
   if (document.activeElement !== $('origVolSlider')) {
     $('origVolSlider').value = Math.round((p.original_volume == null ? 0.25 : p.original_volume) * 100);
@@ -975,6 +1051,12 @@ $('lineFile').onchange = async () => {
   reader.readAsDataURL(file);
 };
 
+$('voiceEngine').onchange = async () => {
+  const p = current(); if (!p) return;
+  try { upsert(await patch(`/api/recap/projects/${p.id}`, { voice_engine: $('voiceEngine').value })); }
+  catch (e) { showError($('stepErr'), e.message); }
+};
+
 $('voiceLang').onchange = async () => {
   const p = current(); if (!p) return;
   try {
@@ -1027,6 +1109,20 @@ function paintLength() {
   $('lenPct').textContent = secs >= full ? 'the whole video, uncut'
                                          : Math.round((secs / full) * 100) + '% of ' + fmt(full);
 }
+const saveLook = () => {
+  const p = current(); if (!p) return;
+  $('capOpts').classList.toggle('hide', !$('burnCaps').checked);
+  patch(`/api/recap/projects/${p.id}`, {
+    shape: $('shapeSel').value,
+    framing: $('framingSel').value,
+    burn_captions: $('burnCaps').checked,
+    caption_style: $('capStyle').value,
+    caption_lang: $('capLang').value
+  }).then(upsert).catch(e => showError($('stepErr'), e.message));
+};
+['shapeSel', 'framingSel', 'burnCaps', 'capStyle', 'capLang']
+  .forEach(id => { $(id).onchange = saveLook; });
+
 $('lenSlider').oninput = paintLength;
 $('lenFull').onclick = () => { $('lenSlider').value = $('lenSlider').max; paintLength(); };
 $('applyLen').onclick = async () => {
@@ -1283,8 +1379,12 @@ function listen() {
       $('geminiModel').innerHTML =
         `<option value="">choose automatically</option><option selected>${escapeHtml(settings.gemini_model)}</option>`;
     }
-    try { state.voices = (await request('/api/recap/voices')).voices || []; } catch (e) {}
     state.projects = await request('/api/recap/projects');
+    // the voice catalogue can be slow the first time (the local engine reports
+    // its device), so the project list must not wait behind it
+    request('/api/recap/voices')
+      .then(d => { state.voices = d.voices || []; if (current()) renderVoice(current()); })
+      .catch(() => {});
     renderList();
     renderProject();
     listen();
