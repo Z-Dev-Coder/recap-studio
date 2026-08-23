@@ -464,7 +464,12 @@
               <div class="row" style="margin-bottom:12px">
                 <h3 class="grow" style="margin:0">Original transcript</h3>
                 <span class="note" id="transcriptNote"></span>
-                <button class="sm" id="dlTranscript">Download SRT</button>
+                <select id="transcriptSrtLang" style="max-width:190px">
+                  <option value="">SRT &middot; as captured</option>
+                  <option value="my">SRT &middot; &#4119;&#4156;&#4116;&#4121;&#4140; Burmese</option>
+                  <option value="en">SRT &middot; English</option>
+                </select>
+                <button class="sm" id="dlTranscript">Download</button>
               </div>
               <textarea id="transcriptField" rows="18" readonly></textarea>
             </div>
@@ -476,6 +481,7 @@
 </div>
 
 <input type="file" id="lineFile" accept="audio/*" class="hide">
+<input type="file" id="videoFile" accept="video/*" class="hide">
 
 <div class="veil hide" id="newVeil">
   <div class="modal">
@@ -485,6 +491,12 @@
     </p>
     <label class="f">Video URL</label>
     <input type="text" id="url" placeholder="https://..." spellcheck="false">
+    <div class="row" style="margin-top:10px">
+      <span class="tiny">or use a video already on this PC</span>
+      <div class="grow"></div>
+      <button class="sm" id="pickFile">Choose file...</button>
+    </div>
+    <div class="tiny" id="pickedFile" style="margin-top:6px"></div>
     <div class="row" style="margin-top:14px">
       <div>
         <label class="f">Format</label>
@@ -565,7 +577,8 @@ const post  = (path, body) => request(path, { method: 'POST',  headers: { 'Conte
 const patch = (path, body) => request(path, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
 
 const state = { projects: [], current: null, mode: 'reels', lang: 'en', wsLang: 'en',
-                frame: null, tab: 'cut', env: {}, voices: [], lines: [], uploadFor: null, audio: null };
+                frame: null, tab: 'cut', env: {}, voices: [], lines: [], uploadFor: null,
+                audio: null, pickedFile: '' };
 
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g,
@@ -653,16 +666,21 @@ $('wsLangSeg').onclick = e => {
 $('create').onclick = async () => {
   const url = $('url').value.trim();
   showError($('createErr'), '');
-  if (!url) return showError($('createErr'), 'Paste a video link first.');
+  if (!url && !state.pickedFile) {
+    return showError($('createErr'), 'Paste a video link, or choose a file.');
+  }
   $('create').disabled = true;
   try {
     const p = await post('/api/recap/projects', {
-      url, mode: state.mode, language: state.lang, autorun: true
+      url, source_file: state.pickedFile || '',
+      mode: state.mode, language: state.lang, autorun: true
     });
     state.current = p.id;
     state.wsLang = state.lang;
     [...$('wsLangSeg').children].forEach(x => x.classList.toggle('on', x.dataset.lang === state.lang));
     $('url').value = '';
+    state.pickedFile = '';
+    $('pickedFile').textContent = '';
     shutModal('newVeil');
     upsert(p);
   } catch (e) { showError($('createErr'), e.message); }
@@ -922,6 +940,24 @@ $('runAll').onclick = async () => {
 $('origVolSlider').oninput = paintMix;
 $('narrVolSlider').oninput = paintMix;
 
+$('pickFile').onclick = () => { $('videoFile').value = ''; $('videoFile').click(); };
+$('videoFile').onchange = () => {
+  const f = $('videoFile').files[0];
+  if (!f) return;
+  // Electron exposes the real path; a plain browser does not, and the server
+  // needs a path it can open rather than the bytes.
+  const path = f.path || '';
+  if (!path) {
+    showError($('createErr'),
+      'This browser will not reveal the file path. Open Recap Studio inside ' +
+      'Toolbox to pick a local file, or paste a URL instead.');
+    return;
+  }
+  state.pickedFile = path;
+  $('pickedFile').textContent = 'Using: ' + f.name;
+  showError($('createErr'), '');
+};
+
 $('lineFile').onchange = async () => {
   const p = current();
   const file = $('lineFile').files[0];
@@ -1101,9 +1137,27 @@ $('dlSrtSource').onclick = () => {
   const p = current(); if (!p) return;
   dl(`/api/recap/projects/${p.id}/srt?lang=${state.wsLang}&timing=original`, `recap_${state.wsLang}_original.srt`);
 };
-$('dlTranscript').onclick = () => {
+$('dlTranscript').onclick = async () => {
   const p = current(); if (!p) return;
-  dl(`/api/recap/projects/${p.id}/file?name=transcript.srt`, 'transcript.srt');
+  const lang = $('transcriptSrtLang').value;
+  const btn = $('dlTranscript');
+  if (!lang) {
+    dl(`/api/recap/projects/${p.id}/transcript.srt`, 'transcript.srt');
+    return;
+  }
+  // translating a whole transcript takes a moment, so say so rather than
+  // looking like nothing happened
+  btn.disabled = true;
+  btn.textContent = 'Translating...';
+  try {
+    const res = await fetch(`/api/recap/projects/${p.id}/transcript.srt?lang=${lang}`);
+    if (!res.ok) throw new Error((await res.json()).detail || 'translation failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    dl(url, `transcript_${lang}.srt`);
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  } catch (e) { showError($('stepErr'), e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Download'; }
 };
 
 /* ------------------------------------------------------------ thumbnail

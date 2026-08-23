@@ -382,6 +382,72 @@ def expand_burmese(client: Gemini, beats: list[Beat], title: str = "") -> int:
     return fixed
 
 
+# --------------------------------------------------------------- subtitles
+
+_TRANSLATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "lines": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "index": {"type": "integer"},
+                    "text": {"type": "string"},
+                },
+                "required": ["index", "text"],
+            },
+        }
+    },
+    "required": ["lines"],
+}
+
+
+def translate_cues(
+    client: Gemini,
+    cues: list[Cue],
+    target: str = "my",
+    batch: int = 60,
+) -> list[str]:
+    """
+    Translate a transcript line by line, keeping the line count intact.
+
+    Subtitles are translated in batches with their indexes attached rather than
+    as one blob, because a translation that merges or splits lines no longer
+    lines up with the timings it has to be shown against. Anything the model
+    drops keeps its original text instead of leaving a gap.
+    """
+    language = LANGUAGES.get(target, target)
+    out = [c.text for c in cues]
+
+    for start in range(0, len(cues), batch):
+        chunk = cues[start:start + batch]
+        listing = "\n".join(
+            "{}: {}".format(start + i, c.text) for i, c in enumerate(chunk)
+        )
+        prompt = (
+            "Translate these subtitle lines into " + language + ".\n\n"
+            + listing
+            + "\n\nReturn one object per line with the SAME index. Translate "
+            "every line, keep them separate, and keep each one about as long "
+            "as the original so it still fits the time it is on screen. "
+            "Natural spoken phrasing, not a literal word-for-word rendering."
+        )
+        try:
+            data = client.generate_json(prompt, _TRANSLATE_SCHEMA, temperature=0.3)
+        except GeminiError:
+            continue        # this batch keeps the original text
+        for item in data.get("lines") or []:
+            try:
+                i = int(item.get("index", -1))
+            except (TypeError, ValueError):
+                continue
+            text = (item.get("text") or "").strip()
+            if text and 0 <= i < len(out):
+                out[i] = text
+    return out
+
+
 # ------------------------------------------------------------------ entry
 
 def generate(

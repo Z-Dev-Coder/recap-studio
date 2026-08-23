@@ -44,6 +44,7 @@ class Project:
     id: str
     dir: Path
     url: str = ""
+    source_file: str = ""         # a video the user supplied instead of a link
     title: str = ""
     uploader: str = ""
     duration: float = 0.0
@@ -132,6 +133,7 @@ class Project:
             "id": self.id,
             "dir": str(self.dir),
             "url": self.url,
+            "source_file": self.source_file,
             "title": self.title,
             "uploader": self.uploader,
             "duration": self.duration,
@@ -205,6 +207,7 @@ class Project:
             id=data.get("id") or folder.name,
             dir=folder,
             url=data.get("url", ""),
+            source_file=data.get("source_file", ""),
             title=data.get("title", ""),
             uploader=data.get("uploader", ""),
             duration=float(data.get("duration") or 0),

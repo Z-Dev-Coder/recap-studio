@@ -28,7 +28,8 @@ from ..recap.media import Cancelled, MediaError, have_ffmpeg, to_wav
 from ..recap.project import STEPS, Store
 from ..recap.scrape import available as playwright_available
 from ..recap.scrape import install_hint as playwright_hint
-from ..recap.transcript import whisper_available
+from ..recap import script as script_mod
+from ..recap.transcript import Cue, to_srt, whisper_available
 from ..recap import localtts as localtts_mod
 from ..recap import tts as tts_mod
 from ..recap.video import recap_srt, source_srt
@@ -230,7 +231,8 @@ def run_chain(pid: str, steps: list[str], options: dict) -> None:
 # ------------------------------------------------------------------ models
 
 class CreateRequest(BaseModel):
-    url: str
+    url: str = ""
+    source_file: str = ""      # a path on this machine, instead of a link
     mode: str = "reels"
     language: str = "en"
     target_seconds: float = 0.0
@@ -399,10 +401,17 @@ def projects() -> list[dict]:
 @router.post("/projects")
 def create(req: CreateRequest) -> dict:
     url = req.url.strip()
-    if not url:
-        raise HTTPException(400, "a video URL is required")
+    source_file = req.source_file.strip()
+    if not url and not source_file:
+        raise HTTPException(400, "give a video URL or pick a file")
+    if source_file and not Path(source_file).exists():
+        raise HTTPException(400, f"no such file: {source_file}")
 
-    project = store.create(url)
+    project = store.create(url or Path(source_file).stem)
+    if source_file:
+        project.source_file = source_file
+        project.title = Path(source_file).stem
+        project.url = ""
     project.mode = req.mode if req.mode in ("reels", "long") else "reels"
     project.language = req.language if req.language in ("en", "my") else "en"
     project.target_seconds = max(0.0, float(req.target_seconds or 0))
@@ -675,6 +684,54 @@ def voice_lines(pid: str, lang: str = "") -> dict:
             "file": mine.name if has_custom else (generated.name if generated.exists() else ""),
         })
     return {"lang": lang, "lines": rows}
+
+
+@router.get("/projects/{pid}/transcript.srt")
+def transcript_srt(pid: str, lang: str = "") -> PlainTextResponse:
+    """
+    The original transcript as SRT, optionally translated.
+
+    Without `lang` this is the transcript exactly as captured. With one, the
+    lines are translated but keep their original timings, so the file still
+    matches the source video frame for frame.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    if not project.transcript:
+        raise HTTPException(400, "there is no transcript yet")
+
+    cues = [Cue(**c) for c in project.transcript]
+    name = "transcript.srt"
+
+    if lang and lang != (project.transcript_language or "").split("-")[0]:
+        settings = load_settings()
+        key = settings.get("gemini_key", "")
+        if not key:
+            raise HTTPException(400, "a Gemini API key is needed to translate")
+        model = settings.get("gemini_model", "") or _auto_model(key)
+
+        cached = project.dir / f"transcript_{lang}.srt"
+        if cached.exists():
+            return PlainTextResponse(
+                cached.read_text(encoding="utf-8"),
+                headers={"Content-Disposition": f'attachment; filename="transcript_{lang}.srt"'},
+                media_type="application/x-subrip",
+            )
+        try:
+            texts = script_mod.translate_cues(Gemini(key, model), cues, lang)
+        except GeminiError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        for cue, text in zip(cues, texts):
+            cue.text = text
+        name = f"transcript_{lang}.srt"
+        cached.write_text(to_srt(cues), encoding="utf-8")
+
+    return PlainTextResponse(
+        to_srt(cues),
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+        media_type="application/x-subrip",
+    )
 
 
 @router.get("/projects/{pid}/srt")

@@ -47,9 +47,16 @@ def run_source(project: Project, cookies_browser: str = "", quality: str = "1080
     """
     Fetch the original video and its metadata.
 
+    A project can start from a file on disk instead of a link, in which case
+    there is nothing to download -- the file is copied in and probed for the
+    duration the rest of the pipeline needs.
+
     yt-dlp has no stop method, so a cancel is delivered by raising out of the
     progress hook it calls on every chunk.
     """
+    if project.source_file:
+        return _adopt_local_file(project)
+
     import yt_dlp
 
     from ..downloader import _js_runtimes
@@ -110,6 +117,31 @@ def run_source(project: Project, cookies_browser: str = "", quality: str = "1080
     project.save()
 
 
+def _adopt_local_file(project: Project) -> None:
+    """Take a video the user already has and treat it as the source."""
+    import shutil
+
+    origin = Path(project.source_file)
+    if not origin.exists():
+        raise StepError(f"that file is no longer there: {origin}")
+    if not have_ffmpeg():
+        raise StepError("ffmpeg was not found on PATH")
+
+    dest = project.source_path
+    if not dest.exists() or dest.stat().st_size != origin.stat().st_size:
+        # copied rather than referenced: the project folder has to stay
+        # self-contained, and the original must not be touched
+        shutil.copy2(origin, dest)
+
+    info = probe(dest)
+    if info.duration <= 0:
+        raise StepError("ffmpeg could not read a duration from that file")
+    project.duration = info.duration
+    if not project.title:
+        project.title = origin.stem
+    project.save()
+
+
 # -------------------------------------------------------------- 2. transcript
 
 def run_transcript(project: Project, cookies_browser: str = "", whisper_model: str = "small", cancel=None) -> None:
@@ -117,7 +149,7 @@ def run_transcript(project: Project, cookies_browser: str = "", whisper_model: s
     cues: list[Cue] = []
     language = ""
 
-    if project.url:
+    if project.url and not project.source_file:
         try:
             cues, language = from_platform(project.url, cookies_browser)
         except Exception:      # noqa: BLE001 - fall through to transcription
