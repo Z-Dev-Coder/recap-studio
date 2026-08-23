@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: blob: file:; media-src 'self' blob: file:;
+               style-src 'self' 'unsafe-inline'; script-src 'self'" />
+<title>Screen Recorder</title>
+<link rel="stylesheet" href="../../renderer/base.css" />
+<link rel="stylesheet" href="module.css" />
+</head>
+<body class="module-body">
+
+<div class="seg-bar">
+  <div class="seg">
+    <button class="nav-item active" data-tab="record">Record</button>
+    <button class="nav-item" data-tab="library">Library</button>
+    <button class="nav-item" data-tab="settings">Settings</button>
+  </div>
+  <div class="seg-right">
+    <span class="hk-hint"><b id="hkStart">F9</b> start / stop</span>
+    <span class="hk-hint"><b id="hkPause">F10</b> pause</span>
+    <span class="hk-hint"><b id="hkShot">F11</b> shot</span>
+    <span class="hk-hint"><b id="hkCam">F8</b> camera</span>
+    <span id="ffmpegBadge" class="badge warn hidden">ffmpeg missing</span>
+  </div>
+</div>
+
+<div class="module-scroll">
+
+  <!-- ================= RECORD ================= -->
+  <section class="tab active" id="tab-record">
+    <div class="mode-grid">
+      <button class="mode-card active" data-mode="fullscreen">
+        <div class="mode-ic">&#9633;</div>
+        <div class="mode-t">Full screen</div>
+        <div class="mode-d">Capture an entire display</div>
+      </button>
+      <button class="mode-card" data-mode="region">
+        <div class="mode-ic">&#9744;</div>
+        <div class="mode-t">Region</div>
+        <div class="mode-d">Drag a custom area</div>
+      </button>
+      <button class="mode-card" data-mode="window">
+        <div class="mode-ic">&#9707;</div>
+        <div class="mode-t">Window</div>
+        <div class="mode-d">A single app window</div>
+      </button>
+      <button class="mode-card" data-mode="webcam">
+        <div class="mode-ic">&#9673;</div>
+        <div class="mode-t">Webcam</div>
+        <div class="mode-d">Camera only</div>
+      </button>
+      <button class="mode-card" data-mode="audio">
+        <div class="mode-ic">&#9834;</div>
+        <div class="mode-t">Audio only</div>
+        <div class="mode-d">Mic and / or system sound</div>
+      </button>
+      <button class="mode-card" data-mode="screenshot">
+        <div class="mode-ic">&#9986;</div>
+        <div class="mode-t">Screenshot</div>
+        <div class="mode-d">Grab a still image</div>
+      </button>
+    </div>
+
+    <div class="panel-row">
+      <div class="card grow">
+        <div class="card-head">
+          <h3 id="pickerTitle">Choose a display</h3>
+          <button class="ghost small" id="refreshSources">Refresh</button>
+        </div>
+        <div class="source-list" id="sourceList"></div>
+        <div class="region-info hidden" id="regionInfo">
+          <span id="regionText">No region selected</span>
+          <button class="ghost small" id="pickRegion">Select area</button>
+        </div>
+      </div>
+
+      <div class="card side">
+        <div class="card-head"><h3>Inputs</h3></div>
+
+        <label class="toggle">
+          <input type="checkbox" id="tMic" /><span class="tk"></span><span class="tl">Microphone</span>
+        </label>
+        <select id="micDevice" class="select mini"></select>
+        <div class="meter"><div class="meter-fill" id="micMeter"></div></div>
+
+        <label class="toggle">
+          <input type="checkbox" id="tSys" /><span class="tk"></span><span class="tl">System sound</span>
+        </label>
+
+        <label class="toggle">
+          <input type="checkbox" id="tCam" /><span class="tk"></span><span class="tl">Webcam overlay</span>
+        </label>
+        <select id="camDevice" class="select mini"></select>
+
+        <div class="preview-wrap"><video id="camPreview" muted autoplay playsinline></video></div>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <div class="ab-left">
+        <span class="chip" id="chipFormat">MP4</span>
+        <span class="chip" id="chipQuality">High</span>
+        <span class="chip" id="chipFps">30 fps</span>
+      </div>
+      <button class="record-btn" id="recordBtn">
+        <span class="rb-dot"></span><span id="recordLabel">Start recording</span>
+      </button>
+      <div class="ab-right"><span class="timer" id="timer">00:00:00</span></div>
+    </div>
+
+    <div class="status" id="status"></div>
+  </section>
+
+  <!-- ================= LIBRARY ================= -->
+  <section class="tab" id="tab-library">
+    <div class="lib-actions">
+      <span class="muted small" id="libPath"></span>
+      <span style="flex:1"></span>
+      <button class="ghost small" id="libRefresh">Refresh</button>
+      <button class="ghost small" id="libFolder">Open folder</button>
+    </div>
+    <div class="lib-grid" id="libGrid"></div>
+  </section>
+
+  <!-- ================= SETTINGS ================= -->
+  <section class="tab" id="tab-settings">
+    <div class="card">
+      <div class="card-head"><h3>Output</h3></div>
+      <div class="field">
+        <label>Save to</label>
+        <div class="row">
+          <input class="input" id="sOutDir" readonly />
+          <button class="ghost small" id="sPickDir">Change</button>
+        </div>
+      </div>
+      <div class="grid3">
+        <div class="field">
+          <label>Format</label>
+          <select class="select" id="sFormat">
+            <option value="mp4">MP4 (H.264)</option>
+            <option value="webm">WebM (no conversion)</option>
+            <option value="gif">Animated GIF</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Quality</label>
+          <select class="select" id="sQuality">
+            <option value="low">Low - small file</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="lossless">Near lossless</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Frame rate</label>
+          <select class="select" id="sFps">
+            <option value="15">15 fps</option>
+            <option value="24">24 fps</option>
+            <option value="30">30 fps</option>
+            <option value="60">60 fps</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Recording</h3></div>
+      <div class="grid3">
+        <div class="field">
+          <label>Countdown</label>
+          <select class="select" id="sCountdown">
+            <option value="0">Off</option>
+            <option value="3">3 seconds</option>
+            <option value="5">5 seconds</option>
+            <option value="10">10 seconds</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Auto stop after</label>
+          <select class="select" id="sAutoStop">
+            <option value="0">Never</option>
+            <option value="5">5 minutes</option>
+            <option value="15">15 minutes</option>
+            <option value="30">30 minutes</option>
+            <option value="60">60 minutes</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Webcam size</label>
+          <select class="select" id="sCamSize">
+            <option value="160">Small</option>
+            <option value="220">Medium</option>
+            <option value="320">Large</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid3">
+        <div class="field">
+          <label>Webcam corner</label>
+          <select class="select" id="sCamPos">
+            <option value="bottom-right">Bottom right</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="top-right">Top right</option>
+            <option value="top-left">Top left</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Main window</label>
+          <select class="select" id="sMinimize">
+            <option value="true">Minimize while recording</option>
+            <option value="false">Keep visible</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Hotkeys</h3></div>
+      <div class="grid3">
+        <div class="field">
+          <label>Start / stop</label>
+          <input class="input hk" id="sHkStart" readonly placeholder="Click, then press keys" />
+        </div>
+        <div class="field">
+          <label>Pause / resume</label>
+          <input class="input hk" id="sHkPause" readonly placeholder="Click, then press keys" />
+        </div>
+        <div class="field">
+          <label>Screenshot</label>
+          <input class="input hk" id="sHkShot" readonly placeholder="Click, then press keys" />
+        </div>
+        <div class="field">
+          <label>Hide / show camera</label>
+          <input class="input hk" id="sHkCam" readonly placeholder="Click, then press keys" />
+        </div>
+      </div>
+      <p class="muted small">Hotkeys are global - they work even when Toolbox is minimised.</p>
+    </div>
+  </section>
+
+</div>
+
+<div class="countdown hidden" id="countdown"><span id="countdownNum">3</span></div>
+
+<script src="module.js"></script>
+</body>
+</html>

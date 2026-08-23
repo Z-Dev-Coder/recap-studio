@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Camera</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:transparent;user-select:none;
+    font:12px "Segoe UI",system-ui,sans-serif;color:#fff}
+
+  /* the whole bubble is the drag handle -- grab your face and move it */
+  #bubble{position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden;
+    background:#0d1017;box-shadow:0 14px 40px rgba(0,0,0,.55);
+    border:3px solid rgba(255,255,255,.14);-webkit-app-region:drag}
+  #bubble.square{border-radius:20px}
+  video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
+
+  #msg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    text-align:center;padding:14px;color:#9aa6b8;line-height:1.45}
+  #msg.on{display:flex}
+
+  /* controls appear on hover so the bubble stays clean on screen */
+  #bar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:6px;justify-content:center;
+    padding:8px 0 10px;opacity:0;transition:opacity .15s;
+    background:linear-gradient(to top,rgba(8,10,14,.85),transparent);-webkit-app-region:no-drag}
+  #bubble:hover #bar{opacity:1}
+  .btn{width:26px;height:26px;border:0;border-radius:50%;cursor:pointer;
+    background:rgba(255,255,255,.16);color:#fff;font-size:13px;line-height:1;
+    display:flex;align-items:center;justify-content:center}
+  .btn:hover{background:rgba(255,255,255,.3)}
+
+  /* native resize lives on the window edges; this grip just advertises it */
+  #grip{position:absolute;right:6px;bottom:6px;width:16px;height:16px;opacity:0;
+    transition:opacity .15s;pointer-events:none}
+  #bubble:hover #grip{opacity:.5}
+  #grip i{position:absolute;right:0;background:#fff;border-radius:1px;display:block}
+  #grip i:nth-child(1){bottom:0;width:14px;height:2px}
+  #grip i:nth-child(2){bottom:4px;width:9px;height:2px}
+  #grip i:nth-child(3){bottom:8px;width:4px;height:2px}
+</style>
+</head>
+<body>
+  <div id="bubble">
+    <video id="v" autoplay playsinline muted></video>
+    <div id="msg"></div>
+    <div id="bar">
+      <button class="btn" id="shape" title="Round / square">&#9679;</button>
+      <button class="btn" id="hide" title="Hide while recording">&#8211;</button>
+    </div>
+    <div id="grip"><i></i><i></i><i></i></div>
+  </div>
+<script src="cam.js"></script>
+</body>
+</html>

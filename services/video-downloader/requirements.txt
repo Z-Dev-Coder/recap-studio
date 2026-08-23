@@ -1,0 +1,15 @@
+# curl-cffi supplies the browser impersonation yt-dlp asks for on some
+# YouTube formats; without it those downloads fail with a TLS-fingerprint
+# error rather than anything descriptive.
+yt-dlp[default,curl-cffi]
+
+# Web UI (ytdl-ui.cmd). Kept in the same venv as the downloader so there is
+# one environment to set up, not two.
+fastapi
+uvicorn[standard]
+
+# Recap Studio
+requests          # Gemini REST calls
+Pillow            # thumbnail frame scoring
+playwright        # optional: reads the source page for recap context
+faster-whisper    # optional: transcribes videos that have no captions

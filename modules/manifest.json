@@ -1,0 +1,41 @@
+{
+  "comment": "Add a tool by dropping a folder in modules/ and adding an entry here. type 'page' loads entry in the module frame; type 'service-web' starts a local service and loads its URL.",
+  "modules": [
+    {
+      "id": "screen-recorder",
+      "name": "Screen Recorder",
+      "tagline": "Record your screen, webcam or audio",
+      "icon": "\u25cf",
+      "accent": "#ff4d5e",
+      "type": "page",
+      "entry": "modules/screen-recorder/index.html",
+      "enabled": true
+    },
+    {
+      "id": "youtube-downloader",
+      "name": "Video Downloader",
+      "tagline": "YouTube, Facebook, TikTok, Instagram and 1000+ sites",
+      "icon": "\u2913",
+      "accent": "#4c8dff",
+      "type": "service-web",
+      "service": "ytdl",
+      "enabled": true
+    }
+  ],
+  "services": {
+    "ytdl": {
+      "name": "Video Downloader service",
+      "projectRoot": "services/video-downloader",
+      "python": "venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "ytdl.web",
+        "-p",
+        "{port}",
+        "-n"
+      ],
+      "healthPath": "/api/config",
+      "setupHint": "Run setup.cmd in D:\\toolbox\\services\\video-downloader once to create the venv."
+    }
+  }
+}

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: blob: file:; media-src 'self' blob: file:;
+               style-src 'self' 'unsafe-inline'; script-src 'self';
+               frame-src 'self' file: http://127.0.0.1:* http://localhost:*" />
+<title>Toolbox</title>
+<link rel="stylesheet" href="base.css" />
+<link rel="stylesheet" href="shell.css" />
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-dot"></div>
+      <div>
+        <div class="brand-name">Toolbox</div>
+        <div class="brand-sub">personal tools</div>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <button class="nav-item active" data-view="dashboard"><span class="ic">&#9635;</span> Dashboard</button>
+      <div class="nav-sep">Tools</div>
+      <div id="navModules"></div>
+    </nav>
+
+    <div class="side-foot">
+      <div id="svcDots"></div>
+      <div class="ver" id="ver"></div>
+    </div>
+  </aside>
+
+  <main class="shell-main">
+
+    <!-- ============ dashboard ============ -->
+    <section class="view active" id="view-dashboard">
+      <header class="page-head">
+        <h1 id="greeting">Welcome back</h1>
+        <p class="muted">Pick a tool, or jump straight back into something recent.</p>
+      </header>
+
+      <div class="tool-grid" id="toolGrid"></div>
+
+      <div class="dash-cols">
+        <div class="card grow">
+          <div class="card-head">
+            <h3>Recent recordings</h3>
+            <button class="ghost small" data-folder="recordings">Open folder</button>
+          </div>
+          <div class="recent" id="recentRecordings"></div>
+        </div>
+        <div class="card grow">
+          <div class="card-head">
+            <h3>Recent downloads</h3>
+            <button class="ghost small" data-folder="downloads">Open folder</button>
+          </div>
+          <div class="recent" id="recentDownloads"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ module host ============ -->
+    <section class="view" id="view-module">
+      <div class="module-bar">
+        <button class="ghost small" id="backHome">&#8592; Dashboard</button>
+        <span class="module-title" id="moduleTitle"></span>
+        <span class="module-state" id="moduleState"></span>
+        <span class="spacer"></span>
+        <button class="ghost small" id="moduleReload">Reload</button>
+      </div>
+      <div class="module-host">
+        <div class="loader hidden" id="moduleLoader"><div class="spin"></div><span id="loaderText">Starting...</span></div>
+        <div class="module-error hidden" id="moduleError"></div>
+        <!-- "camera *" not "camera": a bare feature name delegates to 'src', and a
+             file:// module frame has an opaque origin that 'src' never matches, so the
+             recorder would be refused the mic and camera before Electron is asked. -->
+        <iframe id="moduleFrame" allow="camera *; microphone *; display-capture *; autoplay *" src="about:blank"></iframe>
+      </div>
+    </section>
+
+  </main>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>

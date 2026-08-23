@@ -1,0 +1,22 @@
+# build output
+dist/
+node_modules/
+
+# the bundled Python service brings its own environment and model cache
+services/video-downloader/venv/
+services/video-downloader/downloads/
+**/__pycache__/
+*.pyc
+
+# secrets and per-machine state -- the Gemini key lives here
+settings.json
+services/video-downloader/**/settings.json
+
+# media and generated projects
+*.mp4
+*.webm
+*.mkv
+*.wav
+*.mp3
+*.m4a
+RecapStudio/
