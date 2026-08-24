@@ -31,9 +31,7 @@
       "!services/video-downloader/venv/Lib/site-packages/librosa/**",
       "!services/video-downloader/venv/Lib/site-packages/sklearn/**",
       "!services/video-downloader/venv/Lib/site-packages/scipy/**",
-      "!services/video-downloader/venv/Lib/site-packages/datasets/**",
-      "!services/video-downloader/venv/Lib/site-packages/tokenizers/**",
-      "!services/video-downloader/venv/Lib/site-packages/safetensors/**"
+      "!services/video-downloader/venv/Lib/site-packages/datasets/**"
     ],
     "win": {
       "target": [
