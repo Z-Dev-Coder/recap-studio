@@ -436,15 +436,15 @@
 
             <div class="card">
               <div class="row" style="margin-bottom:6px">
-                <h3 class="grow" style="margin:0">Use my own script</h3>
-                <button class="sm ghost" id="ownToggle">Write one</button>
+                <h3 class="grow" style="margin:0">Add my own lines</h3>
+                <button class="sm ghost" id="ownToggle">Write some</button>
               </div>
               <div class="hide" id="ownBox">
                 <div class="tiny" style="margin-bottom:10px">
-                  Paste your lines &mdash; one per line, or separated by blank lines.
-                  They are laid across the video in order, and the cut is fitted to
-                  them once they are spoken, exactly as with a generated script.
-                  Paste an SRT instead and its timings are used as they are.
+                  Write your lines &mdash; one per line, or separated by blank lines.
+                  They join the script, and the whole thing is laid across the video
+                  again so the added lines get footage of their own. Paste an SRT
+                  instead and its timings are used as they are.
                 </div>
                 <textarea id="ownText" rows="10"
                           placeholder="ပထမကြောင်း...&#10;&#10;ဒုတိယကြောင်း..."></textarea>
@@ -456,13 +456,21 @@
                       <option value="en">English</option>
                     </select>
                   </div>
+                  <div class="field" style="max-width:200px">
+                    <label class="f">Put them</label>
+                    <select id="ownWhere"></select>
+                  </div>
+                  <div class="field" style="max-width:170px">
+                    <label class="f">And</label>
+                    <select id="ownMode">
+                      <option value="add">keep the rest</option>
+                      <option value="replace">replace everything</option>
+                    </select>
+                  </div>
                   <div class="grow"></div>
-                  <button class="primary sm" id="ownApply">Use this script</button>
+                  <button class="primary sm" id="ownApply">Add to the script</button>
                 </div>
-                <div class="tiny" style="margin-top:8px;color:var(--err)">
-                  This replaces the current script, and the cut and narration made
-                  from it.
-                </div>
+                <div class="tiny" style="margin-top:8px" id="ownWarn"></div>
                 <div id="ownErr"></div>
               </div>
             </div>
@@ -1805,37 +1813,62 @@ $('auditionVoices').onclick = async () => {
 };
 
 /* ------------------------------------------------------ a script of your own */
+function paintOwnMode() {
+  const adding = $('ownMode').value === 'add';
+  $('ownApply').textContent = adding ? 'Add to the script' : 'Replace the script';
+  $('ownWhere').parentElement.classList.toggle('hide', !adding);
+  $('ownWarn').style.color = adding ? '' : 'var(--err)';
+  $('ownWarn').textContent = adding
+    ? 'The cut and the narration are cleared, because the script they were made from has changed.'
+    : 'This throws away the generated script entirely, along with the cut and narration.';
+}
+
+/* Where the new lines go. Offered as "after line N" rather than an index box,
+   because the only way to know where a line belongs is to read the one before
+   it. */
+function paintOwnWhere(p) {
+  const lines = (p && p.beats) || [];
+  $('ownWhere').innerHTML =
+    '<option value="-1">at the end</option>' +
+    lines.map((b, i) => {
+      const text = ((b.my || b.en || '').trim()).slice(0, 26);
+      return '<option value="' + i + '">after line ' + (i + 1) +
+             (text ? ' - ' + escapeHtml(text) + '...' : '') + '</option>';
+    }).join('');
+}
+
+$('ownMode').onchange = paintOwnMode;
+
 $('ownToggle').onclick = () => {
   const box = $('ownBox');
   const hidden = box.classList.contains('hide');
   box.classList.toggle('hide', !hidden);
-  $('ownToggle').textContent = hidden ? 'Cancel' : 'Write one';
-  if (hidden && !$('ownText').value.trim()) {
-    // start from the current script, since editing one is easier than typing one
-    const p = current();
-    if (p && (p.beats || []).length) {
-      const lang = $('ownLang').value;
-      $('ownText').value = p.beats.map(b => (b[lang] || '').trim())
-                                  .filter(Boolean).join('\n\n');
-    }
-  }
+  $('ownToggle').textContent = hidden ? 'Cancel' : 'Write some';
+  if (hidden) { paintOwnWhere(current()); paintOwnMode(); }
 };
 
 $('ownApply').onclick = async () => {
   const p = current(); if (!p) return;
   const text = $('ownText').value.trim();
+  const mode = $('ownMode').value;
   showError($('ownErr'), '');
-  if (!text) return showError($('ownErr'), 'Paste your script first.');
-  if (!confirm('Replace the current script with this one?\n\n' +
-               'The cut and the narration made from the old script are cleared.')) return;
+  if (!text) return showError($('ownErr'), 'Write your lines first.');
+  // only the destructive one asks; added lines can just be edited out again
+  if (mode === 'replace' &&
+      !confirm('Throw away the generated script and use only these lines?')) return;
 
   $('ownApply').disabled = true;
   try {
-    const r = await post(`/api/recap/projects/${p.id}/script/manual`,
-                         { text, lang: $('ownLang').value });
+    const r = await post(`/api/recap/projects/${p.id}/script/manual`, {
+      text, lang: $('ownLang').value, mode,
+      after: Number($('ownWhere').value),
+    });
+    $('ownText').value = '';
     $('ownBox').classList.add('hide');
-    $('ownToggle').textContent = 'Write one';
-    $('scriptNote').textContent = `your own script - ${r.lines} lines`;
+    $('ownToggle').textContent = 'Write some';
+    $('scriptNote').textContent = mode === 'add'
+      ? r.added + ' lines added - ' + r.lines + ' in the script'
+      : 'your own script - ' + r.lines + ' lines';
     upsert(await request(`/api/recap/projects/${p.id}`));
   } catch (e) { showError($('ownErr'), e.message); }
   finally { $('ownApply').disabled = false; }

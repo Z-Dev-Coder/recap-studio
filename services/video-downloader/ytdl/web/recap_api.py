@@ -331,6 +331,8 @@ class SettingsRequest(BaseModel):
 class ManualScriptRequest(BaseModel):
     text: str
     lang: str = "my"
+    mode: str = "add"          # add | replace
+    after: int = -1            # insert after this line; -1 means at the end
 
 
 class ExtendRequest(BaseModel):
@@ -587,23 +589,43 @@ def manual_script(pid: str, req: ManualScriptRequest) -> dict:
         raise HTTPException(404, "no such project")
 
     lang = req.lang if req.lang in ("en", "my") else "my"
-    beats = script_mod.parse_manual(req.text, project.duration or 0.0, lang)
-    if not beats:
+    duration = project.duration or 0.0
+    written = script_mod.parse_manual(req.text, duration, lang)
+    if not written:
         raise HTTPException(400, "there are no lines in that script")
+
+    if req.mode == "replace":
+        beats = written
+    else:
+        # Adding, not replacing: the new lines join the ones already there and
+        # the whole script is laid across the video again, because the beats
+        # are tied to chapters and a longer script needs more of them.
+        rows = [dict(b) for b in project.beats]
+        fresh = [{"en": b.en, "my": b.my, "score": 5.0, "why": "written by hand"}
+                 for b in written]
+        at = len(rows) if req.after < 0 else max(0, min(len(rows), req.after + 1))
+        rows[at:at] = fresh
+        beats = script_mod.respread(rows, duration)
+        if not beats:
+            raise HTTPException(400, "there are no lines in that script")
 
     project.beats = [b.as_dict() for b in beats]
     project.coverage = round(script_mod.coverage(beats, project.duration or 0.0), 3)
     # the old cut and narration belong to a script that no longer exists
     project.timeline = []
     project.narration = []
-    project.mark("script", "done", message="your own script ({} lines)".format(len(beats)))
+    project.mark("script", "done", message=(
+        "{} lines added - {} in the script".format(len(written), len(beats))
+        if req.mode != "replace" else
+        "your own script ({} lines)".format(len(beats))))
     for step in ("voice", "video", "final"):
         project.mark(step, "idle", message="script replaced - run again")
     pipeline.write_subtitles(project)
     pipeline.write_text_assets(project)
     project.save()
     push(project)
-    return {"ok": True, "lines": len(beats), "lang": lang}
+    return {"ok": True, "added": len(written), "lines": len(beats),
+            "lang": lang, "mode": req.mode}
 
 
 @router.get("/projects/{pid}/script/length")

@@ -807,3 +807,38 @@ def _manual_srt(text: str) -> list[tuple[float, float, str]] | None:
         if body:
             out.append((start, max(end, start + 0.5), body))
     return out or None
+
+
+def respread(rows: list[dict], duration: float) -> list[Beat]:
+    """
+    Lay a set of lines across the whole video again, in order.
+
+    Used when lines are added to an existing script: the beats are tied to
+    chapters, so a longer script needs the chapters redrawn rather than the new
+    lines squeezed in beside the old ones. Text and order are kept exactly;
+    only the spans move -- and the cut is fitted to the narration afterwards
+    anyway, so these spans are a starting point rather than a decision.
+    """
+    rows = [r for r in rows if (r.get("en") or r.get("my") or "").strip()]
+    if not rows:
+        return []
+
+    windows = plan_windows(duration, len(rows)) if duration > 0 else []
+    beats: list[Beat] = []
+    for i, row in enumerate(rows):
+        if windows:
+            ws, we = windows[i]
+            start = ws
+            end = min(we, ws + max(2.0, (we - ws) * 0.6))
+        else:
+            start, end = float(i * 3), float(i * 3 + 2)
+        beats.append(Beat(
+            index=i,
+            start=round(start, 3),
+            end=round(end, 3),
+            en=(row.get("en") or "").strip(),
+            my=(row.get("my") or "").strip(),
+            score=float(row.get("score", 5) or 5),
+            why=(row.get("why") or "").strip(),
+        ))
+    return beats

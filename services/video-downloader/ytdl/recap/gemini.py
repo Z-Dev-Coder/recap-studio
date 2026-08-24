@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 
+import time
+
 import requests
 
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
@@ -18,6 +20,12 @@ API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
 # so a package carrying both languages runs long; too small a cap does not
 # error, it truncates mid-object and the Burmese written second is what goes
 # missing.
+# How many times to sit out a rate limit, and the longest wait worth
+# sitting out. Beyond this it is a daily cap rather than a burst, and the user
+# needs telling rather than a frozen button.
+RATE_LIMIT_RETRIES = 2
+MAX_RATE_WAIT = 75.0
+
 MAX_OUTPUT_TOKENS = 32768
 
 # Free-tier models, best first. Google retires these from under new keys --
@@ -86,6 +94,7 @@ class Gemini:
         schema: dict,
         temperature: float = 0.7,
         images: list[tuple[str, bytes]] | None = None,
+        cancel=None,
     ) -> dict:
         """
         Ask for JSON and get a dict back, or raise something readable.
@@ -115,16 +124,34 @@ class Gemini:
             },
         }
         url = f"{API_ROOT}/models/{self.model}:generateContent"
-        try:
-            resp = requests.post(
-                url,
-                params={"key": self.api_key},
-                json=body,
-                timeout=self.timeout,
-                headers={"Content-Type": "application/json"},
-            )
-        except requests.RequestException as exc:
-            raise GeminiError(f"Could not reach Gemini: {exc}") from exc
+
+        # The free tier's limit is per minute, and a 429 says exactly how long
+        # to wait -- usually seconds. Failing the whole step on that threw away
+        # the calls already paid for and made the user press the button again
+        # for no reason, so wait it out instead. Only a short wait is worth
+        # sitting through; a daily cap reports a delay far longer than this and
+        # falls through to the error, where it belongs.
+        for attempt in range(RATE_LIMIT_RETRIES + 1):
+            try:
+                resp = requests.post(
+                    url,
+                    params={"key": self.api_key},
+                    json=body,
+                    timeout=self.timeout,
+                    headers={"Content-Type": "application/json"},
+                )
+            except requests.RequestException as exc:
+                raise GeminiError(f"Could not reach Gemini: {exc}") from exc
+
+            if resp.status_code != 429:
+                break
+            wait = retry_after(resp)
+            if attempt >= RATE_LIMIT_RETRIES or not 0 < wait <= MAX_RATE_WAIT:
+                break
+            if cancel is not None and cancel.is_set():
+                break
+            # a second of margin: coming back exactly on the boundary re-trips it
+            time.sleep(wait + 1.0)
 
         if resp.status_code == 429:
             raise GeminiError(

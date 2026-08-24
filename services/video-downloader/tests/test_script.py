@@ -339,3 +339,25 @@ def test_an_explicit_length_still_wins():
 def test_reels_are_unaffected_by_the_source_length():
     count, clip = script_mod.beat_plan(4000.0, "reels")
     assert count * clip == pytest.approx(60.0)
+
+
+def test_added_lines_join_the_script_rather_than_replacing_it():
+    rows = [{"en": "one", "my": "တစ်"}, {"en": "two", "my": "နှစ်"}]
+    fresh = [{"en": "", "my": "သုံး"}]
+    beats = script_mod.respread(rows + fresh, 120.0)
+    assert [b.my for b in beats] == ["တစ်", "နှစ်", "သုံး"]
+    assert [b.en for b in beats] == ["one", "two", ""]
+
+
+def test_respread_covers_the_whole_video_again():
+    rows = [{"my": f"line {i}"} for i in range(5)]
+    beats = script_mod.respread(rows, 100.0)
+    assert beats[0].start == 0
+    assert beats[-1].end <= 100.0
+    assert [b.index for b in beats] == [0, 1, 2, 3, 4]
+    assert [b.start for b in beats] == sorted(b.start for b in beats)
+
+
+def test_respread_drops_blank_rows():
+    beats = script_mod.respread([{"my": "a"}, {"my": "   "}, {"en": "b"}], 60.0)
+    assert len(beats) == 2
