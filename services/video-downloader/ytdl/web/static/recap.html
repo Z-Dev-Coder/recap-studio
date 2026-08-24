@@ -484,6 +484,19 @@
                   but not another round of speech.
                 </div>
 
+                <h3 style="margin:20px 0 10px">Your own voice</h3>
+                <div class="tiny" style="margin-bottom:8px">
+                  Upload a few seconds of yourself speaking and the local engine
+                  narrates every line in that voice &mdash; including Burmese.
+                </div>
+                <div class="row">
+                  <button class="sm" id="pickReference">Upload a sample</button>
+                  <button class="sm ghost danger hide" id="clearReference">Remove</button>
+                  <span class="tiny" id="referenceNote"></span>
+                </div>
+                <input type="text" id="referenceText" placeholder="what the clip says (optional, sharpens the copy)"
+                       style="margin-top:8px">
+
                 <h3 style="margin:20px 0 10px">Lines</h3>
                 <div class="tiny" style="margin-bottom:8px">
                   Upload your own recording for any line &mdash; it survives a
@@ -554,6 +567,7 @@
 
 <input type="file" id="lineFile" accept="audio/*" class="hide">
 <input type="file" id="videoFile" accept="video/*" class="hide">
+<input type="file" id="referenceFile" accept="audio/*" class="hide">
 
 <div class="veil hide" id="newVeil">
   <div class="modal">
@@ -939,6 +953,16 @@ function renderVoice(p) {
     $('narrVolSlider').value = Math.round((p.narration_volume == null ? 1 : p.narration_volume) * 100);
   }
   paintMix();
+
+  const cloned = !!p.voice_reference;
+  $('clearReference').classList.toggle('hide', !cloned);
+  $('referenceNote').textContent = cloned
+    ? 'using your voice' + (p.voice_engine === 'voxcpm' ? '' : ' (local engine only)')
+    : 'using the model voice';
+  if (document.activeElement !== $('referenceText')) {
+    $('referenceText').value = p.voice_reference_text || '';
+  }
+
   renderVoiceList(p);
 }
 
@@ -1071,6 +1095,33 @@ $('lineFile').onchange = async () => {
   };
   reader.readAsDataURL(file);
 };
+
+$('pickReference').onclick = () => { $('referenceFile').value = ''; $('referenceFile').click(); };
+$('referenceFile').onchange = () => {
+  const p = current();
+  const file = $('referenceFile').files[0];
+  if (!p || !file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    $('referenceNote').textContent = 'uploading...';
+    try {
+      const r = await post(`/api/recap/projects/${p.id}/voice/reference`, {
+        audio_base64: String(reader.result).split(',')[1],
+        filename: file.name,
+        text: $('referenceText').value
+      });
+      $('referenceNote').textContent =
+        `using your voice (${r.seconds}s)` + (r.hint ? ' - ' + r.hint : '');
+    } catch (e) { showError($('stepErr'), e.message); $('referenceNote').textContent = ''; }
+  };
+  reader.readAsDataURL(file);
+};
+$('clearReference').onclick = async () => {
+  const p = current(); if (!p) return;
+  try { await request(`/api/recap/projects/${p.id}/voice/reference`, { method: 'DELETE' }); }
+  catch (e) { showError($('stepErr'), e.message); }
+};
+$('referenceText').oninput = autosaveLater(() => ({ voice_reference_text: $('referenceText').value }), 1200);
 
 $('localModel').onchange = async () => {
   const p = current(); if (!p) return;

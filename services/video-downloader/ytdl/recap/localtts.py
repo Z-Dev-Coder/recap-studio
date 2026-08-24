@@ -27,16 +27,20 @@ _model = None
 _model_lock = threading.Lock()
 _model_id = ""
 
-# The 0.5B model is the practical default: a third the size of VoxCPM2, so
-# roughly a third of the work per line, and it fits a 6GB card with room to
-# spare. VoxCPM2 sounds better but needs hardware to match.
-DEFAULT_MODEL = "openbmb/VoxCPM-0.5B"
+# VoxCPM2 is the only one of these that speaks anything beyond Chinese and
+# English. The smaller models are three times faster and fit a 6GB card
+# comfortably, but handed Burmese they produce confident Chinese-sounding
+# nonsense rather than failing, so size must never be chosen over language.
+DEFAULT_MODEL = "openbmb/VoxCPM2"
 
 MODELS = {
-    "openbmb/VoxCPM-0.5B": "0.5B - 1.5GB, fastest, fits a 6GB card",
-    "openbmb/VoxCPM1.5": "1.5 - 1.8GB, a step up in quality",
-    "openbmb/VoxCPM2": "2B - 4.6GB, best quality, wants 8GB VRAM",
+    "openbmb/VoxCPM2": "2B - 4.6GB - 30 languages incl. Burmese. The only one for Burmese.",
+    "openbmb/VoxCPM-0.5B": "0.5B - 1.5GB - ENGLISH AND CHINESE ONLY, fastest",
+    "openbmb/VoxCPM1.5": "1.5 - 1.8GB - ENGLISH AND CHINESE ONLY",
 }
+
+# Anything not in here will be spoken by a model that was never trained on it.
+MULTILINGUAL_MODELS = {"openbmb/VoxCPM2"}
 
 # Only a fallback: the real rate is read off the loaded model, because the
 # model decides it and a wrong header plays the narration at the wrong speed.

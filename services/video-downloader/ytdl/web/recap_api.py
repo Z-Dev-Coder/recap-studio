@@ -288,6 +288,14 @@ class VoiceLineRequest(BaseModel):
     filename: str = ""
 
 
+class VoiceReferenceRequest(BaseModel):
+    """A clip of someone speaking, for the local engine to clone."""
+
+    audio_base64: str
+    filename: str = ""
+    text: str = ""          # what is said in the clip, if known
+
+
 class VoicePreviewRequest(BaseModel):
     voice: str = "Kore"
     style: str = ""
@@ -666,6 +674,77 @@ def delete_voice_line(pid: str, index: int, lang: str = "my") -> dict:
     target.unlink(missing_ok=True)
     push(project)
     return {"ok": True, "removed": existed}
+
+
+@router.post("/projects/{pid}/voice/reference")
+def upload_voice_reference(pid: str, req: VoiceReferenceRequest) -> dict:
+    """
+    Take a clip of a voice for the local engine to clone.
+
+    VoxCPM2 needs only a few seconds to copy a voice, and it clones across
+    languages -- so a Burmese sample of your own voice narrates every line in
+    it, which no cloud voice can do. Telling it what the clip says (`text`)
+    sharpens the copy; leaving it blank still works.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+
+    raw = req.audio_base64.split(",", 1)[-1]
+    try:
+        blob = base64.b64decode(raw, validate=True)
+    except Exception as exc:      # noqa: BLE001
+        raise HTTPException(400, f"that is not valid base64 audio: {exc}") from exc
+    if len(blob) < 2000:
+        raise HTTPException(400, "that clip is too short to copy a voice from")
+
+    project.voice_dir.mkdir(parents=True, exist_ok=True)
+    suffix = Path(req.filename or "reference.wav").suffix or ".wav"
+    staged = project.voice_dir / f"reference_upload{suffix}"
+    staged.write_bytes(blob)
+
+    target = project.voice_dir / "reference.wav"
+    try:
+        to_wav(staged, target)
+    except MediaError as exc:
+        raise HTTPException(400, f"could not read that audio: {exc}") from exc
+    finally:
+        staged.unlink(missing_ok=True)
+
+    seconds = 0.0
+    try:
+        from ..recap.media import probe as _probe
+        seconds = _probe(target).duration
+    except Exception:      # noqa: BLE001 - the length is only advice
+        pass
+
+    project.voice_reference = target.name
+    project.voice_reference_text = req.text.strip()
+    project.mark("voice", "idle", message="voice sample added - regenerate to use it")
+    project.save()
+    push(project)
+    return {
+        "ok": True,
+        "file": target.name,
+        "seconds": round(seconds, 1),
+        "hint": ("shorter than 3 seconds is thin for cloning"
+                 if 0 < seconds < 3 else ""),
+    }
+
+
+@router.delete("/projects/{pid}/voice/reference")
+def clear_voice_reference(pid: str) -> dict:
+    """Go back to the model's own voice."""
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    (project.voice_dir / "reference.wav").unlink(missing_ok=True)
+    project.voice_reference = ""
+    project.voice_reference_text = ""
+    project.mark("voice", "idle", message="voice sample removed - regenerate")
+    project.save()
+    push(project)
+    return {"ok": True}
 
 
 @router.get("/projects/{pid}/voice/lines")
