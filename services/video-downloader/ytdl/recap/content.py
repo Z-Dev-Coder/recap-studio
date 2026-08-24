@@ -192,8 +192,48 @@ DOCUMENTARY_RECAP = ContentProfile(
 )
 
 
+NARRATOR = ContentProfile(
+    id="narrator",
+    label="Narrator",
+    description="Voice-over that plays along with the video, not a summary of it.",
+    brief="a narrator's voice-over that runs alongside the video",
+    pick=(
+        "Choose the moments that carry the video and let them breathe -- this "
+        "narration plays over the footage rather than replacing it, so the "
+        "viewer is watching what you are talking about. Prefer moments where a "
+        "voice adds something: what is happening, who these people are, what "
+        "it means. Skip anything that speaks for itself on screen."
+    ),
+    voice=(
+        "You are the narrator of this video, speaking over it while it plays, "
+        "to someone who is watching along with you. That is the difference "
+        "from a recap: they can see it, so do not tell them what they are "
+        "looking at. Add what the picture cannot say -- who someone is, why "
+        "this matters, what is about to be at stake -- and then get out of the "
+        "way and let a moment play.\n"
+        "Speak WITH the footage, in the present as it unfolds. Leave silence "
+        "where the video is doing the work. Never narrate over a moment by "
+        "describing it back."
+    ),
+    burmese=(
+        "Warm, unhurried Burmese narration of the kind heard over a film or a "
+        "programme -- a person talking you through something you are both "
+        "watching. Present-tense where the action is happening now. Room to "
+        "breathe between thoughts rather than a wall of speech. Not the brisk "
+        "delivery of a recap channel, and not the detachment of a news reader."
+    ),
+    review=(
+        "1. adds what the picture cannot say, rather than describing it  "
+        "2. written for someone watching, not someone who has not seen it  "
+        "3. leaves the footage room to play  4. nothing invented  5. present "
+        "and unhurried  6. natural spoken Burmese  7. reads aloud well"
+    ),
+    density=0.85,
+)
+
+
 PROFILES: dict[str, ContentProfile] = {
-    p.id: p for p in (RECAP, NEWS, MOVIE_TRAILER, DOCUMENTARY_RECAP)
+    p.id: p for p in (RECAP, NARRATOR, NEWS, MOVIE_TRAILER, DOCUMENTARY_RECAP)
 }
 
 DEFAULT = RECAP.id

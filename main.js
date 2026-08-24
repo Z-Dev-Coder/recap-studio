@@ -581,12 +581,16 @@ app.whenReady().then(() => {
   // which is always one of our own pages. Only local content is trusted:
   // the only remote thing this app loads is a service on 127.0.0.1.
   const MEDIA = new Set(['media', 'audioCapture', 'videoCapture', 'display-capture']);
+  // The recap tool tells you when a step that takes minutes has finished. The
+  // handler below answers for every permission the app asks for, so leaving
+  // notifications out of this set is the same as denying them.
+  const ALLOWED = new Set([...MEDIA, 'notifications']);
   const isLocal = u =>
     typeof u === 'string' &&
     (u.startsWith('file://') || u.startsWith('http://127.0.0.1') || u.startsWith('http://localhost'));
 
   const allowMedia = (perm, wc, ...urls) => {
-    if (!MEDIA.has(perm)) return false;
+    if (!ALLOWED.has(perm)) return false;
     // an opaque ("null") or empty origin says nothing -- judge by the page
     if (urls.some(isLocal)) return true;
     return isLocal(wc ? wc.getURL() : '');

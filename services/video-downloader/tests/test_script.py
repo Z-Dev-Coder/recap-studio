@@ -229,3 +229,113 @@ def test_output_contract_is_unchanged(monkeypatch, fake_gemini, story_reply):
     beat = out["beats"][0]
     for key in ("index", "start", "end", "en", "my", "score", "why"):
         assert key in beat
+
+
+# ------------------------------------------------------------ cancellation
+
+def test_stop_is_honoured_between_stages(monkeypatch, fake_gemini, story_reply):
+    """
+    A model call cannot be interrupted, so Stop can only land between stages.
+
+    Without a check at those boundaries the whole step ran to completion
+    however early Stop was pressed, which is what "the stop button does
+    nothing" looked like.
+    """
+    import threading
+    from ytdl.recap.media import Cancelled
+
+    stop = threading.Event()
+
+    class StopAfterFirst(fake_gemini):
+        def generate_json(self, *a, **k):
+            out = super().generate_json(*a, **k)
+            stop.set()                     # pressed while stage 1 was in flight
+            return out
+
+    client = StopAfterFirst([story_reply, _package(6), {"lines": []}, {"lines": []}])
+    monkeypatch.setattr(script_mod, "Gemini", lambda *a, **k: client)
+
+    with pytest.raises(Cancelled):
+        script_mod.generate(api_key="k", model="m", title="t", uploader="u",
+                            duration=60.0, cues=[], mode="long",
+                            target_seconds=60.0, cancel=stop)
+    assert client.calls == 1        # stopped before the second stage began
+
+
+def test_no_cancel_means_no_interruption(monkeypatch, fake_gemini, story_reply):
+    n, _ = script_mod.beat_plan(60.0, "long", 60.0)
+    client = fake_gemini([story_reply, _package(n),
+                          {"lines": [{"index": i, "my": "မ" * 80} for i in range(n)]},
+                          {"lines": []}])
+    monkeypatch.setattr(script_mod, "Gemini", lambda *a, **k: client)
+    out = script_mod.generate(api_key="k", model="m", title="t", uploader="u",
+                              duration=60.0, cues=[], mode="long", target_seconds=60.0)
+    assert len(out["beats"]) == n
+
+
+# ------------------------------------------------------- a script of your own
+
+def test_plain_lines_become_beats_across_the_video():
+    beats = script_mod.parse_manual("first line\n\nsecond line\n\nthird line", 90.0, "my")
+    assert [b.my for b in beats] == ["first line", "second line", "third line"]
+    assert all(b.en == "" for b in beats)          # not machine-translated
+    assert beats[0].start == 0
+    assert beats[-1].end <= 90.0
+    assert [b.start for b in beats] == sorted(b.start for b in beats)
+
+
+def test_single_newlines_work_when_there_are_no_blank_lines():
+    beats = script_mod.parse_manual("one\ntwo\nthree", 60.0, "en")
+    assert [b.en for b in beats] == ["one", "two", "three"]
+
+
+def test_an_srt_keeps_its_own_timings():
+    srt = (
+        "1\n00:00:05,000 --> 00:00:09,500\nfirst\n\n"
+        "2\n00:01:02,250 --> 00:01:06,000\nsecond\n"
+    )
+    beats = script_mod.parse_manual(srt, 300.0, "my")
+    assert len(beats) == 2
+    assert beats[0].start == 5.0 and beats[0].end == 9.5
+    assert beats[1].start == 62.25
+    assert beats[1].my == "second"
+
+
+def test_burmese_survives_unchanged():
+    text = "ပထမကြောင်း\n\nဒုတိယကြောင်း"
+    beats = script_mod.parse_manual(text, 60.0, "my")
+    assert beats[0].my == "ပထမကြောင်း"
+    assert beats[1].my == "ဒုတိယကြောင်း"
+
+
+def test_an_empty_script_yields_nothing():
+    assert script_mod.parse_manual("", 60.0) == []
+    assert script_mod.parse_manual("   \n\n  \n", 60.0) == []
+
+
+def test_a_manual_script_works_without_a_known_duration():
+    beats = script_mod.parse_manual("a\n\nb", 0.0, "my")
+    assert len(beats) == 2
+    assert beats[0].end > beats[0].start
+
+
+def test_long_form_defaults_to_the_whole_video():
+    """
+    With no length chosen, the script must be planned for the whole source.
+
+    It used to plan for 22% of it, which was survivable while the cut had an
+    independent length -- but the cut is fitted to the narration now, so that
+    default silently became the length of the finished video.
+    """
+    count, clip = script_mod.beat_plan(420.0, "long")
+    assert count * clip == pytest.approx(420.0, rel=0.02)
+
+
+def test_an_explicit_length_still_wins():
+    count, clip = script_mod.beat_plan(420.0, "long", 120.0)
+    assert count * clip == pytest.approx(120.0, rel=0.02)
+
+
+def test_reels_are_unaffected_by_the_source_length():
+    count, clip = script_mod.beat_plan(4000.0, "reels")
+    assert count * clip == pytest.approx(60.0)

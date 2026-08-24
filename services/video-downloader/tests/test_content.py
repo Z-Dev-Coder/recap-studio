@@ -19,7 +19,7 @@ from ytdl.recap import script as script_mod
 from ytdl.recap.script import Beat
 from ytdl.recap.story import from_dict
 
-ALL = ["recap", "news", "movie_trailer", "documentary_recap"]
+ALL = ["recap", "narrator", "news", "movie_trailer", "documentary_recap"]
 
 
 def flat(text: str) -> str:
@@ -28,7 +28,7 @@ def flat(text: str) -> str:
 
 # ------------------------------------------------------------------ profiles
 
-def test_the_four_types_exist():
+def test_every_type_is_listed():
     assert sorted(content.PROFILES) == sorted(ALL)
 
 
@@ -65,7 +65,7 @@ def test_normalise_falls_back_only_for_display():
 
 def test_listing_is_what_the_picker_needs():
     rows = content.listing()
-    assert len(rows) == 4
+    assert len(rows) == len(ALL)
     assert all(r["id"] and r["label"] and r["description"] for r in rows)
 
 

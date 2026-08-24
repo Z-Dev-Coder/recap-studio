@@ -157,6 +157,7 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
                 temperature=float(options.get("temperature", 0.7)),
                 use_scrape=bool(options.get("use_scrape", settings.get("use_scrape", True))),
                 use_vision=bool(options.get("use_vision", settings.get("use_vision", True))),
+                cancel=stop,
             )
         elif step == "video":
             def progress(done: int, total: int) -> None:
@@ -325,6 +326,17 @@ class SettingsRequest(BaseModel):
     whisper_model: str | None = None
     use_scrape: bool | None = None
     use_vision: bool | None = None
+
+
+class ManualScriptRequest(BaseModel):
+    text: str
+    lang: str = "my"
+
+
+class ExtendRequest(BaseModel):
+    target_seconds: float = 0.0
+    lang: str = ""
+    api_key: str = ""
 
 
 class ThumbnailRequest(BaseModel):
@@ -505,6 +517,12 @@ def cancel(pid: str) -> dict:
     cancel_event(pid).set()
     with _running_lock:
         step = _running.get(pid)
+    # Some stages cannot be interrupted mid-flight -- a model call in
+    # particular -- so say the stop has registered rather than leaving the
+    # button looking dead while the current stage finishes.
+    if step and step in project.steps:
+        project.mark(step, "running", message="stopping...")
+        push(project)
     return {"ok": True, "was_running": step or ""}
 
 
@@ -553,6 +571,128 @@ def edit(pid: str, req: EditRequest) -> dict:
     project.save()
     push(project)
     return project.snapshot()
+
+
+@router.post("/projects/{pid}/script/manual")
+def manual_script(pid: str, req: ManualScriptRequest) -> dict:
+    """
+    Use a script the user wrote instead of a generated one.
+
+    Everything downstream -- the voice, the cut fitted to it, the subtitles,
+    the final render -- works the same way whether the lines were written by
+    the model or by hand, so this only has to produce beats.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+
+    lang = req.lang if req.lang in ("en", "my") else "my"
+    beats = script_mod.parse_manual(req.text, project.duration or 0.0, lang)
+    if not beats:
+        raise HTTPException(400, "there are no lines in that script")
+
+    project.beats = [b.as_dict() for b in beats]
+    project.coverage = round(script_mod.coverage(beats, project.duration or 0.0), 3)
+    # the old cut and narration belong to a script that no longer exists
+    project.timeline = []
+    project.narration = []
+    project.mark("script", "done", message="your own script ({} lines)".format(len(beats)))
+    for step in ("voice", "video", "final"):
+        project.mark(step, "idle", message="script replaced - run again")
+    pipeline.write_subtitles(project)
+    pipeline.write_text_assets(project)
+    project.save()
+    push(project)
+    return {"ok": True, "lines": len(beats), "lang": lang}
+
+
+@router.get("/projects/{pid}/script/length")
+def script_length(pid: str, lang: str = "") -> dict:
+    """
+    How long the narration will run, against how long the video is.
+
+    Answering this before the narration is spoken is what lets someone see
+    that eleven short lines will not fill five minutes -- and the cut is
+    fitted to the narration, so that gap is exactly what decides the length of
+    the finished video.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+
+    from ..recap import burmese as burmese_mod
+
+    lang = lang if lang in ("en", "my") else (project.voice_lang or "my")
+    beats = [script_mod.Beat(**{k: v for k, v in b.items()
+                                if k in ("index", "start", "end", "en", "my",
+                                         "score", "why")})
+             for b in project.beats]
+
+    # a spoken clip beats an estimate, where one exists
+    spoken = 0.0
+    for m in project.narration or []:
+        if str(m.get("file", "")).endswith(f"_{lang}.wav"):
+            spoken += float(m.get("seconds") or 0)
+
+    estimated = burmese_mod.estimate_seconds(beats, lang)
+    return {
+        "lang": lang,
+        "lines": sum(1 for b in beats if (getattr(b, lang, "") or "").strip()),
+        "video_seconds": round(project.duration or 0.0, 1),
+        "estimated_seconds": estimated,
+        "spoken_seconds": round(spoken, 1),
+        "narration_seconds": round(spoken or estimated, 1),
+    }
+
+
+@router.post("/projects/{pid}/script/extend")
+def extend_script(pid: str, req: ExtendRequest) -> dict:
+    """Ask for a fuller script, so the recap can run as long as it needs to."""
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    if not project.beats:
+        raise HTTPException(400, "write the recap script first")
+
+    from ..recap import burmese as burmese_mod
+    from ..recap import story as story_mod
+
+    settings = load_settings()
+    key = req.api_key or settings.get("gemini_key", "")
+    if not key:
+        raise HTTPException(400, "a Gemini key is needed to extend the script")
+
+    lang = req.lang if req.lang in ("en", "my") else (project.voice_lang or "my")
+    want = float(req.target_seconds or 0) or (project.duration or 0.0)
+    if want <= 0:
+        raise HTTPException(400, "give a target length")
+
+    beats = [script_mod.Beat(**{k: v for k, v in b.items()
+                                if k in ("index", "start", "end", "en", "my",
+                                         "score", "why")})
+             for b in project.beats]
+
+    model = settings.get("gemini_model", "") or _auto_model(key)
+    client = Gemini(key, model)
+    story = story_mod.from_dict(project.story or {}, project.duration or 0.0)
+
+    report = burmese_mod.extend(
+        client, beats, story, want_seconds=want, lang=lang,
+        title=project.title, treatment=project.content_type or "recap",
+    )
+    if not report["changed"]:
+        return report | {"ok": True, "note": "nothing could be lengthened honestly"}
+
+    project.beats = [b.as_dict() for b in beats]
+    # the narration and the cut were made from the shorter script
+    project.narration = []
+    for step in ("voice", "video", "final"):
+        project.mark(step, "idle", message="script extended - run again")
+    pipeline.write_subtitles(project)
+    pipeline.write_text_assets(project)
+    project.save()
+    push(project)
+    return report | {"ok": True}
 
 
 @router.post("/projects/{pid}/thumbnail")
@@ -780,7 +920,7 @@ SAMPLE_LINE = {
 
 
 @router.post("/projects/{pid}/voice/candidates")
-def voice_candidates(pid: str, count: int = 4, lang: str = "") -> dict:
+def voice_candidates(pid: str, count: int = 4, lang: str = "", slot: int = -1) -> dict:
     """
     Audition several local voices and keep the one that sounds right.
 
@@ -805,13 +945,17 @@ def voice_candidates(pid: str, count: int = 4, lang: str = "") -> dict:
 
     out = project.voice_dir / "candidates"
     out.mkdir(parents=True, exist_ok=True)
-    for old in out.glob("cand_*.wav"):
-        old.unlink(missing_ok=True)
-    for old in out.glob("cand_*.txt"):
-        old.unlink(missing_ok=True)
+    # `slot` lets the page ask for one voice at a time, so each appears as soon
+    # as it exists instead of the whole set arriving after several minutes of a
+    # dead button. Only a full run clears what was there before.
+    first = max(0, int(slot)) if slot >= 0 else 0
+    if slot < 0:
+        for stale in list(out.glob("cand_*.wav")) + list(out.glob("cand_*.txt")):
+            stale.unlink(missing_ok=True)
 
     rows = []
-    for i in range(count):
+    for offset in range(count):
+        i = first + offset
         try:
             # no reference and no anchor: each call is a different speaker,
             # which is the whole point here

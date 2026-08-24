@@ -314,6 +314,7 @@
             <button data-tab="script">Script</button>
             <button data-tab="copy">Title &amp; tags</button>
             <button data-tab="voice">Voice</button>
+            <button data-tab="final">Final video</button>
             <button data-tab="thumb">Thumbnail</button>
             <button data-tab="source">Transcript</button>
             <button data-tab="files">Files</button>
@@ -432,6 +433,39 @@
                 <span class="tiny">Edits save themselves. Timing changes apply on rebuild.</span>
               </div>
             </div>
+
+            <div class="card">
+              <div class="row" style="margin-bottom:6px">
+                <h3 class="grow" style="margin:0">Use my own script</h3>
+                <button class="sm ghost" id="ownToggle">Write one</button>
+              </div>
+              <div class="hide" id="ownBox">
+                <div class="tiny" style="margin-bottom:10px">
+                  Paste your lines &mdash; one per line, or separated by blank lines.
+                  They are laid across the video in order, and the cut is fitted to
+                  them once they are spoken, exactly as with a generated script.
+                  Paste an SRT instead and its timings are used as they are.
+                </div>
+                <textarea id="ownText" rows="10"
+                          placeholder="ပထမကြောင်း...&#10;&#10;ဒုတိယကြောင်း..."></textarea>
+                <div class="row" style="margin-top:10px">
+                  <div class="field" style="max-width:150px">
+                    <label class="f">These lines are</label>
+                    <select id="ownLang">
+                      <option value="my">&#4119;&#4156;&#4116;&#4121;&#4140; Burmese</option>
+                      <option value="en">English</option>
+                    </select>
+                  </div>
+                  <div class="grow"></div>
+                  <button class="primary sm" id="ownApply">Use this script</button>
+                </div>
+                <div class="tiny" style="margin-top:8px;color:var(--err)">
+                  This replaces the current script, and the cut and narration made
+                  from it.
+                </div>
+                <div id="ownErr"></div>
+              </div>
+            </div>
           </section>
 
           <section data-panel="copy" class="hide">
@@ -461,17 +495,36 @@
 
           <section data-panel="voice" class="hide">
             <div class="card">
-              <div class="row" style="margin-bottom:12px">
-                <h3 class="grow" style="margin:0">Final video &mdash; recap with narration</h3>
-                <span class="note" id="finalNote"></span>
+              <div class="row" style="margin-bottom:10px">
+                <h3 class="grow" style="margin:0">Narration</h3>
+                <span class="note" id="lengthNote"></span>
               </div>
-              <video id="finalVideo" controls preload="metadata"></video>
-              <div class="row" style="margin-top:12px">
+              <div class="row">
                 <button class="primary sm" id="makeVoice">Generate narration</button>
-                <span id="finalDownloads" style="display:inline-flex;gap:8px"></span>
-                <span id="finalSwitch" style="display:inline-flex;gap:6px"></span>
+                <button class="sm" id="refreshLength">Check length</button>
                 <div class="grow"></div>
-                <span class="tiny">Free tier speaks ~3 lines a minute, so a dozen lines takes a few minutes.</span>
+                <span class="tiny">Free tier speaks ~3 lines a minute.</span>
+              </div>
+
+              <div class="hide" id="extendBox" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+                <div class="tiny" id="extendWhy" style="margin-bottom:8px"></div>
+                <div class="row">
+                  <div class="field" style="max-width:150px">
+                    <label class="f">Make it run about</label>
+                    <input type="number" id="extendTarget" min="10" step="10">
+                  </div>
+                  <div class="field" style="max-width:70px">
+                    <label class="f">&nbsp;</label>
+                    <div class="tiny" style="padding-top:9px">seconds</div>
+                  </div>
+                  <div class="grow"></div>
+                  <button class="sm" id="extendScript">Extend the script</button>
+                </div>
+                <div class="tiny" style="margin-top:6px">
+                  Adds what the story notes already contain and the script left out.
+                  Nothing invented, no filler &mdash; a line that cannot honestly grow
+                  is left alone. The narration is cleared, so it needs speaking again.
+                </div>
               </div>
             </div>
 
@@ -529,6 +582,31 @@
               </div>
 
               <div class="card">
+                <h3 style="margin:20px 0 10px">Your own voice</h3>
+                <div class="tiny" style="margin-bottom:8px">
+                  Upload a few seconds of yourself speaking and the local engine
+                  narrates every line in that voice &mdash; including Burmese.
+                </div>
+                <div class="row">
+                  <button class="sm" id="pickReference">Upload a sample</button>
+                  <button class="sm ghost danger hide" id="clearReference">Remove</button>
+                  <span class="tiny" id="referenceNote"></span>
+                </div>
+                <input type="text" id="referenceText" placeholder="what the clip says (optional, sharpens the copy)"
+                       style="margin-top:8px">
+
+                <h3 style="margin:20px 0 10px">Lines</h3>
+                <div class="tiny" style="margin-bottom:8px">
+                  Upload your own recording for any line &mdash; it survives a
+                  regenerate and costs no quota.
+                </div>
+                <div class="scroll" id="voiceLines" style="max-height:260px"></div>
+              </div>
+            </div>
+          </section>
+
+          <section data-panel="final" class="hide">
+              <div class="card">
                 <h3>Mix</h3>
                 <div class="row">
                   <label class="f grow" style="margin:0">Original audio under the voice</label>
@@ -560,30 +638,28 @@
                   the pitch as spoken.
                 </div>
 
-                <h3 style="margin:20px 0 10px">Your own voice</h3>
-                <div class="tiny" style="margin-bottom:8px">
-                  Upload a few seconds of yourself speaking and the local engine
-                  narrates every line in that voice &mdash; including Burmese.
-                </div>
-                <div class="row">
-                  <button class="sm" id="pickReference">Upload a sample</button>
-                  <button class="sm ghost danger hide" id="clearReference">Remove</button>
-                  <span class="tiny" id="referenceNote"></span>
-                </div>
-                <input type="text" id="referenceText" placeholder="what the clip says (optional, sharpens the copy)"
-                       style="margin-top:8px">
-
-                <h3 style="margin:20px 0 10px">Lines</h3>
-                <div class="tiny" style="margin-bottom:8px">
-                  Upload your own recording for any line &mdash; it survives a
-                  regenerate and costs no quota.
-                </div>
-                <div class="scroll" id="voiceLines" style="max-height:260px"></div>
+              </div>
+                      <div class="card">
+              <div class="row" style="margin-bottom:12px">
+                <h3 class="grow" style="margin:0">Final video</h3>
+                <span class="note" id="finalNote"></span>
+              </div>
+              <video id="finalVideo" controls preload="metadata"></video>
+              <div class="row" style="margin-top:12px">
+                <button class="primary sm" id="renderFinal">Render final video</button>
+                <span id="finalDownloads" style="display:inline-flex;gap:8px"></span>
+                <span id="finalSwitch" style="display:inline-flex;gap:6px"></span>
+              </div>
+              <div class="tiny" style="margin-top:8px">
+                Nothing here is rendered until you ask. Regenerating a line, changing
+                the mix or re-cutting all need another render &mdash; but never
+                another round of speech.
               </div>
             </div>
+
           </section>
 
-          <section data-panel="thumb" class="hide">
+<section data-panel="thumb" class="hide">
             <div class="cols">
               <div class="card">
                 <div class="row" style="margin-bottom:12px">
@@ -1012,7 +1088,7 @@ const BUSY_LABELS = { source: 'downloading', transcript: 'transcribing', script:
 /* Which panel a step's work shows up on, so the running step can bring its own
    tab forward instead of leaving you watching a page that is not changing. */
 const STEP_TAB = { source: 'source', transcript: 'source', script: 'script',
-                   voice: 'voice', video: 'cut', thumbnail: 'thumb', final: 'voice' };
+                   voice: 'voice', video: 'cut', thumbnail: 'thumb', final: 'final' };
 
 function showTab(name) {
   if (!name || state.tab === name) return;
@@ -1020,8 +1096,64 @@ function showTab(name) {
   [...$('tabs').children].forEach(x => x.classList.toggle('on', x.dataset.tab === name));
   document.querySelectorAll('[data-panel]').forEach(s =>
     s.classList.toggle('hide', s.dataset.panel !== name));
-  if (name === 'voice' && current()) loadVoiceLines(current());
+  if (name === 'voice' && current()) { loadVoiceLines(current()); loadLength(current()); }
   if (name === 'files' && current()) { loadFiles(current()); loadCleanup(current()); }
+}
+
+/* Telling you when the slow work is done.
+
+   Only the steps that genuinely take minutes -- transcribing, speaking every
+   line, encoding, rendering -- are worth interrupting for. Downloading a short
+   clip or writing the script finishes while you are still looking at the page,
+   and a notification for those is just noise.
+
+   Nothing is sent while the window has focus: if you are watching the progress
+   you do not need telling. */
+const SLOW_STEPS = new Set(['transcript', 'voice', 'video', 'final']);
+const SLOW_LABELS = {
+  transcript: 'Transcript ready',
+  voice: 'Narration finished',
+  video: 'Recap cut built',
+  final: 'Final video rendered',
+};
+let notifiedFrom = {};
+
+function askToNotify() {
+  try {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission === 'default') Notification.requestPermission();
+  } catch (e) { /* not available here */ }
+}
+
+function notifyDone(name, status, project) {
+  if (!SLOW_STEPS.has(name)) return;
+  try {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    if (!document.hidden && document.hasFocus()) return;   // you are already here
+    const good = status === 'done';
+    const n = new Notification(
+      good ? (SLOW_LABELS[name] || 'Step finished') : `${STEP_LABELS[name] || name} failed`,
+      {
+        body: (project.title || 'Recap Studio') +
+              (good ? '' : ' - ' + ((project.steps[name] || {}).error || '')),
+        tag: `${project.id}:${name}`,      // one per step, not a pile of them
+      });
+    n.onclick = () => { try { window.focus(); } catch (e) {} n.close(); };
+  } catch (e) { /* never let a notification break the render */ }
+}
+
+function watchSlowSteps(p) {
+  const seen = notifiedFrom[p.id] || (notifiedFrom[p.id] = {});
+  for (const [name, s] of Object.entries(p.steps || {})) {
+    const was = seen[name];
+    seen[name] = s.status;
+    if (was === 'running' && (s.status === 'done' || s.status === 'error')) {
+      notifyDone(name, s.status, p);
+    }
+    if (was !== 'running' && s.status === 'running' && SLOW_STEPS.has(name)) {
+      askToNotify();       // asked only when something slow actually starts
+    }
+  }
 }
 
 /* Follow the work. A step that has just started pulls its tab forward; once
@@ -1176,6 +1308,7 @@ function renderProject() {
   followVoiceProgress(p);
   renderResultBar(p);
   if (state.autoFollow !== false) followWork(p);
+  watchSlowSteps(p);
 
   // Stop replaces Run all whenever something is actually running
   const busy = Object.values(p.steps || {}).some(st => st.status === 'running');
@@ -1590,41 +1723,122 @@ function renderResultBar(p) {
 
 $('resultOpen').onclick = () => $('openFolder').click();
 
-function renderCandidates(p, d) {
+/* Auditioning local voices.
+
+   The first cut of this generated four samples behind one button and showed
+   nothing until all four existed -- minutes of a disabled button, and if the
+   user never picked one, the voice step went on to invent its own speaker
+   anyway. So: they arrive one at a time and appear as they land, the first one
+   is adopted the moment it exists so there is always a definite voice, and the
+   row for whichever is in use says so. */
+let candidates = [];
+let chosenVoice = -1;
+
+function renderCandidates(p) {
   const box = $('candidateList');
-  if (!d || !d.candidates.length) { box.innerHTML = ''; return; }
-  box.innerHTML = d.candidates.map(c => `
-    <div class="row" style="padding:6px 0;border-top:1px solid var(--line)">
-      <span class="grow" style="font-size:13px">Voice ${c.index + 1}</span>
+  if (!candidates.length) { box.innerHTML = ''; return; }
+  box.innerHTML = candidates.map(c => {
+    const on = c.index === chosenVoice;
+    return `
+    <div class="row" style="padding:7px 0;border-top:1px solid var(--line);
+         ${on ? 'background:var(--accent-soft);border-radius:var(--r-sm)' : ''}">
+      <span class="grow" style="font-size:13px;padding-left:${on ? '8px' : '0'}">
+        Voice ${c.index + 1}${on ? ' &middot; <strong>in use</strong>' : ''}
+      </span>
       <audio controls preload="none" style="height:32px"
              src="/api/recap/projects/${p.id}/file?name=${encodeURIComponent(c.file)}"></audio>
-      <button class="sm" data-pick="${c.index}">Use this</button>
-    </div>`).join('');
+      <button class="sm ${on ? 'ghost' : ''}" data-pick="${c.index}" ${on ? 'disabled' : ''}>
+        ${on ? 'chosen' : 'Use this'}
+      </button>
+    </div>`;
+  }).join('');
+
   box.querySelectorAll('[data-pick]').forEach(b => {
-    b.onclick = async () => {
-      b.disabled = true;
-      try {
-        await post(`/api/recap/projects/${p.id}/voice/candidates/select?index=${b.dataset.pick}`, {});
-        $('auditionNote').textContent = `voice ${Number(b.dataset.pick) + 1} chosen - regenerate narration`;
-      } catch (e) { showError($('stepErr'), e.message); }
-      finally { b.disabled = false; }
-    };
+    b.onclick = () => useCandidate(p, Number(b.dataset.pick));
   });
+}
+
+async function useCandidate(p, index, quiet) {
+  try {
+    await post(`/api/recap/projects/${p.id}/voice/candidates/select?index=${index}`, {});
+    chosenVoice = index;
+    renderCandidates(p);
+    if (!quiet) {
+      $('auditionNote').textContent =
+        `voice ${index + 1} in use - regenerate the narration to hear it`;
+    }
+  } catch (e) { showError($('stepErr'), e.message); }
 }
 
 $('auditionVoices').onclick = async () => {
   const p = current(); if (!p) return;
   const btn = $('auditionVoices');
+  const want = 4;
   btn.disabled = true;
-  // the first call loads the model, which is slow and worth saying so
-  $('auditionNote').textContent = 'generating - the first one loads the model, give it a minute';
+  candidates = [];
+  chosenVoice = -1;
+  renderCandidates(p);
+
   try {
-    const d = await post(
-      `/api/recap/projects/${p.id}/voice/candidates?count=4&lang=${p.voice_lang || 'en'}`, {});
-    renderCandidates(p, d);
-    $('auditionNote').textContent = 'play each, then keep one';
-  } catch (e) { showError($('stepErr'), e.message); $('auditionNote').textContent = ''; }
-  finally { btn.disabled = false; }
+    for (let i = 0; i < want; i++) {
+      $('auditionNote').textContent = i === 0
+        ? 'generating the first voice - this one loads the model, give it a minute'
+        : `generating voice ${i + 1} of ${want}...`;
+      const d = await post(
+        `/api/recap/projects/${p.id}/voice/candidates` +
+        `?count=1&slot=${i}&lang=${p.voice_lang || 'my'}`, {});
+      const row = (d.candidates || [])[0];
+      if (!row) break;
+      candidates.push(row);
+      // adopt the first straight away, so a voice is always actually chosen
+      if (i === 0) await useCandidate(p, row.index, true);
+      else renderCandidates(p);
+    }
+    $('auditionNote').textContent = candidates.length
+      ? 'voice 1 is in use - play the others and switch if you prefer one'
+      : 'nothing was generated';
+  } catch (e) {
+    showError($('stepErr'), e.message);
+    $('auditionNote').textContent = candidates.length
+      ? `stopped after ${candidates.length}` : '';
+  } finally { btn.disabled = false; }
+};
+
+/* ------------------------------------------------------ a script of your own */
+$('ownToggle').onclick = () => {
+  const box = $('ownBox');
+  const hidden = box.classList.contains('hide');
+  box.classList.toggle('hide', !hidden);
+  $('ownToggle').textContent = hidden ? 'Cancel' : 'Write one';
+  if (hidden && !$('ownText').value.trim()) {
+    // start from the current script, since editing one is easier than typing one
+    const p = current();
+    if (p && (p.beats || []).length) {
+      const lang = $('ownLang').value;
+      $('ownText').value = p.beats.map(b => (b[lang] || '').trim())
+                                  .filter(Boolean).join('\n\n');
+    }
+  }
+};
+
+$('ownApply').onclick = async () => {
+  const p = current(); if (!p) return;
+  const text = $('ownText').value.trim();
+  showError($('ownErr'), '');
+  if (!text) return showError($('ownErr'), 'Paste your script first.');
+  if (!confirm('Replace the current script with this one?\n\n' +
+               'The cut and the narration made from the old script are cleared.')) return;
+
+  $('ownApply').disabled = true;
+  try {
+    const r = await post(`/api/recap/projects/${p.id}/script/manual`,
+                         { text, lang: $('ownLang').value });
+    $('ownBox').classList.add('hide');
+    $('ownToggle').textContent = 'Write one';
+    $('scriptNote').textContent = `your own script - ${r.lines} lines`;
+    upsert(await request(`/api/recap/projects/${p.id}`));
+  } catch (e) { showError($('ownErr'), e.message); }
+  finally { $('ownApply').disabled = false; }
 };
 
 $('pickReference').onclick = () => { $('referenceFile').value = ''; $('referenceFile').click(); };
@@ -1704,6 +1918,61 @@ $('stopBtn').onclick = async () => {
   catch (e) { showError($('stepErr'), e.message); }
   finally { $('stopBtn').disabled = false; }
 };
+
+/* How long the narration will run, against how long the video is. This is the
+   number that decides the length of the finished video, because the cut is
+   fitted to the narration -- so a script far shorter than the source is worth
+   seeing before anything is spoken or encoded. */
+async function loadLength(p) {
+  try {
+    const d = await request(
+      `/api/recap/projects/${p.id}/script/length?lang=${p.voice_lang || 'my'}`);
+    const fmt = s => s >= 60 ? `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`
+                             : `${Math.round(s)}s`;
+    const spoken = d.spoken_seconds > 0;
+    $('lengthNote').textContent =
+      `${d.lines} lines - narration ${fmt(d.narration_seconds)}` +
+      (spoken ? ' (spoken)' : ' (estimated)') +
+      `, video ${fmt(d.video_seconds)}`;
+
+    // worth offering the extension only when there is a real gap to close
+    const short = d.video_seconds > 0 && d.narration_seconds < d.video_seconds * 0.8;
+    $('extendBox').classList.toggle('hide', !short);
+    if (short) {
+      const pct = Math.round(d.narration_seconds / d.video_seconds * 100);
+      $('extendWhy').textContent =
+        `The narration covers about ${pct}% of the video. With "trim to the ` +
+        `narration" on, that is roughly how long the finished recap will be.`;
+      if (!$('extendTarget').value) {
+        $('extendTarget').value = Math.round(d.video_seconds * 0.9);
+      }
+    }
+  } catch (e) { $('lengthNote').textContent = ''; }
+}
+
+$('refreshLength').onclick = () => { const p = current(); if (p) loadLength(p); };
+
+$('extendScript').onclick = async () => {
+  const p = current(); if (!p) return;
+  const want = Number($('extendTarget').value) || 0;
+  if (want <= 0) return showError($('stepErr'), 'Give a target length in seconds.');
+  const btn = $('extendScript');
+  btn.disabled = true;
+  const before = btn.textContent;
+  btn.textContent = 'extending...';
+  try {
+    const r = await post(`/api/recap/projects/${p.id}/script/extend`,
+                         { target_seconds: want, lang: p.voice_lang || 'my' });
+    upsert(await request(`/api/recap/projects/${p.id}`));
+    loadLength(current());
+    $('lengthNote').textContent = r.changed
+      ? `${r.changed} lines extended - about ${Math.round(r.before)}s to ${Math.round(r.after)}s`
+      : (r.note || 'nothing was changed');
+  } catch (e) { showError($('stepErr'), e.message); }
+  finally { btn.disabled = false; btn.textContent = before; }
+};
+
+$('renderFinal').onclick = () => runStep('final');
 
 $('regenScript').onclick = () => runStep('script');
 $('reframe').onclick = () => runStep('thumbnail', { frame_count: Number($('frameCount').value) || 16 });

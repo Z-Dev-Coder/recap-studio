@@ -339,3 +339,113 @@ wrong, and when you do, change as little as possible. List what was wrong in
             revised += 1
 
     return {"checked": len(beats), "revised": revised, "issues": issues[:40]}
+
+
+def estimate_seconds(beats, lang: str = "my") -> float:
+    """
+    How long this script will take to speak, before speaking it.
+
+    Character count over the measured rate. Rough, but it is the only way to
+    answer "will this fill my video?" without paying for the narration first.
+    """
+    total = 0.0
+    for b in beats:
+        text = (getattr(b, lang, "") or "").strip()
+        if text:
+            total += len(text) / MY_CHARS_PER_SECOND
+    return round(total, 1)
+
+
+_EXTEND_SCHEMA = _WRITE_SCHEMA
+
+
+def extend(
+    client: Gemini,
+    beats,
+    story: Story,
+    *,
+    want_seconds: float,
+    lang: str = "my",
+    title: str = "",
+    treatment: str = "recap",
+    temperature: float = 0.75,
+) -> dict:
+    """
+    Make an existing script longer, with more of the story rather than more words.
+
+    A recap can come out far shorter than the video it covers -- eleven lines of
+    five seconds over five minutes of footage. The cut is fitted to the
+    narration, so a thin script produces a short video, and the honest fix is a
+    fuller script rather than padding the footage back out.
+
+    Every line is expanded together, so the additions stay in sequence and read
+    as one narration. Lines already carrying their share are left alone.
+    """
+    beats = [b for b in beats if (getattr(b, lang, "") or "").strip()]
+    if not beats:
+        return {"changed": 0, "before": 0.0, "after": 0.0}
+
+    before = estimate_seconds(beats, lang)
+    if before <= 0 or want_seconds <= before * 1.05:
+        return {"changed": 0, "before": before, "after": before}
+
+    scale = want_seconds / before
+    style = profile_for(treatment)
+
+    rows = []
+    for b in beats:
+        text = getattr(b, lang, "")
+        target = int(len(text) * scale)
+        events = story.events_in(b.start, b.end) if story else []
+        detail = event_block(events, limit=5)
+        row = ["--- LINE {} (now {} characters, aim for about {}) ---".format(
+            b.index, len(text), target)]
+        if detail:
+            row.append("Everything known about this moment:\n" + detail)
+        row.append("What it currently says:\n" + text)
+        rows.append("\n".join(row))
+
+    prompt = "\n\n".join(x for x in [
+        "The Burmese narration below is too short for the video it plays over. "
+        "It runs about {:.0f} seconds and needs to run about {:.0f}.".format(
+            before, want_seconds),
+        story.overview_block() if story else "",
+        story.cast_block() if story else "",
+        "\n\n".join(rows),
+        "HOW TO LENGTHEN IT\n"
+        "Add what is actually there. Every line has notes above it -- the "
+        "events, their causes, what they led to, who was involved -- and most "
+        "of that has been left out. Put it in.\n"
+        "- Say more about what happens, not the same thing at greater length.\n"
+        "- Nothing invented. If the notes do not support it, it does not go in.\n"
+        "- No filler, no restating the previous sentence, no words whose only "
+        "job is to reach the character count. A line that cannot honestly grow "
+        "should be returned as it is.\n"
+        "- Keep the order and keep it reading as one continuous narration.\n"
+        "- Same names, same spellings.",
+        "AND KEEP IT SOUNDING LIKE THIS\n" + style.burmese,
+        STYLE,
+        "Return every line, with its index and the full new text.",
+    ] if x and x.strip())
+
+    try:
+        data = client.generate_json(prompt, _EXTEND_SCHEMA, temperature)
+    except GeminiError:
+        return {"changed": 0, "before": before, "after": before}
+
+    by_index = {b.index: b for b in beats}
+    changed = 0
+    for item in data.get("lines") or []:
+        try:
+            i = int(item.get("index", -1))
+        except (TypeError, ValueError):
+            continue
+        text = (item.get(lang) or item.get("my") or "").strip()
+        beat = by_index.get(i)
+        # only accept a genuine expansion; a shorter rewrite is not the job
+        if beat is not None and text and len(text) > len(getattr(beat, lang, "")):
+            setattr(beat, lang, text)
+            changed += 1
+
+    return {"changed": changed, "before": before,
+            "after": estimate_seconds(beats, lang)}

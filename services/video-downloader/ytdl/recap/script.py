@@ -10,6 +10,7 @@ property of the plan instead of a hope about the output.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, asdict
 
 from .content import PROFILES, profile_for
@@ -129,7 +130,12 @@ def beat_plan(duration: float, mode: str, target_seconds: float = 0.0) -> tuple[
         total = target_seconds or 60.0
         count = 8 if total <= 45 else 10 if total <= 75 else 12
         return count, total / count
-    total = target_seconds or max(45.0, min(duration * 0.22, 300.0))
+    # With no length chosen this used to plan for 22% of the source -- a
+    # summary. That was survivable while the cut had its own length, but the
+    # cut is now fitted to the narration, so 22% of the source WAS the finished
+    # video: seven minutes in, ninety seconds out. Long form now defaults to
+    # the whole thing, which is also where the length slider starts.
+    total = target_seconds or duration or 45.0
     count = max(6, min(24, int(duration // 60) + 6))
     return count, max(4.0, total / count)
 
@@ -604,6 +610,7 @@ def generate(
     context: str = "",
     frames: list[tuple[str, bytes]] | None = None,
     treatment: str = "recap",
+    cancel=None,
 ) -> dict:
     """
     Video in, recap package out, in four stages rather than one prompt.
@@ -630,11 +637,26 @@ def generate(
     """
     from . import burmese as burmese_mod
     from . import story as story_mod
+    from .media import Cancelled
+
+    def check() -> None:
+        """
+        Stop between stages.
+
+        A Gemini call cannot be interrupted once it is in flight, so the stop
+        button can only take effect at a stage boundary -- but there are four
+        of them here, and without this the whole step ran to completion however
+        early Stop was pressed. Checking between them is the difference between
+        "stops in a moment" and "does nothing".
+        """
+        if cancel is not None and cancel.is_set():
+            raise Cancelled()
 
     client = Gemini(api_key, model)
     count, clip_len = beat_plan(duration, mode, target_seconds)
 
     # ---------------------------------------------------------- 1. read it
+    check()
     story = story_mod.analyse(
         client, title=title, duration=duration, cues=cues,
         context=context, frames=frames,
@@ -658,6 +680,7 @@ def generate(
         )
 
     # ------------------------------------------------- 2. pick the moments
+    check()
     prompt = build_prompt(
         title=title, uploader=uploader, duration=duration, cues=cues,
         windows=windows, clip_len=clip_len, mode=mode,
@@ -672,6 +695,7 @@ def generate(
         return max(1.5, min(beat.end - beat.start, clip_len * 1.5))
 
     # ------------------------------------------------- 3. write the Burmese
+    check()
     written = burmese_mod.write(
         client, beats, story, title=title, seconds_for=seconds_for,
         temperature=min(0.9, temperature + 0.1), treatment=treatment,
@@ -679,6 +703,7 @@ def generate(
 
     # ------------------------------------------------------- 4. read it back
     review = {"checked": 0, "revised": 0, "issues": []}
+    check()
     if written:
         review = burmese_mod.review(
             client, beats, story, title=title, seconds_for=seconds_for,
@@ -710,3 +735,75 @@ def generate(
         "burmese_written": written,
         "burmese_review": review,
     }
+
+
+# ------------------------------------------------------- a script of your own
+
+def parse_manual(text: str, duration: float, lang: str = "my") -> list[Beat]:
+    """
+    Turn a script the user wrote themselves into beats.
+
+    Two shapes are accepted, because both are things people actually have:
+
+    * plain lines -- one narration line per line (or per blank-line-separated
+      block). These carry no timings, so they are laid evenly across the video
+      and the cut is fitted to the narration afterwards, exactly as it is for a
+      generated script.
+    * SRT -- if the text parses as subtitles, its timings are used as given.
+      Someone who has taken the trouble to time their script means those times.
+
+    The chosen language is where the text goes; the other side is left empty
+    rather than machine-translated into it.
+    """
+    lang = lang if lang in ("en", "my") else "my"
+    rows = _manual_srt(text)
+    if rows is None:
+        blocks = [b.strip() for b in re.split(r"\n\s*\n", text) if b.strip()]
+        if len(blocks) < 2:
+            blocks = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        rows = [(None, None, " ".join(b.split())) for b in blocks]
+
+    rows = [(s, e, t) for s, e, t in rows if t.strip()]
+    if not rows:
+        return []
+
+    windows = plan_windows(duration, len(rows)) if duration > 0 else []
+    beats: list[Beat] = []
+    for i, (start, end, body) in enumerate(rows):
+        if start is None and windows:
+            ws, we = windows[i]
+            # a nominal span; the cut is fitted to the spoken length later
+            start, end = ws, min(we, ws + max(2.0, (we - ws) * 0.6))
+        elif start is None:
+            start, end = float(i), float(i) + 2.0
+        beat = Beat(index=i, start=round(float(start), 3), end=round(float(end), 3),
+                    score=5.0, why="written by hand")
+        setattr(beat, lang, body)
+        beats.append(beat)
+    return beats
+
+
+def _manual_srt(text: str) -> list[tuple[float, float, str]] | None:
+    """Parse SRT if that is what this is, otherwise None."""
+    stamp = re.compile(
+        r"(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*"
+        r"(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})"
+    )
+    if not stamp.search(text):
+        return None
+
+    out: list[tuple[float, float, str]] = []
+    for block in re.split(r"\n\s*\n", text):
+        found = stamp.search(block)
+        if not found:
+            continue
+        h1, m1, s1, ms1, h2, m2, s2, ms2 = (int(x) for x in found.groups())
+        start = h1 * 3600 + m1 * 60 + s1 + ms1 / 1000
+        end = h2 * 3600 + m2 * 60 + s2 + ms2 / 1000
+        body = " ".join(
+            ln.strip() for ln in block.splitlines()
+            if ln.strip() and not stamp.search(ln) and not ln.strip().isdigit()
+        )
+        if body:
+            out.append((start, max(end, start + 0.5), body))
+    return out or None

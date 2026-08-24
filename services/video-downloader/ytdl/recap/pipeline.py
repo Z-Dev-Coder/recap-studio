@@ -236,6 +236,7 @@ def run_script(
     temperature: float = 0.7,
     use_scrape: bool = True,
     use_vision: bool = True,
+    cancel=None,
 ) -> None:
     """Ask Gemini for the recap script, description, hashtags and title."""
     if not project.transcript:
@@ -265,7 +266,11 @@ def run_script(
 
     context = "\n\n".join(parts)
 
-    count, _ = script_mod.beat_plan(duration, project.mode, project.target_seconds)
+    # The length the user actually set lives on the cut slider, so prefer it:
+    # planning the script to one length and the cut to another is how the two
+    # ended up disagreeing.
+    wanted = project.target_seconds or project.cut_seconds or 0.0
+    count, _ = script_mod.beat_plan(duration, project.mode, wanted)
     frames = collect_frames(project, duration, count) if use_vision else []
 
     result = script_mod.generate(
@@ -276,11 +281,12 @@ def run_script(
         duration=duration,
         cues=cues,
         mode=project.mode,
-        target_seconds=project.target_seconds,
+        target_seconds=wanted,
         temperature=temperature,
         context=context,
         frames=frames,
         treatment=project.content_type or "recap",
+        cancel=cancel,
     )
 
     project.duration = duration
@@ -577,9 +583,15 @@ def run_final(project: Project, on_progress=None, cancel=None) -> None:
         for m in rows:
             row = by_index.get(int(m.get("index", -1)))
             at = float(row["recap_start"]) + VOICE_LEAD if row else float(m.get("at") or 0)
+            at = max(0.0, at)
+            # Write the position back. It was computed for the mux and thrown
+            # away, so the saved narration kept the provisional positions the
+            # lines were recorded against -- the file was right and the data
+            # describing it was wrong, which is worse than either.
+            m["at"] = round(at, 3)
             path = project.voice_dir / m["file"]
             if path.exists():
-                clips.append({"path": path, "at": max(0.0, at)})
+                clips.append({"path": path, "at": at})
         if not clips:
             continue
 
