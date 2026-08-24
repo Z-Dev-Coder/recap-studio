@@ -96,10 +96,12 @@ def device_note() -> str:
         name = torch.cuda.get_device_name(0)
         gb = torch.cuda.get_device_properties(0).total_memory / 1e9
         note = f"{name}, {gb:.0f}GB"
-        # measured here on a 6GB GTX 1660 Ti: the 0.5B model narrates at about
-        # a third of realtime, which is usable. VoxCPM2 wants a bigger card.
+        # VoxCPM2 is documented as wanting 8GB, but it was measured fitting a
+        # 6GB card here using 6.4GB of it -- tight rather than impossible. The
+        # warning stays, because anything else claiming VRAM mid-run will
+        # break it.
         if gb < 7.5:
-            note += " -- good for the 0.5B model; VoxCPM2 wants 8GB"
+            note += " -- VoxCPM2 fits, but only just; close other GPU work"
     else:
         note = ("CPU only -- around 100x slower than realtime, which is not "
                 "practical. A CUDA build of PyTorch fixes it.")

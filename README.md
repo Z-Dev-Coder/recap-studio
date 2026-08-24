@@ -126,6 +126,13 @@ See [Getting a Gemini API key](#getting-a-gemini-api-key). Free tier is enough.
 
 ### Step 5 — Optional: enable local narration
 
+> **Set up the service environment first.** Run `setup-external.cmd` from the
+> source checkout, or the commands below against
+> `%APPDATA%\Toolbox\service`. That folder sits outside the app, so updating
+> Toolbox never deletes it — an environment inside the app folder is wiped on
+> every update, which also makes the update take minutes.
+
+
 The installer deliberately leaves out the local-narration stack — it is 4.3 GB
 of PyTorch for a feature that downloads its own model as well. To turn it on,
 point these at wherever you installed:

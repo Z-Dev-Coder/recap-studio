@@ -31,7 +31,14 @@
       "!services/video-downloader/venv/Lib/site-packages/librosa/**",
       "!services/video-downloader/venv/Lib/site-packages/sklearn/**",
       "!services/video-downloader/venv/Lib/site-packages/scipy/**",
-      "!services/video-downloader/venv/Lib/site-packages/datasets/**"
+      "!services/video-downloader/venv/Lib/site-packages/datasets/**",
+      "!services/video-downloader/venv/Lib/site-packages/scipy.libs/**",
+      "!services/video-downloader/venv/Lib/site-packages/playwright/**",
+      "!services/video-downloader/venv/Lib/site-packages/playwright_stealth/**",
+      "!services/video-downloader/venv/Lib/site-packages/**/tests/**",
+      "!services/video-downloader/venv/Lib/site-packages/**/test/**",
+      "!services/video-downloader/venv/Lib/site-packages/**/*.dist-info/**",
+      "!services/video-downloader/venv/Lib/site-packages/**/__pycache__/**"
     ],
     "win": {
       "target": [

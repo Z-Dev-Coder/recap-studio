@@ -16,6 +16,11 @@ const os = require('os');
 const http = require('http');
 const { spawn, execFile } = require('child_process');
 
+// Without this, a dev run resolves userData to ...\Roaming\Electron while the
+// packaged app uses ...\Roaming\Toolbox -- so the two would keep separate
+// settings and, worse, separate service environments.
+app.setName('Toolbox');
+
 const SETTINGS_FILE = () => path.join(app.getPath('userData'), 'settings.json');
 const MANIFEST_FILE = path.join(__dirname, 'modules', 'manifest.json');
 
@@ -102,6 +107,25 @@ function ping(url) {
   });
 }
 
+/* Where the service's Python lives.
+
+   The bundled venv sits inside the app folder, and an installer wipes that
+   folder before writing the new version -- so anything installed into it
+   (PyTorch and VoxCPM run to several gigabytes) is destroyed on every update,
+   and the delete itself makes the install crawl.
+
+   A venv in userData survives updates and is checked first. The bundled one
+   remains the fallback, so a fresh install still works with no setup. */
+function externalVenv() {
+  return path.join(app.getPath('userData'), 'service', 'Scripts', 'python.exe');
+}
+
+function pythonFor(root, cfg) {
+  const outside = externalVenv();
+  if (fs.existsSync(outside)) return outside;
+  return path.isAbsolute(cfg.python) ? cfg.python : path.join(root, cfg.python);
+}
+
 async function startService(id) {
   const cfg = (manifest.services || {})[id];
   if (!cfg) throw new Error('Unknown service: ' + id);
@@ -116,7 +140,7 @@ async function startService(id) {
   const root = path.isAbsolute(cfg.projectRoot)
     ? cfg.projectRoot
     : path.join(__dirname, cfg.projectRoot);
-  const exe = path.isAbsolute(cfg.python) ? cfg.python : path.join(root, cfg.python);
+  const exe = pythonFor(root, cfg);
   if (!fs.existsSync(exe)) {
     throw new Error('Interpreter not found:\n' + exe + '\n\n' + (cfg.setupHint || ''));
   }
@@ -374,6 +398,17 @@ function downloadsDir() {
 }
 
 /* ================= ipc ================= */
+/* The page shows this so the install command names a real path rather than a
+   guess the user has to translate. */
+ipcMain.handle('app:servicePython', () => {
+  const outside = externalVenv();
+  return {
+    external: outside,
+    inUse: fs.existsSync(outside) ? outside : 'bundled',
+    updateSafe: fs.existsSync(outside),
+  };
+});
+
 ipcMain.handle('app:modules', () => loadManifest().modules);
 ipcMain.handle('app:version', () => ({
   app: app.getVersion(), electron: process.versions.electron, node: process.versions.node
