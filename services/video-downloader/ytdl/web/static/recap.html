@@ -2169,7 +2169,21 @@ function listen() {
     renderProject();
     listen();
   } catch (e) {
-    $('envWarn').innerHTML = `<div class="banner err">${escapeHtml(e.message)}</div>`;
+    // Boot loads the settings, the projects and the content types in one go.
+    // If any of it fails -- most often because the local service is still
+    // starting, or restarted underneath an open page -- everything downstream
+    // is skipped and the app just looks empty, which reads as a broken UI
+    // rather than a page that could not reach its backend. Say what happened
+    // and offer the one action that fixes it.
+    $('envWarn').innerHTML =
+      `<div class="banner err">
+         <strong>Could not reach the local service.</strong>
+         ${escapeHtml(e.message)}<br>
+         The page may have loaded while the service was restarting.
+         <button class="sm" id="bootRetry" style="margin-top:8px">Try again</button>
+       </div>`;
+    const retry = $('bootRetry');
+    if (retry) retry.onclick = () => location.reload();
   }
 })();
 </script>
