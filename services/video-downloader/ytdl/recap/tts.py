@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import struct
 import time
+import wave
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -260,6 +261,15 @@ def custom_path(out_dir: Path, index: int, lang: str) -> Path:
     return out_dir / f"line_{index:03d}_{lang}_custom.wav"
 
 
+def clip_seconds_of(path: Path) -> float:
+    """How long a finished clip runs, so the cut can be fitted to it."""
+    try:
+        with wave.open(str(path)) as w:
+            return w.getnframes() / float(w.getframerate() or 1)
+    except Exception:      # noqa: BLE001 - a length we cannot read is just unknown
+        return 0.0
+
+
 def narrate(
     api_key: str,
     timeline: list[dict],
@@ -303,7 +313,9 @@ def narrate(
         mine = custom_path(out_dir, i, lang)
         if mine.exists() and mine.stat().st_size > 1000:
             made.append({"file": mine.name, "at": float(row.get("recap_start") or 0),
-                         "text": row[lang], "custom": True})
+                         "text": row[lang], "custom": True,
+                         "index": int(row.get("index", i)),
+                         "seconds": clip_seconds_of(mine)})
             if on_progress:
                 on_progress(i + 1, len(rows))
             continue
@@ -312,7 +324,9 @@ def narrate(
         if dest.exists() and dest.stat().st_size > 1000:
             # a retry after a rate limit resumes instead of paying for it twice
             made.append({"file": dest.name, "at": float(row.get("recap_start") or 0),
-                         "text": row[lang]})
+                         "text": row[lang],
+                         "index": int(row.get("index", i)),
+                         "seconds": clip_seconds_of(dest)})
             if on_progress:
                 on_progress(i + 1, len(rows))
             continue
@@ -355,6 +369,8 @@ def narrate(
             "file": dest.name,
             "at": float(row.get("recap_start") or 0),
             "text": row[lang],
+            "index": int(row.get("index", i)),
+            "seconds": clip_seconds_of(dest),
         })
         if on_progress:
             on_progress(i + 1, len(rows))

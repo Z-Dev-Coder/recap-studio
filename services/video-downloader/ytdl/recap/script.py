@@ -39,11 +39,78 @@ class Beat:
 
 # ------------------------------------------------------------------ planning
 
-def plan_windows(duration: float, count: int) -> list[tuple[float, float]]:
-    """Equal chapters across the whole video: the coverage guarantee."""
+# How far a chapter boundary may slide to avoid landing mid-event, as a share
+# of one chapter. Small on purpose: the equal spacing is what guarantees the
+# recap covers the whole video, and that guarantee is worth more than a
+# perfectly placed cut.
+SNAP_WINDOW = 0.35
+
+
+def plan_windows(
+    duration: float,
+    count: int,
+    cues: list[Cue] | None = None,
+    events: list[dict] | None = None,
+) -> list[tuple[float, float]]:
+    """
+    Chapters across the whole video: the coverage guarantee.
+
+    Equal chapters are what stop a recap from covering the first three minutes
+    and calling it done, so the spacing stays essentially equal. But a boundary
+    that falls in the middle of a sentence -- or in the middle of an event --
+    splits one moment across two beats, and both halves then get narrated as if
+    they were separate things.
+
+    So each interior boundary is allowed to slide, by at most SNAP_WINDOW of a
+    chapter, to the nearest gap between speech, preferring a gap that is also a
+    seam between story events. Boundaries stay in order and no chapter is
+    allowed to collapse.
+    """
     count = max(1, count)
+    if duration <= 0:
+        return [(0.0, 0.0)]
     step = duration / count
-    return [(i * step, (i + 1) * step) for i in range(count)]
+    edges = [i * step for i in range(count + 1)]
+
+    seams = _boundary_candidates(cues, events)
+    if seams:
+        reach = step * SNAP_WINDOW
+        for i in range(1, count):
+            near = [t for t in seams if abs(t - edges[i]) <= reach]
+            if not near:
+                continue
+            # keep the order strict, so no chapter can vanish
+            low = edges[i - 1] + step * 0.25
+            high = edges[i + 1] - step * 0.25
+            near = [t for t in near if low < t < high]
+            if near:
+                edges[i] = min(near, key=lambda t: abs(t - edges[i]))
+
+    return [(edges[i], edges[i + 1]) for i in range(count)]
+
+
+def _boundary_candidates(
+    cues: list[Cue] | None,
+    events: list[dict] | None,
+) -> list[float]:
+    """
+    Moments where cutting is least likely to break something.
+
+    A pause in the speech is the cheap signal, available on every video. When
+    the story analysis ran, the edges of its events are the better signal, and
+    they are offered twice so a pause that is also an event seam wins.
+    """
+    out: list[float] = []
+    for a, b in zip(cues or [], (cues or [])[1:]):
+        if b.start - a.end >= 0.35:          # a real pause, not a breath
+            out.append((a.end + b.start) / 2)
+    for e in events or []:
+        try:
+            out.append(float(e.get("end", 0)))
+            out.append(float(e.get("start", 0)))
+        except (TypeError, ValueError):
+            continue
+    return sorted(t for t in out if t > 0)
 
 
 def beat_plan(duration: float, mode: str, target_seconds: float = 0.0) -> tuple[int, float]:
@@ -92,11 +159,10 @@ _SCHEMA = {
                     "start": {"type": "number"},
                     "end": {"type": "number"},
                     "en": {"type": "string"},
-                    "my": {"type": "string"},
                     "score": {"type": "number"},
                     "why": {"type": "string"},
                 },
-                "required": ["index", "start", "end", "en", "my", "score", "why"],
+                "required": ["index", "start", "end", "en", "score", "why"],
             },
         },
     },
@@ -108,14 +174,39 @@ _SCHEMA = {
 }
 
 
-def _windows_block(cues: list[Cue], windows: list[tuple[float, float]]) -> str:
+def _windows_block(
+    cues: list[Cue],
+    windows: list[tuple[float, float]],
+    story=None,
+) -> str:
+    """
+    Each chapter as the beat-picker sees it.
+
+    When the story analysis ran, what HAPPENS in a chapter is listed above what
+    is SAID in it. A transcript alone leaves the model to infer events from
+    dialogue, which is how visual moments -- somebody arriving, escaping, being
+    caught -- get missed on videos that show more than they say.
+    """
+    from .story import event_block
+
     lines = []
     for i, (ws, we) in enumerate(windows):
+        parts = ["### Chapter {} | window {:.1f}s - {:.1f}s".format(i, ws, we)]
+
+        detail = event_block(story.events_in(ws, we), limit=5) if story else ""
+        if detail:
+            parts.append("What happens:\n" + detail)
+
         inside = cues_in(cues, ws, we)
-        body = " ".join(c.text for c in inside).strip() or "(no speech in this stretch)"
-        if len(body) > 1600:
-            body = body[:1600] + " ..."
-        lines.append("### Chapter {} | window {:.1f}s - {:.1f}s\n{}".format(i, ws, we, body))
+        body = " ".join(c.text for c in inside).strip()
+        if len(body) > 1400:
+            body = body[:1400] + " ..."
+        if body:
+            parts.append("What is said:\n" + body)
+        elif not detail:
+            parts.append("(no speech in this stretch)")
+
+        lines.append("\n".join(parts))
     return "\n\n".join(lines)
 
 
@@ -161,6 +252,7 @@ def build_prompt(
     mode: str,
     context: str = "",
     frame_note: str = "",
+    story=None,
 ) -> str:
     kind = (
         "a punchy vertical short/reel" if mode == "reels"
@@ -174,8 +266,11 @@ Channel: {uploader}
 Length: {dur:.0f} seconds ({mins:.1f} minutes)
 Target: {kind}
 
-{context}{frame_note}The video below is split into {n} equal chapters. The transcript for
-each chapter follows.
+{context}{frame_note}The video below is split into {n} chapters, covering it end to end. What
+happens in each -- and what is said in it -- follows.
+
+The Burmese narration is written separately, from the same notes. Write only
+the English here.
 
 {chapters}
 
@@ -195,14 +290,9 @@ Return JSON with these fields.
      who does what, to whom, and what it leads to. Name the people and things
      on screen. Do not repeat the transcript verbatim -- retell it in your own
      words, sharper than the original.
-   - "my": the SAME line in natural Burmese (Myanmar), carrying every piece of
-     information the English carries -- the names, the actions, the outcome.
-     Write how a Burmese creator would actually say it, not a word-for-word
-     transliteration, and never a shortened gloss: if the English runs to four
-     sentences, so does the Burmese. A Burmese line visibly briefer than its
-     English twin is wrong and must be rewritten longer and fuller. The Burmese
-     lines must join up the same way the English ones do, with the connecting
-     words Burmese narration actually uses.
+     The lines are read out back to back, so each one must follow on from the
+     one before it. A line that would read the same if the beats were shuffled
+     is wrong.
    - "score": 1-10, how strongly this moment would hold a scrolling viewer.
      Score against these, and say which one applies in "why":
        hook (makes you stop scrolling), emotional peak, strong opinion,
@@ -251,7 +341,7 @@ Write for a real audience: concrete, specific, no filler like "in this video".
         n=len(windows),
         context=(context + "\n\n") if context else "",
         frame_note=(frame_note + "\n\n") if frame_note else "",
-        chapters=_windows_block(cues, windows),
+        chapters=_windows_block(cues, windows, story),
         clip=clip_len,
         minclip=clip_len * 0.6,
         length_rule=_length_rule(clip_len, mode),
@@ -275,6 +365,9 @@ def repair_beats(
     """
     by_index: dict[int, dict] = {}
     for item in raw or []:
+        # the model has returned bare strings and numbers in this array before
+        if not isinstance(item, dict):
+            continue
         try:
             i = int(item.get("index", -1))
         except (TypeError, ValueError):
@@ -326,99 +419,56 @@ def coverage(beats: list[Beat], duration: float) -> float:
     return min(1.0, (beats[-1].end - beats[0].start) / duration)
 
 
-# ------------------------------------------------------------------ parity
+# --------------------------------------------------------- Burmese quality
 
-# Measured against real output: a Burmese line carrying the same content as its
-# English twin runs roughly 0.9-1.4x its character count. Below this it is a
-# compressed gloss, which is what "the Burmese is too short" looks like in the
-# data.
-PARITY_FLOOR = 0.85
-
-_EXPAND_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "items": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "index": {"type": "integer"},
-                    "my": {"type": "string"},
-                },
-                "required": ["index", "my"],
-            },
-        }
-    },
-    "required": ["items"],
-}
-
-
-def thin_burmese(beats: list[Beat]) -> list[int]:
-    """Indexes whose Burmese says visibly less than the English."""
-    thin = []
-    for i, b in enumerate(beats):
-        if not b.en.strip():
-            continue
-        if not b.my.strip() or len(b.my) < PARITY_FLOOR * len(b.en):
-            thin.append(i)
-    return thin
-
-
-def expand_burmese(client: Gemini, beats: list[Beat], title: str = "") -> int:
+def thin_burmese(beats: list[Beat], seconds_for=None) -> list[int]:
     """
-    Rewrite the Burmese lines that came back short, in one extra call.
+    Which Burmese lines are worth a second pass.
 
-    Asking again for the whole package would re-roll the English and the
-    timings too; this touches only the lines that need more words, so a good
-    first draft is not thrown away to fix a few of them.
+    This used to compare the Burmese character count against the English one
+    and flag anything under 85% of it. Measured against real output that test
+    is meaningless: the same content in Burmese runs anywhere from 1.05x to
+    1.6x the English length, so the ratio says more about the two writing
+    systems than about whether a line is any good. Worse, it pushed the repair
+    pass to pad Burmese with filler until the arithmetic came out right.
+
+    What actually matters is whether the line fits the clip when spoken, so
+    that is what is measured now -- see burmese.needs_work.
+
+    Returns positions in `beats` (not beat indexes), as it always did.
     """
-    thin = thin_burmese(beats)
-    if not thin:
+    from . import burmese
+
+    flagged = set(burmese.needs_work(beats, seconds_for))
+    return [i for i, b in enumerate(beats) if b.index in flagged]
+
+
+def expand_burmese(
+    client: Gemini,
+    beats: list[Beat],
+    title: str = "",
+    story=None,
+    seconds_for=None,
+) -> int:
+    """
+    Repair the Burmese lines that need it. Kept under its old name because the
+    pipeline and the API both call it, but its job has changed: it no longer
+    makes short lines longer, it fixes lines that are wrong -- missing,
+    inaccurate, unnatural, or the wrong length for the clip they play over.
+
+    Returns how many lines were changed.
+    """
+    from . import burmese
+    from .story import Story
+
+    flagged = burmese.needs_work(beats, seconds_for)
+    if not flagged:
         return 0
-
-    lines = []
-    for i in thin:
-        lines.append(
-            "index {}:\n  ENGLISH: {}\n  CURRENT BURMESE (too short): {}".format(
-                i, beats[i].en, beats[i].my or "(missing)"
-            )
-        )
-
-    header = "These Burmese narration lines for a video recap"
-    if title:
-        header += ' of "{}"'.format(title)
-    header += " are shorter than their English counterparts and have lost detail."
-
-    prompt = "\n\n".join([
-        header,
-        "\n\n".join(lines),
-        "Rewrite each one in natural Burmese (Myanmar script) so it carries "
-        "everything the English says -- the names, the actions, the outcome -- "
-        "at the same length, sentence for sentence. These are spoken narration "
-        "lines that must fill several seconds of video each, so a short "
-        "caption-style line is wrong: write it out in full. Keep the meaning "
-        "and tone. Return the same index for each. Burmese only, no "
-        "transliteration, no English words except proper names that Burmese "
-        "speakers would leave in Latin script.",
-    ])
-
-    try:
-        data = client.generate_json(prompt, _EXPAND_SCHEMA, temperature=0.6)
-    except GeminiError:
-        return 0        # the first draft stands rather than failing the step
-
-    fixed = 0
-    for item in data.get("items") or []:
-        try:
-            i = int(item.get("index", -1))
-        except (TypeError, ValueError):
-            continue
-        text = (item.get("my") or "").strip()
-        # only accept a rewrite that is actually longer than what it replaces
-        if 0 <= i < len(beats) and len(text) > len(beats[i].my):
-            beats[i].my = text
-            fixed += 1
-    return fixed
+    report = burmese.review(
+        client, beats, story or Story(),
+        title=title, seconds_for=seconds_for, only=flagged,
+    )
+    return report.get("revised", 0)
 
 
 # --------------------------------------------------------------- subtitles
@@ -541,25 +591,85 @@ def generate(
     context: str = "",
     frames: list[tuple[str, bytes]] | None = None,
 ) -> dict:
+    """
+    Video in, recap package out, in four stages rather than one prompt.
+
+    It used to be a single call that had to work out the story, pick the
+    moments, write English, write Burmese and lay out the whole social post at
+    once. Everything competed for the same attention, and the Burmese lost --
+    written in the same breath as the English, it came out as a translation of
+    it whatever the instructions said.
+
+    Now:
+      1. READ    -- what actually happens (story.analyse), on its own.
+      2. PICK    -- which moments to use and the English narration, given the
+                    events rather than the raw transcript.
+      3. WRITE   -- the Burmese, from the same events and the whole beat
+                    sequence at once, so lines connect and none of it is
+                    translated from the English.
+      4. CHECK   -- read the Burmese back and repair only what is wrong.
+
+    Stages 1 and 4 degrade to nothing if they fail: no analysis means stage 2
+    falls back to the transcript it always used, and no review leaves the
+    written Burmese standing. Cost is one extra call over the old path in the
+    common case, two when lines need repair.
+    """
+    from . import burmese as burmese_mod
+    from . import story as story_mod
+
+    client = Gemini(api_key, model)
     count, clip_len = beat_plan(duration, mode, target_seconds)
-    windows = plan_windows(duration, count)
+
+    # ---------------------------------------------------------- 1. read it
+    story = story_mod.analyse(
+        client, title=title, duration=duration, cues=cues,
+        context=context, frames=frames,
+    )
+
+    # chapters can now avoid cutting an event in half
+    windows = plan_windows(duration, count, cues, story.events if story else None)
+
+    # The frames were read in stage 1 and what they showed is in the events, so
+    # sending them again here would pay for the same pictures twice to tell the
+    # model something it has already been told in words. They are only attached
+    # when there is no analysis to carry them.
+    resend = None if story else frames
     frame_note = ""
-    if frames:
+    if resend:
         frame_note = (
             "ON-SCREEN CONTENT\n"
             "{} screenshots are attached, one from each chapter in order. Use "
             "them to describe what is actually shown -- slides, code, faces, "
-            "products, on-screen text -- not just what is said.".format(len(frames))
+            "products, on-screen text -- not just what is said.".format(len(resend))
         )
+
+    # ------------------------------------------------- 2. pick the moments
     prompt = build_prompt(
         title=title, uploader=uploader, duration=duration, cues=cues,
         windows=windows, clip_len=clip_len, mode=mode,
-        context=context, frame_note=frame_note,
+        context=context, frame_note=frame_note, story=story or None,
     )
-    client = Gemini(api_key, model)
-    data = client.generate_json(prompt, _SCHEMA, temperature, images=frames)
+    data = client.generate_json(prompt, _SCHEMA, temperature, images=resend)
     beats = repair_beats(data.get("beats") or [], windows, clip_len, duration)
-    expanded = expand_burmese(client, beats, title)
+
+    # the clip a line is spoken over is the only length that matters
+    def seconds_for(beat: Beat) -> float:
+        return max(1.5, min(beat.end - beat.start, clip_len * 1.5))
+
+    # ------------------------------------------------- 3. write the Burmese
+    written = burmese_mod.write(
+        client, beats, story, title=title, seconds_for=seconds_for,
+        temperature=min(0.9, temperature + 0.1),
+    )
+
+    # ------------------------------------------------------- 4. read it back
+    review = {"checked": 0, "revised": 0, "issues": []}
+    if written:
+        review = burmese_mod.review(
+            client, beats, story, title=title, seconds_for=seconds_for,
+        )
+    expanded = review.get("revised", 0)
+
     return {
         "beats": [b.as_dict() for b in beats],
         "video_type": (data.get("video_type") or "").strip(),
@@ -578,4 +688,8 @@ def generate(
         "coverage": round(coverage(beats, duration), 3),
         "mode": mode,
         "burmese_expanded": expanded,
+        # internal, for diagnosis -- never shown to the user
+        "story": story_mod.as_dict(story) if story else {},
+        "burmese_written": written,
+        "burmese_review": review,
     }

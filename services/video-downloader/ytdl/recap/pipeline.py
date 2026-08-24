@@ -28,6 +28,11 @@ from .media import (
     probe,
 )
 from .project import Project
+
+# a beat of silence before the narrator starts and after they finish, so the
+# picture does not change on the same frame as the last syllable
+VOICE_LEAD = 0.4
+VOICE_TAIL = 0.8
 from .transcript import (
     Cue,
     TranscriptError,
@@ -196,7 +201,11 @@ def collect_frames(project: Project, duration: float, count: int) -> list[tuple[
     shots_dir = project.dir / "vision"
     shots_dir.mkdir(parents=True, exist_ok=True)
     frames: list[tuple[str, bytes]] = []
-    count = max(1, min(count, 10))
+    # These now feed the story analysis rather than the narration prompt, and
+    # they are the only evidence for anything that happens without being said,
+    # so a few more of them is worth the quota on a video that shows more than
+    # it tells. Still capped: images are the expensive part of a call.
+    count = max(1, min(count, 16))
     step = duration / count
     for i in range(count):
         when = step * (i + 0.5)
@@ -280,6 +289,7 @@ def run_script(
     project.hashtags = result["hashtags"]
     project.thumbnail_text = result["thumbnail_text"]
     project.coverage = result["coverage"]
+    project.story = result.get("story") or {}
     project.video_type = result.get("video_type", "")
     project.pacing = result.get("pacing", "")
     project.hook = result.get("hook") or {"en": "", "my": ""}
@@ -323,18 +333,31 @@ def run_video(project: Project, on_progress=None, cancel=None) -> None:
     # Captions are burned into their OWN file. Overwriting the clean cut would
     # mean the only way back to an uncaptioned video is to rebuild it, and the
     # captioned one is a preference rather than a correction.
+    _reburn_captions(project, cancel=cancel)
+    project.save()
+
+
+def _reburn_captions(project: Project, cancel=None) -> None:
+    """
+    Redraw the burned-in captions against the current cut.
+
+    Captions are burned into their OWN file. Overwriting the clean cut would
+    mean the only way back to an uncaptioned video is to rebuild it, and the
+    captioned one is a preference rather than a correction. Re-cutting the
+    video invalidates them, because their timings are the recap's timings.
+    """
     captioned = project.captioned_path
     captioned.unlink(missing_ok=True)
-    if project.burn_captions:
-        srt = project.dir / f"recap_script_{project.caption_lang or project.voice_lang}.srt"
-        if srt.exists():
-            try:
-                burn_subtitles(project.recap_path, srt, captioned,
-                               style=project.caption_style, cancel=cancel)
-            except MediaError as exc:
-                raise StepError(f"captions could not be burned in: {exc}") from exc
-
-    project.save()
+    if not project.burn_captions:
+        return
+    srt = project.dir / f"recap_script_{project.caption_lang or project.voice_lang}.srt"
+    if not srt.exists():
+        return
+    try:
+        burn_subtitles(project.recap_path, srt, captioned,
+                       style=project.caption_style, cancel=cancel)
+    except MediaError as exc:
+        raise StepError(f"captions could not be burned in: {exc}") from exc
 
 
 # --------------------------------------------------------------- 5. thumbnail
@@ -452,6 +475,50 @@ def _narrate_one(
     )
     if not made:
         raise StepError("no narration audio was produced")
+
+    # ------------------------------------------------ fit the cut to the voice
+    # Until here the footage was cut to a length the user picked, with no
+    # knowledge of how long the narration would turn out to be. That is how a
+    # 327-second recap ends up carrying 61 seconds of speech: every line is
+    # followed by half a minute of the untrimmed original. Now that the audio
+    # exists its real durations are known, so re-cut each beat to the line
+    # spoken over it and the picture moves with the narrator.
+    if project.fit_to_voice:
+        spoken = {int(m["index"]): m for m in made if m.get("index") is not None}
+        wants = []
+        for i, row in enumerate(project.timeline):
+            entry = spoken.get(int(row.get("index", i)))
+            seconds = float((entry or {}).get("seconds") or 0)
+            # a breath before the line and a moment to land after it
+            wants.append(seconds + VOICE_LEAD + VOICE_TAIL if seconds else 0.0)
+
+        if any(w > 0 for w in wants):
+            try:
+                result = video_mod.build(
+                    project.source_path,
+                    project.beats,
+                    project.recap_path,
+                    mode=project.mode,
+                    target_seconds=project.cut_seconds or project.duration,
+                    duration=project.duration,
+                    cancel=cancel,
+                    framing=project.framing or "blur",
+                    shape=project.shape or "",
+                    fit_seconds=wants,
+                )
+            except MediaError as exc:
+                raise StepError(f"the cut could not be fitted to the voice: {exc}") from exc
+
+            project.timeline = result["timeline"]
+            write_subtitles(project)
+            # the narration now belongs at the new positions, not the old ones
+            for m in made:
+                for row in project.timeline:
+                    if int(row.get("index", -1)) == int(m.get("index", -2)):
+                        m["at"] = float(row["recap_start"]) + VOICE_LEAD
+                        break
+            _reburn_captions(project, cancel=cancel)
+            project.save()
 
     clips = [{"path": project.voice_dir / m["file"], "at": m["at"]} for m in made]
     # narrate over the captioned cut when there is one, so the finished video

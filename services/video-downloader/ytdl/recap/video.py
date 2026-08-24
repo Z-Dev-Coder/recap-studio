@@ -47,6 +47,42 @@ def _bounds(beats: list[dict], duration: float) -> list[tuple[float, float]]:
     return out
 
 
+def plan_fitted(beats: list[dict], wants: list[float],
+                duration: float = 0.0) -> list[tuple[float, float]]:
+    """
+    Give each beat exactly as much footage as its narration needs.
+
+    A recap whose length was chosen independently of the script ends up with
+    five seconds of voice sitting in thirty seconds of footage, eleven times
+    over -- the narration reads as if it stopped after the first line, and the
+    footage in between is the very material the recap was supposed to cut. So
+    size each span to the line spoken over it instead: the picture then changes
+    when the narrator moves on, which is what makes a recap feel edited.
+
+    The span stays centred on the moment the beat named, and cannot grow past
+    its neighbours -- footage belonging to the next beat is not this beat's to
+    borrow.
+    """
+    limits = _bounds(beats, duration)
+    out = []
+    for beat, want, (lo, hi) in zip(beats, wants, limits):
+        start, end = float(beat["start"]), float(beat["end"])
+        want = max(MIN_CLIP, float(want or 0))
+        room = hi - lo
+        if want >= room:
+            out.append((lo, hi))
+            continue
+        middle = (start + end) / 2
+        a = middle - want / 2
+        b = a + want
+        if a < lo:
+            a, b = lo, lo + want
+        elif b > hi:
+            a, b = hi - want, hi
+        out.append((a, b))
+    return out
+
+
 def plan_clips(beats: list[dict], budget: float, duration: float = 0.0) -> list[tuple[float, float]]:
     """
     Choose the span of original video each beat contributes.
@@ -162,6 +198,7 @@ def build(
     cancel=None,
     framing: str = "blur",
     shape: str = "",
+    fit_seconds: list[float] | None = None,
 ) -> dict:
     """
     Splice the beats out of `source` into `dest`.
@@ -190,7 +227,46 @@ def build(
     budget = float(target_seconds or 0)
 
     ordered = sorted(beats, key=lambda b: float(b["start"]))
-    plan = plan_clips(ordered, budget, duration)
+
+    # At the full length there is nothing to splice. The clips have grown until
+    # they meet, so cutting would take the video apart into one part per beat
+    # and glue it straight back together -- eleven re-encodes, eleven seams,
+    # and a file that is the original anyway. Encode it once instead, and map
+    # the beats onto themselves: in an uncut recap, recap time IS source time.
+    if fit_seconds is None and duration > 0 and budget >= duration - 0.5:
+        cut(source, dest, 0.0, duration, vertical=vertical,
+            cancel=cancel, framing=framing)
+        actual = probe(dest).duration or duration
+        timeline = [{
+            "index": b.get("index", i),
+            "source_start": round(float(b["start"]), 3),
+            "source_end": round(float(b["end"]), 3),
+            "recap_start": round(float(b["start"]), 3),
+            "recap_end": round(float(b["end"]), 3),
+            "score": float(b.get("score", 5) or 5),
+            "why": b.get("why", ""),
+            "en": b.get("en", ""),
+            "my": b.get("my", ""),
+        } for i, b in enumerate(ordered)]
+        if on_progress:
+            on_progress(1, 1)
+        try:
+            work.rmdir()
+        except OSError:
+            pass
+        return {
+            "path": str(dest),
+            "duration": round(actual, 2),
+            "clips": 1,
+            "timeline": timeline,
+            "mode": mode,
+            "uncut": True,
+        }
+
+    if fit_seconds:
+        plan = plan_fitted(ordered, fit_seconds, duration)
+    else:
+        plan = plan_clips(ordered, budget, duration)
 
     for i, (beat, span) in enumerate(zip(ordered, plan)):
         if cancel is not None and cancel.is_set():

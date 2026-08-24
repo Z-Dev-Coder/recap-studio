@@ -258,6 +258,7 @@ class EditRequest(BaseModel):
     framing: str | None = None
     shape: str | None = None
     burn_captions: bool | None = None
+    fit_to_voice: bool | None = None
     caption_style: str | None = None
     caption_lang: str | None = None
     language: str | None = None
@@ -733,6 +734,94 @@ def upload_voice_reference(pid: str, req: VoiceReferenceRequest) -> dict:
     }
 
 
+SAMPLE_LINE = {
+    "en": "Here is how this voice sounds reading a line of your recap.",
+    "my": "ပြန်လည်တင်ပြသော "
+          "စာသားကို "
+          "ဒီအသံဖြင့် ဖတ်ပြသည်။",
+}
+
+
+@router.post("/projects/{pid}/voice/candidates")
+def voice_candidates(pid: str, count: int = 4, lang: str = "") -> dict:
+    """
+    Audition several local voices and keep the one that sounds right.
+
+    VoxCPM has no named voices and no seed: with nothing to copy it invents a
+    fresh speaker on every call. That is why the voice list is empty for the
+    local engine -- there is no catalogue to list. So build one here: speak the
+    same sample line a few times, keep each take, and whichever one is chosen
+    becomes the reference clip the whole narration is cloned from. It is the
+    same picker the cloud voices get, with the voices made on the spot.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+
+    from ..recap import localtts
+    if not localtts.available():
+        raise HTTPException(400, "the local voice engine is not installed")
+
+    lang = lang if lang in ("en", "my") else (project.voice_lang or "en")
+    count = max(1, min(6, int(count or 4)))
+    text = SAMPLE_LINE[lang]
+
+    out = project.voice_dir / "candidates"
+    out.mkdir(parents=True, exist_ok=True)
+    for old in out.glob("cand_*.wav"):
+        old.unlink(missing_ok=True)
+    for old in out.glob("cand_*.txt"):
+        old.unlink(missing_ok=True)
+
+    rows = []
+    for i in range(count):
+        try:
+            # no reference and no anchor: each call is a different speaker,
+            # which is the whole point here
+            audio = localtts.speak(
+                text,
+                model_id=project.local_model or localtts.DEFAULT_MODEL,
+                cancel=cancel_event(pid),
+            )
+        except Exception as exc:      # noqa: BLE001
+            if not rows:
+                raise HTTPException(400, f"could not generate a voice: {exc}") from exc
+            break                     # keep whatever was managed
+        wav = out / f"cand_{i}.wav"
+        wav.write_bytes(audio)
+        (out / f"cand_{i}.txt").write_text(text, encoding="utf-8")
+        rows.append({
+            "index": i,
+            "file": f"voice/candidates/{wav.name}",
+            "lang": lang,
+        })
+
+    return {"ok": True, "lang": lang, "text": text, "candidates": rows}
+
+
+@router.post("/projects/{pid}/voice/candidates/select")
+def pick_voice_candidate(pid: str, index: int) -> dict:
+    """Adopt an auditioned voice as the one the narration is spoken in."""
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+
+    src = project.voice_dir / "candidates" / f"cand_{int(index)}.wav"
+    if not src.exists():
+        raise HTTPException(404, "that voice is no longer available - audition again")
+    said = src.with_suffix(".txt")
+
+    target = project.voice_dir / "reference.wav"
+    target.write_bytes(src.read_bytes())
+    project.voice_reference = target.name
+    # the sample text is known exactly, which is the sharpest kind of clone
+    project.voice_reference_text = said.read_text(encoding="utf-8") if said.exists() else ""
+    project.mark("voice", "idle", message="voice chosen - regenerate to use it")
+    project.save()
+    push(project)
+    return {"ok": True, "file": target.name}
+
+
 @router.delete("/projects/{pid}/voice/reference")
 def clear_voice_reference(pid: str) -> dict:
     """Go back to the model's own voice."""
@@ -1083,11 +1172,34 @@ def srt(pid: str, lang: str = "en", timing: str = "recap") -> PlainTextResponse:
     project = store.get(pid)
     if not project:
         raise HTTPException(404, "no such project")
-    if not project.timeline:
-        raise HTTPException(400, "build the recap video first - SRT needs its timings")
+
+    rows = project.timeline
+    if not rows:
+        # Editing the script clears the timeline, because the old cut no longer
+        # matches the new beats. Subtitles against the ORIGINAL still hold --
+        # the beats carry their own source timings and never needed the cut --
+        # so fall back to those rather than refusing a file we can produce.
+        if timing != "original":
+            raise HTTPException(
+                400,
+                "the cut does not match the edited script yet. Rebuild the cut "
+                "for recap-timed subtitles, or download the original timing, "
+                "which works straight from the script.",
+            )
+        rows = [{
+            "source_start": float(b.get("start") or 0),
+            "source_end": float(b.get("end") or 0),
+            "recap_start": float(b.get("start") or 0),
+            "recap_end": float(b.get("end") or 0),
+            "en": b.get("en", ""),
+            "my": b.get("my", ""),
+        } for b in project.beats]
+        if not rows:
+            raise HTTPException(400, "write the recap script first")
+
     body = (
-        source_srt(project.timeline, lang) if timing == "original"
-        else recap_srt(project.timeline, lang)
+        source_srt(rows, lang) if timing == "original"
+        else recap_srt(rows, lang)
     )
     name = f"recap_{lang}_{timing}.srt"
     return PlainTextResponse(

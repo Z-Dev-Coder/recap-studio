@@ -259,6 +259,16 @@
       <button class="ghost sm danger" id="deleteProj" title="Delete project">Delete</button>
     </div>
 
+    <div class="card hide" id="resultBar"
+         style="margin:0 0 4px;border-color:var(--accent);display:flex;align-items:center;gap:14px">
+      <div class="grow">
+        <div class="sec-label" style="padding:0 0 2px">Finished video</div>
+        <div id="resultNote" class="tiny"></div>
+      </div>
+      <span id="resultDownloads" style="display:inline-flex;gap:8px"></span>
+      <button class="sm" id="resultOpen">Open folder</button>
+    </div>
+
     <div class="content">
       <div class="inner">
         <div id="envWarn"></div>
@@ -288,7 +298,12 @@
                 <div class="note" id="guideWhat" style="margin-top:4px"></div>
                 <div class="tiny" id="guideSet" style="margin-top:6px"></div>
               </div>
-              <button class="primary" id="guideRun"></button>
+              <div style="text-align:right">
+                <button class="primary" id="guideRun"></button>
+                <div style="margin-top:8px">
+                  <button class="sm ghost" id="guideRunAll">Run every remaining step</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -319,7 +334,8 @@
               </div>
               <div class="row" style="margin-top:12px">
                 <button class="primary sm" id="applyLen">Apply &amp; rebuild</button>
-                <button class="sm" id="lenFull">Full length</button>
+                <button class="sm" id="lenFull"
+                        title="Put the slider back to the whole original and rebuild">Full length</button>
                 <button class="sm" id="dlVideo">Download</button>
                 <div class="grow"></div>
                 <span class="note" id="videoNote"></span>
@@ -327,6 +343,16 @@
               <div class="tiny" style="margin-top:8px">
                 Starts at the full original. Drag down and the weakest moments
                 give up their seconds first, so the best of it is what remains.
+              </div>
+              <label class="note" style="display:block;margin-top:14px">
+                <input type="checkbox" id="fitVoice"> Trim the footage to the narration
+              </label>
+              <div class="tiny" style="margin-top:4px">
+                On, each moment is shortened to the line spoken over it, so the
+                picture changes when the narrator moves on. Off, the length above
+                is kept and the gaps between lines play as untouched original.
+                The re-trim happens when the narration is generated, because only
+                then is it known how long each line runs.
               </div>
             </div>
 
@@ -480,6 +506,20 @@
 
                 <label class="f" style="margin-top:14px">Voice &mdash; click any to hear it</label>
                 <div class="scroll" id="voiceList" style="max-height:260px"></div>
+
+                <div class="hide" id="localVoicePick" style="margin-top:14px">
+                  <label class="f">Voice</label>
+                  <div class="tiny" style="margin-bottom:8px">
+                    The local engine has no named voices &mdash; it invents a speaker
+                    each time. Audition a few and keep the one you like; every line
+                    is then spoken in it.
+                  </div>
+                  <div class="row">
+                    <button class="sm" id="auditionVoices">Audition 4 voices</button>
+                    <span class="tiny" id="auditionNote"></span>
+                  </div>
+                  <div id="candidateList" style="margin-top:10px"></div>
+                </div>
               </div>
 
               <div class="card">
@@ -942,6 +982,7 @@ function renderProject() {
   paintLength();
   if (document.activeElement !== $('shapeSel')) $('shapeSel').value = p.shape || '';
   if (document.activeElement !== $('framingSel')) $('framingSel').value = p.framing || 'blur';
+  $('fitVoice').checked = p.fit_to_voice !== false;
   $('burnCaps').checked = !!p.burn_captions;
   $('capStyle').value = p.caption_style || 'clean';
   $('capLang').value = p.caption_lang || '';
@@ -986,6 +1027,8 @@ function renderProject() {
   renderFrames(p);
   renderVoice(p);
   renderGuide(p);
+  followVoiceProgress(p);
+  renderResultBar(p);
 
   // Stop replaces Run all whenever something is actually running
   const busy = Object.values(p.steps || {}).some(st => st.status === 'running');
@@ -1035,6 +1078,17 @@ function renderGuide(p) {
   $('guideSet').style.display = next.set ? '' : 'none';
   $('guideRun').textContent = next.run;
   $('guideRun').onclick = () => runStep(next.key);
+
+  // the same chain the autorun tickbox starts, offered again here for anyone
+  // who set their options and now just wants it finished
+  const left = GUIDE.filter(g => (steps[g.key] || {}).status !== 'done').length;
+  $('guideRunAll').textContent =
+    left > 1 ? `Run all ${left} remaining steps` : 'Run every remaining step';
+  $('guideRunAll').classList.toggle('hide', left < 2);
+  $('guideRunAll').onclick = async () => {
+    try { await post(`/api/recap/projects/${p.id}/run`, {}); }
+    catch (e) { showError($('stepErr'), e.message); }
+  };
 }
 
 /* ------------------------------------------------------------------ voice */
@@ -1081,6 +1135,7 @@ function renderVoice(p) {
   // the named voices are a cloud concept; locally the voice comes from a
   // reference clip, so the list would only mislead
   $('voiceList').classList.toggle('hide', local);
+  $('localVoicePick').classList.toggle('hide', !local);
   $('localModelWrap').classList.toggle('hide', !local);
   // with a single model the picker is just noise
   $('localModelWrap').classList.toggle('hide', !local || state.localModels.length < 2);
@@ -1152,6 +1207,25 @@ async function previewVoice(name) {
     state.audio.play();
   } catch (e) { showError($('stepErr'), e.message); }
   finally { if (btn) { btn.disabled = false; btn.innerHTML = '&#9654;'; } }
+}
+
+/* The lines list was only built when the Voice tab was opened, so while the
+   narration was being spoken the rows already finished sat there with no play
+   button until the tab was left and come back to. The step reports progress on
+   every line, so refresh the list as those reports arrive -- and once more when
+   the step stops, to catch the last line. */
+let voiceFollow = { message: null, status: '' };
+
+function followVoiceProgress(p) {
+  if (state.tab !== 'voice') return;
+  const step = (p.steps || {}).voice || {};
+  // progress is carried in the step message ("4/11"), so a changed message is
+  // the signal that another line has audio now
+  const message = step.message || '';
+  if (message === voiceFollow.message && step.status === voiceFollow.status) return;
+  const wasRunning = voiceFollow.status === 'running';
+  voiceFollow = { message, status: step.status || '' };
+  if (step.status === 'running' || wasRunning) loadVoiceLines(p);
 }
 
 async function loadVoiceLines(p) {
@@ -1330,6 +1404,72 @@ $('lineFile').onchange = async () => {
   reader.readAsDataURL(file);
 };
 
+/* The finished video sat at the bottom of the Voice tab, which is the last
+   place you look once the work is done. Surface it above the tabs instead, so
+   the deliverable is reachable from wherever you happen to be. */
+function renderResultBar(p) {
+  const made = Object.keys(p.finals || {});
+  $('resultBar').classList.toggle('hide', !made.length);
+  if (!made.length) return;
+
+  const names = { my: 'Burmese', en: 'English' };
+  $('resultNote').textContent =
+    made.length > 1 ? 'ready in ' + made.map(c => names[c] || c).join(' and ')
+                    : 'ready in ' + (names[made[0]] || made[0]);
+  $('resultDownloads').innerHTML = made.map(c =>
+    `<button class="sm primary" data-final2="${c}">Download ${escapeHtml(names[c] || c)}</button>`).join('');
+  [...$('resultDownloads').children].forEach(b => {
+    b.onclick = () => {
+      state.tab = 'voice';
+      [...$('tabs').children].forEach(x => x.classList.toggle('on', x.dataset.tab === 'voice'));
+      document.querySelectorAll('[data-panel]').forEach(s =>
+        s.classList.toggle('hide', s.dataset.panel !== 'voice'));
+      const target = [...$('finalDownloads').children]
+        .find(x => x.dataset.final === b.dataset.final2);
+      if (target) target.click();
+    };
+  });
+}
+
+$('resultOpen').onclick = () => $('openFolder').click();
+
+function renderCandidates(p, d) {
+  const box = $('candidateList');
+  if (!d || !d.candidates.length) { box.innerHTML = ''; return; }
+  box.innerHTML = d.candidates.map(c => `
+    <div class="row" style="padding:6px 0;border-top:1px solid var(--line)">
+      <span class="grow" style="font-size:13px">Voice ${c.index + 1}</span>
+      <audio controls preload="none" style="height:32px"
+             src="/api/recap/projects/${p.id}/file?name=${encodeURIComponent(c.file)}"></audio>
+      <button class="sm" data-pick="${c.index}">Use this</button>
+    </div>`).join('');
+  box.querySelectorAll('[data-pick]').forEach(b => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await post(`/api/recap/projects/${p.id}/voice/candidates/select?index=${b.dataset.pick}`, {});
+        $('auditionNote').textContent = `voice ${Number(b.dataset.pick) + 1} chosen - regenerate narration`;
+      } catch (e) { showError($('stepErr'), e.message); }
+      finally { b.disabled = false; }
+    };
+  });
+}
+
+$('auditionVoices').onclick = async () => {
+  const p = current(); if (!p) return;
+  const btn = $('auditionVoices');
+  btn.disabled = true;
+  // the first call loads the model, which is slow and worth saying so
+  $('auditionNote').textContent = 'generating - the first one loads the model, give it a minute';
+  try {
+    const d = await post(
+      `/api/recap/projects/${p.id}/voice/candidates?count=4&lang=${p.voice_lang || 'en'}`, {});
+    renderCandidates(p, d);
+    $('auditionNote').textContent = 'play each, then keep one';
+  } catch (e) { showError($('stepErr'), e.message); $('auditionNote').textContent = ''; }
+  finally { btn.disabled = false; }
+};
+
 $('pickReference').onclick = () => { $('referenceFile').value = ''; $('referenceFile').click(); };
 $('referenceFile').onchange = () => {
   const p = current();
@@ -1425,6 +1565,7 @@ const saveLook = () => {
   patch(`/api/recap/projects/${p.id}`, {
     shape: $('shapeSel').value,
     framing: $('framingSel').value,
+    fit_to_voice: $('fitVoice').checked,
     burn_captions: $('burnCaps').checked,
     caption_style: $('capStyle').value,
     caption_lang: $('capLang').value
@@ -1434,7 +1575,14 @@ const saveLook = () => {
   .forEach(id => { $(id).onchange = saveLook; });
 
 $('lenSlider').oninput = paintLength;
-$('lenFull').onclick = () => { $('lenSlider').value = $('lenSlider').max; paintLength(); };
+// This only moved the slider, so on a fresh project -- where it already sits
+// at the full length -- clicking it did nothing at all. It is a shortcut back
+// to the untrimmed original, so it should rebuild like Apply does.
+$('lenFull').onclick = () => {
+  $('lenSlider').value = $('lenSlider').max;
+  paintLength();
+  $('applyLen').click();
+};
 $('applyLen').onclick = async () => {
   const p = current(); if (!p) return;
   $('applyLen').disabled = true;
@@ -1535,14 +1683,29 @@ $('dlVideo').onclick = () => {
   const p = current(); if (!p || !p.has_recap) return;
   dl(`/api/recap/projects/${p.id}/file?name=recap_${p.mode}.mp4`, `recap_${p.mode}.mp4`);
 };
-$('dlSrtRecap').onclick = () => {
+/* An <a download> pointed at an endpoint that answers 400 saves nothing and
+   says nothing, so a refused subtitle file looked exactly like a dead button.
+   Fetch it instead: a real file still downloads, and a refusal is shown. */
+async function downloadSrt(timing, name) {
   const p = current(); if (!p) return;
-  dl(`/api/recap/projects/${p.id}/srt?lang=${state.wsLang}&timing=recap`, `recap_${state.wsLang}.srt`);
-};
-$('dlSrtSource').onclick = () => {
-  const p = current(); if (!p) return;
-  dl(`/api/recap/projects/${p.id}/srt?lang=${state.wsLang}&timing=original`, `recap_${state.wsLang}_original.srt`);
-};
+  try {
+    const r = await fetch(
+      `/api/recap/projects/${p.id}/srt?lang=${state.wsLang}&timing=${timing}`);
+    if (!r.ok) {
+      let detail = `subtitles could not be built (${r.status})`;
+      try { detail = (await r.json()).detail || detail; } catch (e) { /* not json */ }
+      throw new Error(detail);
+    }
+    const url = URL.createObjectURL(await r.blob());
+    dl(url, name);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch (e) { showError($('stepErr'), e.message); }
+}
+
+$('dlSrtRecap').onclick = () =>
+  downloadSrt('recap', `recap_${state.wsLang}.srt`);
+$('dlSrtSource').onclick = () =>
+  downloadSrt('original', `recap_${state.wsLang}_original.srt`);
 $('dlTranscript').onclick = async () => {
   const p = current(); if (!p) return;
   const lang = $('transcriptSrtLang').value;
