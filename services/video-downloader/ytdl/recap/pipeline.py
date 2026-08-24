@@ -280,6 +280,7 @@ def run_script(
         temperature=temperature,
         context=context,
         frames=frames,
+        treatment=project.content_type or "recap",
     )
 
     project.duration = duration
@@ -310,6 +311,25 @@ def run_video(project: Project, on_progress=None, cancel=None) -> None:
     if not have_ffmpeg():
         raise StepError("ffmpeg was not found on PATH")
 
+    # The narration now exists, so the cut is sized to it: each moment gets the
+    # footage its line needs, and no more.
+    wants = None
+    if project.fit_to_voice and project.narration:
+        spoken = {}
+        for m in project.narration:
+            i = int(m.get("index", -1))
+            secs = float(m.get("seconds") or 0)
+            if secs > spoken.get(i, 0):
+                spoken[i] = secs        # the longest language wins the space
+        if spoken:
+            wants = [
+                (spoken.get(int(b.get("index", i)), 0) or 0) + VOICE_LEAD + VOICE_TAIL
+                if spoken.get(int(b.get("index", i))) else 0.0
+                for i, b in enumerate(project.beats)
+            ]
+            if not any(w > 0 for w in wants):
+                wants = None
+
     try:
         result = video_mod.build(
             project.source_path,
@@ -322,12 +342,27 @@ def run_video(project: Project, on_progress=None, cancel=None) -> None:
             cancel=cancel,
             framing=project.framing or "blur",
             shape=project.shape or "",
+            fit_seconds=wants,
         )
     except MediaError as exc:
         raise StepError(str(exc)) from exc
 
     project.timeline = result["timeline"]
     write_subtitles(project)
+
+    # Fitting to the voice can land far short of the length that was asked for,
+    # and silently returning a one-minute video to someone who asked for five
+    # looks like a bug rather than a consequence. Say which it is.
+    asked = project.cut_seconds or project.duration
+    got = float(result.get("duration") or 0)
+    if wants and asked and got < asked * 0.6:
+        project.mark(
+            "video", "running",
+            message=("{:.0f}s of narration only needs {:.0f}s of footage, so the "
+                     "cut is shorter than the {:.0f}s asked for. Regenerate the "
+                     "script for fuller lines, or untick 'trim to the narration'."
+                     ).format(sum(w for w in wants if w), got, asked),
+        )
 
     # burned-in captions, for the feeds that autoplay muted
     # Captions are burned into their OWN file. Overwriting the clean cut would
@@ -408,16 +443,40 @@ def _narrate_one(
     prefix: str = "",
 ) -> None:
     """
-    Speak the recap and lay it over the cut.
+    Speak the recap, one clip per line.
 
-    This is the deliverable: the recap footage with narration in the chosen
-    language on top and the original audio held underneath at whatever level
-    the user set, so the source is still audible without fighting the voice.
+    This runs BEFORE the cut, because the cut is fitted to the narration: the
+    old order asked the voice to fit footage whose length had been chosen
+    before anybody knew how long the lines would be, which is what left five
+    seconds of speech sitting in a thirty-second clip.
+
+    Nothing is laid over the video here -- that is the final step, so the mix
+    can be adjusted without paying to speak every line again.
     """
-    if not project.timeline:
-        raise StepError("build the recap cut first -- the voice follows its timings")
+    if not project.beats:
+        raise StepError("write the recap script first -- there is nothing to speak")
     if not have_ffmpeg():
         raise StepError("ffmpeg was not found on PATH")
+
+    # The cut does not exist yet, so lay the beats out end to end as a stand-in
+    # for it. Only the text and the clip length are read from this; the real
+    # positions are worked out in the final step, once the cut is built.
+    if not project.timeline:
+        playhead = 0.0
+        provisional = []
+        for i, b in enumerate(project.beats):
+            span = max(1.5, float(b.get("end", 0)) - float(b.get("start", 0)))
+            provisional.append({
+                "index": int(b.get("index", i)),
+                "source_start": float(b.get("start", 0)),
+                "source_end": float(b.get("end", 0)),
+                "recap_start": round(playhead, 3),
+                "recap_end": round(playhead + span, 3),
+                "score": float(b.get("score", 5) or 5),
+                "en": b.get("en", ""), "my": b.get("my", ""),
+            })
+            playhead += span
+        project.timeline = provisional
 
     lang = language if language in ("en", "my") else "my"
     # final_path is keyed on the language, so each one lands in its own file
@@ -476,67 +535,71 @@ def _narrate_one(
     if not made:
         raise StepError("no narration audio was produced")
 
-    # ------------------------------------------------ fit the cut to the voice
-    # Until here the footage was cut to a length the user picked, with no
-    # knowledge of how long the narration would turn out to be. That is how a
-    # 327-second recap ends up carrying 61 seconds of speech: every line is
-    # followed by half a minute of the untrimmed original. Now that the audio
-    # exists its real durations are known, so re-cut each beat to the line
-    # spoken over it and the picture moves with the narrator.
-    if project.fit_to_voice:
-        spoken = {int(m["index"]): m for m in made if m.get("index") is not None}
-        wants = []
-        for i, row in enumerate(project.timeline):
-            entry = spoken.get(int(row.get("index", i)))
-            seconds = float((entry or {}).get("seconds") or 0)
-            # a breath before the line and a moment to land after it
-            wants.append(seconds + VOICE_LEAD + VOICE_TAIL if seconds else 0.0)
+    # The narration is kept as clips. Laying it over the picture, at whatever
+    # mix and speed the user settles on, is the final step -- so the mix can be
+    # changed without paying to speak every line again.
+    project.narration = (project.narration or []) + made if prefix else made
+    project.save()
 
-        if any(w > 0 for w in wants):
-            try:
-                result = video_mod.build(
-                    project.source_path,
-                    project.beats,
-                    project.recap_path,
-                    mode=project.mode,
-                    target_seconds=project.cut_seconds or project.duration,
-                    duration=project.duration,
-                    cancel=cancel,
-                    framing=project.framing or "blur",
-                    shape=project.shape or "",
-                    fit_seconds=wants,
-                )
-            except MediaError as exc:
-                raise StepError(f"the cut could not be fitted to the voice: {exc}") from exc
 
-            project.timeline = result["timeline"]
-            write_subtitles(project)
-            # the narration now belongs at the new positions, not the old ones
-            for m in made:
-                for row in project.timeline:
-                    if int(row.get("index", -1)) == int(m.get("index", -2)):
-                        m["at"] = float(row["recap_start"]) + VOICE_LEAD
-                        break
-            _reburn_captions(project, cancel=cancel)
-            project.save()
+# --------------------------------------------------------------- final video
 
-    clips = [{"path": project.voice_dir / m["file"], "at": m["at"]} for m in made]
-    # narrate over the captioned cut when there is one, so the finished video
-    # carries both rather than forcing a choice between them
-    base = project.captioned_path if project.captioned_path.exists() else project.recap_path
-    try:
-        mux_narration(
-            base,
-            clips,
-            project.final_path,
-            original_volume=project.original_volume,
-            narration_volume=project.narration_volume,
-            cancel=cancel,
-        )
-    except MediaError as exc:
-        raise StepError(str(exc)) from exc
+def run_final(project: Project, on_progress=None, cancel=None) -> None:
+    """
+    Lay the narration over the cut and produce the video that gets posted.
 
-    project.narration = made
+    Split out from the voice step so that regenerating a line, changing the
+    mix, or re-cutting does not re-render the whole thing every time -- and so
+    nothing is rendered at all until the script, the voice and the framing have
+    been settled.
+    """
+    if not project.narration:
+        raise StepError("generate the narration first")
+    if not project.recap_path.exists():
+        raise StepError("build the recap cut first")
+    if not have_ffmpeg():
+        raise StepError("ffmpeg was not found on PATH")
+
+    langs = project.voice_langs or [project.voice_lang or "my"]
+    for lang in langs:
+        if cancel is not None and cancel.is_set():
+            raise Cancelled()
+        project.voice_lang = lang
+
+        rows = [m for m in project.narration
+                if str(m.get("file", "")).endswith(f"_{lang}.wav")] or project.narration
+
+        # The cut has been rebuilt since the lines were spoken, so a line's
+        # position comes from the timeline it will actually play over, not from
+        # wherever it sat when it was recorded.
+        by_index = {int(r.get("index", -1)): r for r in project.timeline}
+        clips = []
+        for m in rows:
+            row = by_index.get(int(m.get("index", -1)))
+            at = float(row["recap_start"]) + VOICE_LEAD if row else float(m.get("at") or 0)
+            path = project.voice_dir / m["file"]
+            if path.exists():
+                clips.append({"path": path, "at": max(0.0, at)})
+        if not clips:
+            continue
+
+        base = project.captioned_path if project.captioned_path.exists() else project.recap_path
+        try:
+            mux_narration(
+                base,
+                clips,
+                project.final_path,
+                original_volume=project.original_volume,
+                narration_volume=project.narration_volume,
+                speed=project.narration_speed or 1.0,
+                cancel=cancel,
+            )
+        except MediaError as exc:
+            raise StepError(str(exc)) from exc
+        if on_progress:
+            on_progress(langs.index(lang) + 1, len(langs))
+
+    project.voice_lang = langs[-1]
     project.save()
 
 

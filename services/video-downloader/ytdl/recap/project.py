@@ -22,7 +22,12 @@ import uuid
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-STEPS = ("source", "transcript", "script", "video", "thumbnail", "voice")
+# The voice is spoken BEFORE the cut is built, because the cut is fitted to
+# the narration and cannot be until the narration exists. Assembling the final
+# video is its own step at the end, so nothing is rendered until the script,
+# the voice and the framing have all been settled -- the expensive part should
+# not run every time one of the cheap parts is regenerated.
+STEPS = ("source", "transcript", "script", "voice", "video", "thumbnail", "final")
 
 
 def slugify(text: str, limit: int = 48) -> str:
@@ -82,6 +87,12 @@ class Project:
     # trim the footage to the narration rather than to a length picked before
     # the narration existed -- see plan_fitted
     fit_to_voice: bool = True
+    # recap / news / movie_trailer / documentary_recap -- what the finished
+    # piece is meant to be. Decides what counts as a good moment, how it is
+    # narrated, what it may not do, and what the reviewer checks. See content.py
+    content_type: str = "recap"
+    # how fast the narration is played back; 1.0 is as spoken
+    narration_speed: float = 1.0
     # What the video turned out to be about: characters, events, causes.
     # Internal working notes for the writing stages, never shown to the user.
     story: dict = field(default_factory=dict)
@@ -187,6 +198,8 @@ class Project:
             "voice_engine": self.voice_engine,
             "local_model": self.local_model,
             "fit_to_voice": self.fit_to_voice,
+            "content_type": self.content_type,
+            "narration_speed": self.narration_speed,
             "voice_reference": self.voice_reference,
             "voice_reference_text": self.voice_reference_text,
             "voice_lang": self.voice_lang,
@@ -271,6 +284,9 @@ class Project:
             voice_engine=data.get("voice_engine", "gemini"),
             local_model=data.get("local_model", ""),
             fit_to_voice=bool(data.get("fit_to_voice", True)),
+            # "treatment" was the name this shipped under for a few hours
+            content_type=data.get("content_type") or data.get("treatment") or "recap",
+            narration_speed=float(data.get("narration_speed", 1.0) or 1.0),
             story=data.get("story") or {},
             voice_reference=data.get("voice_reference", ""),
             voice_reference_text=data.get("voice_reference_text", ""),

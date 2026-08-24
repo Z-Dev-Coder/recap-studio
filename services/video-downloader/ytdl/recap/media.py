@@ -295,6 +295,7 @@ def mux_narration(
     dest: Path,
     original_volume: float = 0.25,
     narration_volume: float = 1.0,
+    speed: float = 1.0,
     cancel=None,
 ) -> Path:
     """
@@ -324,10 +325,17 @@ def mux_narration(
     if has_original:
         chains.append(f"[0:a]volume={original_volume:.3f}[bg]")
         labels.append("[bg]")
+    # atempo changes pace without changing pitch, but only within 0.5-2.0, so
+    # anything outside that is clamped rather than silently mangled.
+    speed = min(2.0, max(0.5, float(speed or 1.0)))
+    tempo = "" if abs(speed - 1.0) < 0.01 else f"atempo={speed:.3f},"
+
     for i, c in enumerate(usable, start=1):
         delay = max(0, int(float(c.get("at") or 0) * 1000))
+        # speed first, then the delay -- the delay is a position on the recap
+        # timeline and must not be stretched along with the speech
         chains.append(
-            f"[{i}:a]adelay={delay}|{delay},volume={narration_volume:.3f}[n{i}]"
+            f"[{i}:a]{tempo}adelay={delay}|{delay},volume={narration_volume:.3f}[n{i}]"
         )
         labels.append(f"[n{i}]")
 

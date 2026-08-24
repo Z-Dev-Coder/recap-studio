@@ -25,6 +25,7 @@ Two measured facts shape this module:
 
 from __future__ import annotations
 
+from .content import profile_for
 from .gemini import Gemini, GeminiError
 from .story import Story, event_block
 
@@ -84,11 +85,14 @@ _REVIEW_SCHEMA = {
 }
 
 
+# What follows is true of Burmese narration whatever the piece is: the language
+# rules, separate from the content rules. What changes per kind of piece comes
+# from the profile and is appended to this.
 STYLE = """HOW THE BURMESE MUST SOUND
 
-You are a Burmese recap narrator talking to Burmese viewers. You are not
-translating anything. You watched this video, you understood it, and now you
-are telling people what happened.
+You are a Burmese narrator talking to Burmese viewers. You are not translating
+anything. You watched this video, you understood it, and now you are telling
+people about it in your own words.
 
 Write the way people actually speak:
 - Spoken endings -- -တယ်၊ -ပါတယ်၊ -နေတယ်၊ -သွားတယ်၊ -လိုက်တယ်။ Not the literary
@@ -156,6 +160,7 @@ def write(
     title: str = "",
     seconds_for=None,
     temperature: float = 0.8,
+    treatment: str = "recap",
 ) -> int:
     """
     Write every Burmese line in one pass, in order, as continuous narration.
@@ -172,13 +177,17 @@ def write(
         return 0
     seconds_for = seconds_for or (lambda b: max(1.5, b.end - b.start))
 
+    style = profile_for(treatment)
+
     blocks = [
-        "You are writing the Burmese narration for a recap of a video"
-        + (' titled "{}"'.format(title) if title else "") + ".",
+        "You are writing the Burmese narration for {}".format(style.brief)
+        + (' of a video titled "{}"'.format(title) if title else "") + ".",
+        "WHAT THIS PIECE IS, AND WHAT IT MAY NOT DO\n" + style.voice,
         story.overview_block() if story else "",
         story.cast_block() if story else "",
         STYLE,
-        "THE RECAP, LINE BY LINE\n"
+        "AND FOR THIS KIND OF PIECE\n" + style.burmese,
+        "THE SCRIPT, LINE BY LINE\n"
         "Below is every line in order. Write the Burmese for each one. They are "
         "read out back to back over the video, so line 2 must follow on from "
         "line 1 -- if a line would read the same with the others shuffled, it "
@@ -244,6 +253,7 @@ def review(
     seconds_for=None,
     only: list[int] | None = None,
     temperature: float = 0.5,
+    treatment: str = "recap",
 ) -> dict:
     """
     Read the Burmese back and repair what is wrong with it.
@@ -274,25 +284,26 @@ def review(
                 b.index, chars_for(seconds_for(b)), detail, b.my or "(nothing)")
         )
 
+    style = profile_for(treatment)
+
     prompt = "\n\n".join(x for x in [
-        "You are checking the Burmese narration of a video recap"
-        + (' for "{}"'.format(title) if title else "") + " before it is spoken aloud.",
+        "You are checking the Burmese narration of {}".format(style.brief)
+        + (' for "{}"'.format(title) if title else "") + ", before it is spoken aloud.",
         story.cast_block() if story else "",
         "\n\n".join(rows),
-        """CHECK EACH LINE FOR
-1. Does it say what actually happens? Nothing important dropped.
-2. Nothing added that the notes do not support -- no invented motives,
-   feelings, dialogue or backstory.
-3. Natural spoken Burmese, not a translation. Watch for English clause order,
-   literary -သည်/-၏ endings, formal vocabulary where a plain word belongs, and
-   English idioms carried over word for word.
-4. Characters named consistently, pronouns clear about who is meant.
-5. Cause and effect kept -- events connected, not listed.
-6. It follows on from the line before it.
-7. Good to read aloud: sentence length, clear boundaries, no symbols or
-   abbreviations, natural punctuation for pauses.
-8. No repetition, and no words padding it out to length.
-9. It fits its room without overrunning.
+        # What a good line IS depends on the piece: a trailer line that gives
+        # away the ending and a news line that firms up a hedged claim are both
+        # failures, and neither is something a recap reviewer would look for.
+        "WHAT MATTERS FOR THIS PIECE, IN THIS ORDER\n" + style.review,
+        """CHECK EVERY LINE FOR THESE AS WELL
+- Natural spoken Burmese, not a translation. Watch for English clause order,
+  literary -သည်/-၏ endings, formal vocabulary where a plain word belongs, and
+  English idioms carried over word for word.
+- Nothing added that the notes do not support.
+- Good to read aloud: sentence length, clear boundaries, no symbols or
+  abbreviations, natural punctuation for pauses.
+- No repetition, and no words padding it out to length.
+- It fits its room without overrunning.
 
 Set "ok" true for a line that is already good and leave "revised" empty. Do
 NOT rewrite a good line to make it different -- only fix what is actually

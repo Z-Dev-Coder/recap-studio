@@ -249,6 +249,8 @@
         <button data-lang="en" class="on">English</button>
         <button data-lang="my">&#4119;&#4156;&#4116;&#4121;&#4140;</button>
       </div>
+      <select id="wsContentType" class="sm" style="max-width:170px"
+              title="What kind of piece this is written as"></select>
       <div class="seg" id="modeSwitch" title="Vertical reel, or the original shape">
         <button data-m="reels">Reel</button>
         <button data-m="long">Long</button>
@@ -376,7 +378,11 @@
                   </select>
                 </div>
               </div>
-              <label class="note" style="display:block;margin-top:14px">
+            </div>
+
+            <div class="card">
+              <h3>Captions</h3>
+              <label class="note" style="display:block">
                 <input type="checkbox" id="burnCaps"> Burn captions into the picture
               </label>
               <div class="row" id="capOpts" style="margin-top:10px">
@@ -538,9 +544,20 @@
                   <span class="lenval" id="narrVol">100%</span>
                 </div>
                 <input type="range" id="narrVolSlider" min="20" max="200" value="100">
+
+                <div class="row" style="margin-top:16px">
+                  <label class="f grow" style="margin:0">Narration speed</label>
+                  <span class="lenval" id="narrSpeed">1.00&times;</span>
+                </div>
+                <input type="range" id="narrSpeedSlider" min="50" max="200" value="100">
+                <div class="row">
+                  <span class="tiny">slower</span><div class="grow"></div><span class="tiny">faster</span>
+                </div>
+
                 <div class="tiny" style="margin-top:8px">
-                  Set the mix before generating. Changing it needs another render,
-                  but not another round of speech.
+                  All three apply when the final video is rendered, so changing them
+                  costs one render &mdash; never another round of speech. Speed keeps
+                  the pitch as spoken.
                 </div>
 
                 <h3 style="margin:20px 0 10px">Your own voice</h3>
@@ -580,16 +597,63 @@
                   </select>
                 </div>
                 <canvas id="thumbCanvas" width="1280" height="720"></canvas>
+                <div class="tiny" id="thumbHint" style="margin-top:6px">
+                  Drag the text on the picture to place it.
+                </div>
                 <label class="f" style="margin-top:12px">Overlay text</label>
                 <input type="text" id="thumbText" placeholder="2-5 words">
+
+                <div class="row" style="margin-top:12px">
+                  <div class="field" style="max-width:130px">
+                    <label class="f">Place</label>
+                    <select id="thumbPos">
+                      <option value="bottom">Bottom</option>
+                      <option value="top">Top</option>
+                      <option value="center">Centre</option>
+                      <option value="free">Where I dragged it</option>
+                    </select>
+                  </div>
+                  <div class="field" style="max-width:110px">
+                    <label class="f">Align</label>
+                    <select id="thumbAlign">
+                      <option value="center">Centre</option>
+                      <option value="left">Left</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </div>
+                  <div class="field" style="max-width:140px">
+                    <label class="f">Backing</label>
+                    <select id="thumbBack">
+                      <option value="fade">Soft fade</option>
+                      <option value="box">Solid box</option>
+                      <option value="none">None</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field" style="max-width:96px">
+                    <label class="f">Text</label>
+                    <input type="color" id="thumbColor" value="#ffffff" style="height:34px;padding:2px">
+                  </div>
+                  <div class="field" style="max-width:96px">
+                    <label class="f">Backing</label>
+                    <input type="color" id="thumbBackColor" value="#000000" style="height:34px;padding:2px">
+                  </div>
+                  <div class="field grow">
+                    <label class="f">Size <span class="tiny" id="thumbSizeVal"></span></label>
+                    <input type="range" id="thumbSize" min="40" max="220" value="100">
+                  </div>
+                  <div class="field grow">
+                    <label class="f">Backing opacity <span class="tiny" id="thumbOpacityVal"></span></label>
+                    <input type="range" id="thumbOpacity" min="0" max="100" value="62">
+                  </div>
+                </div>
+
                 <div class="row" style="margin-top:10px">
-                  <select id="thumbPos" style="max-width:120px">
-                    <option value="bottom">Bottom</option>
-                    <option value="top">Top</option>
-                    <option value="center">Centre</option>
-                  </select>
                   <button class="primary sm" id="saveThumb">Save</button>
                   <button class="sm" id="dlThumb">Download</button>
+                  <button class="sm ghost" id="thumbReset">Reset layout</button>
                 </div>
               </div>
               <div class="card">
@@ -683,6 +747,13 @@
       <button class="sm" id="pickFile">Choose file...</button>
     </div>
     <div class="tiny" id="pickedFile" style="margin-top:6px"></div>
+    <div class="row" style="margin-top:14px">
+      <div class="grow">
+        <label class="f">What are we making?</label>
+        <select id="contentTypeSel"></select>
+        <div class="tiny" id="contentTypeNote" style="margin-top:4px"></div>
+      </div>
+    </div>
     <div class="row" style="margin-top:14px">
       <div>
         <label class="f">Format</label>
@@ -839,6 +910,42 @@ $('loadModels').onclick = async () => {
   } catch (e) { $('settingsMsg').textContent = e.message; }
 };
 
+/* The kinds of piece this can make. Loaded from the backend so the picker and
+   the profiles cannot drift apart. */
+state.contentTypes = [];
+
+async function loadContentTypes() {
+  try {
+    const d = await request('/api/recap/content-types');
+    state.contentTypes = d.content_types || [];
+  } catch (e) { state.contentTypes = [{ id: 'recap', label: 'Recap', description: '' }]; }
+
+  const paint = sel => {
+    sel.innerHTML = state.contentTypes
+      .map(t => `<option value="${t.id}">${escapeHtml(t.label)}</option>`).join('');
+  };
+  paint($('contentTypeSel'));
+  paint($('wsContentType'));
+  noteFor($('contentTypeSel').value);
+}
+
+function noteFor(id) {
+  const row = state.contentTypes.find(t => t.id === id);
+  $('contentTypeNote').textContent = row ? row.description : '';
+}
+
+$('contentTypeSel').onchange = () => noteFor($('contentTypeSel').value);
+
+$('wsContentType').onchange = async () => {
+  const p = current(); if (!p) return;
+  try {
+    // the script was written as a different kind of piece, so it no longer fits
+    upsert(await patch(`/api/recap/projects/${p.id}`,
+                       { content_type: $('wsContentType').value }));
+    showError($('stepErr'), '');
+  } catch (e) { showError($('stepErr'), e.message); }
+};
+
 /* -------------------------------------------------------------- create */
 $('modeSeg').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -868,6 +975,7 @@ $('create').onclick = async () => {
     const p = await post('/api/recap/projects', {
       url, source_file: state.pickedFile || '',
       mode: state.mode, language: state.lang,
+      content_type: $('contentTypeSel').value || 'recap',
       autorun: $('autorun').checked
     });
     // without autorun, fetch what is needed to decide the settings and stop
@@ -895,9 +1003,48 @@ function upsert(p) {
 }
 
 const STEP_LABELS = { source: 'Download', transcript: 'Transcript', script: 'Script',
-                      video: 'Recap cut', thumbnail: 'Frames', voice: 'Voice' };
+                      voice: 'Voice', video: 'Recap cut', thumbnail: 'Frames',
+                      final: 'Final video' };
 const BUSY_LABELS = { source: 'downloading', transcript: 'transcribing', script: 'writing',
-                      video: 'cutting', thumbnail: 'framing', voice: 'speaking' };
+                      voice: 'speaking', video: 'cutting', thumbnail: 'framing',
+                      final: 'rendering' };
+
+/* Which panel a step's work shows up on, so the running step can bring its own
+   tab forward instead of leaving you watching a page that is not changing. */
+const STEP_TAB = { source: 'source', transcript: 'source', script: 'script',
+                   voice: 'voice', video: 'cut', thumbnail: 'thumb', final: 'voice' };
+
+function showTab(name) {
+  if (!name || state.tab === name) return;
+  state.tab = name;
+  [...$('tabs').children].forEach(x => x.classList.toggle('on', x.dataset.tab === name));
+  document.querySelectorAll('[data-panel]').forEach(s =>
+    s.classList.toggle('hide', s.dataset.panel !== name));
+  if (name === 'voice' && current()) loadVoiceLines(current());
+  if (name === 'files' && current()) { loadFiles(current()); loadCleanup(current()); }
+}
+
+/* Follow the work. A step that has just started pulls its tab forward; once
+   the user changes tab by hand during that step, they are left alone until the
+   next one begins -- being yanked away from something you are reading is worse
+   than watching the wrong panel. */
+let following = { step: '', tab: '' };
+
+function followWork(p) {
+  const running = Object.entries(p.steps || {})
+    .find(([, s]) => s.status === 'running');
+  if (!running) { following = { step: '', tab: '' }; return; }
+  const [name] = running;
+  if (following.step === name) {
+    // still the same step: only re-assert if the user has not moved away
+    if (following.tab && state.tab === following.tab) return;
+    if (following.tab) return;
+  }
+  const tab = STEP_TAB[name];
+  if (!tab) return;
+  showTab(tab);
+  following = { step: name, tab: state.tab };
+}
 
 function projState(p) {
   const steps = Object.entries(p.steps || {});
@@ -929,12 +1076,8 @@ function renderList() {
 /* ----------------------------------------------------------- workspace */
 $('tabs').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
-  state.tab = b.dataset.tab;
-  [...$('tabs').children].forEach(x => x.classList.toggle('on', x === b));
-  document.querySelectorAll('[data-panel]').forEach(s =>
-    s.classList.toggle('hide', s.dataset.panel !== state.tab));
-  if (state.tab === 'voice' && current()) loadVoiceLines(current());
-  if (state.tab === 'files' && current()) { loadFiles(current()); loadCleanup(current()); }
+  showTab(b.dataset.tab);
+  following.tab = '';        // a deliberate move: stop steering this step
 };
 
 function renderProject() {
@@ -983,6 +1126,9 @@ function renderProject() {
   if (document.activeElement !== $('shapeSel')) $('shapeSel').value = p.shape || '';
   if (document.activeElement !== $('framingSel')) $('framingSel').value = p.framing || 'blur';
   $('fitVoice').checked = p.fit_to_voice !== false;
+  if ($('wsContentType').value !== (p.content_type || 'recap')) {
+    $('wsContentType').value = p.content_type || 'recap';
+  }
   $('burnCaps').checked = !!p.burn_captions;
   $('capStyle').value = p.caption_style || 'clean';
   $('capLang').value = p.caption_lang || '';
@@ -1029,6 +1175,7 @@ function renderProject() {
   renderGuide(p);
   followVoiceProgress(p);
   renderResultBar(p);
+  if (state.autoFollow !== false) followWork(p);
 
   // Stop replaces Run all whenever something is actually running
   const busy = Object.values(p.steps || {}).some(st => st.status === 'running');
@@ -1051,17 +1198,23 @@ const GUIDE = [
     what: 'Picks the moments and writes the narration, title, description and hashtags in both languages.',
     set: 'Set the format (Reel or Long) in the header first — it decides how long each line is written to be.',
     run: 'Write the script' },
+  { key: 'voice', title: 'Speak the narration',
+    what: 'Records each line on its own. The cut is fitted to these afterwards, '
+        + 'which is why this comes before it.',
+    set: 'Pick the language and audition a voice on the Voice tab first.',
+    run: 'Generate narration' },
   { key: 'video', title: 'Cut the recap',
-    what: 'Splices the chosen moments together.',
-    set: 'Set the length, shape and captions on the Recap cut tab before running this.',
+    what: 'Keeps only the footage each spoken line needs.',
+    set: 'Set the shape and captions on the Recap cut tab before running this.',
     run: 'Build the cut' },
   { key: 'thumbnail', title: 'Find thumbnail frames',
     what: 'Pulls candidate frames and ranks them by the script\'s own scores.',
     set: '', run: 'Find frames' },
-  { key: 'voice', title: 'Speak the narration',
-    what: 'Narrates the script over the cut and mixes it with the original audio.',
-    set: 'Choose the language, voice and how loud the original stays on the Voice tab first.',
-    run: 'Generate narration' },
+  { key: 'final', title: 'Render the final video',
+    what: 'Lays the narration over the cut at the mix you set. This is the file you post.',
+    set: 'Read the script and listen to the lines first. This is the slow step, and '
+       + 'anything regenerated afterwards means rendering again.',
+    run: 'Render final video' },
 ];
 
 function renderGuide(p) {
@@ -1150,6 +1303,9 @@ function renderVoice(p) {
   if (document.activeElement !== $('origVolSlider')) {
     $('origVolSlider').value = Math.round((p.original_volume == null ? 0.25 : p.original_volume) * 100);
   }
+  if (document.activeElement !== $('narrSpeedSlider')) {
+    $('narrSpeedSlider').value = Math.round((p.narration_speed || 1) * 100);
+  }
   if (document.activeElement !== $('narrVolSlider')) {
     $('narrVolSlider').value = Math.round((p.narration_volume == null ? 1 : p.narration_volume) * 100);
   }
@@ -1170,6 +1326,7 @@ function renderVoice(p) {
 function paintMix() {
   $('origVol').textContent = $('origVolSlider').value + '%';
   $('narrVol').textContent = $('narrVolSlider').value + '%';
+  $('narrSpeed').innerHTML = (Number($('narrSpeedSlider').value) / 100).toFixed(2) + '&times;';
 }
 
 function renderVoiceList(p) {
@@ -1646,10 +1803,13 @@ $('descField').oninput = saveCopy;
 $('voiceStyle').oninput = autosaveLater(() => ({ voice_style: $('voiceStyle').value }), 1200);
 const saveMix = autosaveLater(() => ({
   original_volume: Number($('origVolSlider').value) / 100,
-  narration_volume: Number($('narrVolSlider').value) / 100
+  narration_volume: Number($('narrVolSlider').value) / 100,
+  narration_speed: Number($('narrSpeedSlider').value) / 100
 }));
 $('origVolSlider').onchange = saveMix;
 $('narrVolSlider').onchange = saveMix;
+$('narrSpeedSlider').onchange = saveMix;
+$('narrSpeedSlider').oninput = paintMix;
 
 $('tagsField').oninput = autosave(() => ({
   hashtags: $('tagsField').value.split(/[\s,\n]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean)
@@ -1777,6 +1937,26 @@ function thumbShape(p) {
   return THUMB_SHAPES[key];
 }
 
+/* The thumbnail overlay, laid out by the user rather than by three presets.
+
+   Position is kept as a fraction of the canvas, not as pixels, so a layout
+   survives switching between 16:9 and 9:16 -- the same design has to work on
+   both, and pixel coordinates would put the text off the edge. */
+const THUMB_DEFAULT = { x: 0.5, y: 0.86 };
+let thumbLayout = { ...THUMB_DEFAULT };
+let thumbBox = null;          // where the text landed last paint, for hit-testing
+
+function thumbAnchor(c) {
+  const pos = $('thumbPos').value;
+  if (pos === 'free') return thumbLayout;
+  return { x: 0.5, y: pos === 'top' ? 0.14 : pos === 'center' ? 0.5 : 0.86 };
+}
+
+function hexToRgb(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [0, 0, 0];
+}
+
 function paintThumb() {
   const c = $('thumbCanvas'), ctx = c.getContext('2d');
   const [w, h] = thumbShape(current());
@@ -1785,41 +1965,123 @@ function paintThumb() {
   ctx.fillRect(0, 0, c.width, c.height);
   if (thumbImage) {
     const scale = Math.max(c.width / thumbImage.width, c.height / thumbImage.height);
-    const w = thumbImage.width * scale, h = thumbImage.height * scale;
-    ctx.drawImage(thumbImage, (c.width - w) / 2, (c.height - h) / 2, w, h);
+    const iw = thumbImage.width * scale, ih = thumbImage.height * scale;
+    ctx.drawImage(thumbImage, (c.width - iw) / 2, (c.height - ih) / 2, iw, ih);
   }
+
+  $('thumbSizeVal').textContent = $('thumbSize').value + '%';
+  $('thumbOpacityVal').textContent = $('thumbOpacity').value + '%';
+
   const text = $('thumbText').value.trim();
+  thumbBox = null;
   if (!text) return;
 
-  const pos = $('thumbPos').value;
-  const size = Math.round(c.width / (text.length > 22 ? 16 : 11));
+  const scale = Number($('thumbSize').value) / 100;
+  const base = c.width / (text.length > 22 ? 16 : 11);
+  const size = Math.max(10, Math.round(base * scale));
   ctx.font = `700 ${size}px "Segoe UI", "Myanmar Text", system-ui, sans-serif`;
-  ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  const lines = wrapText(ctx, text, c.width * 0.86);
+  const align = $('thumbAlign').value;
+  ctx.textAlign = align;
+
+  const maxWidth = c.width * 0.86;
+  const lines = wrapText(ctx, text, maxWidth);
   const lineHeight = size * 1.25;
   const block = lines.length * lineHeight;
-  const y = pos === 'top' ? block / 2 + c.height * 0.07
-          : pos === 'center' ? c.height / 2
-          : c.height - block / 2 - c.height * 0.07;
 
-  const grad = ctx.createLinearGradient(0, y - block / 2 - size * 0.6, 0, y + block / 2 + size * 0.6);
-  grad.addColorStop(0, 'rgba(0,0,0,0)');
-  grad.addColorStop(0.5, 'rgba(0,0,0,.62)');
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, y - block / 2 - size * 0.6, c.width, block + size * 1.2);
+  const anchor = thumbAnchor(c);
+  // keep the block on the canvas whatever was dragged
+  const halfH = block / 2 + size * 0.6;
+  const y = Math.min(c.height - halfH, Math.max(halfH, anchor.y * c.height));
+  const widest = Math.max(...lines.map(l => ctx.measureText(l).width));
+  const halfW = widest / 2 + size * 0.4;
+  const cx = Math.min(c.width - halfW, Math.max(halfW, anchor.x * c.width));
+  const x = align === 'left' ? cx - widest / 2 : align === 'right' ? cx + widest / 2 : cx;
+
+  const backing = $('thumbBack').value;
+  const alpha = Number($('thumbOpacity').value) / 100;
+  const [br, bg, bb] = hexToRgb($('thumbBackColor').value);
+
+  if (backing === 'fade' && alpha > 0) {
+    const top = y - block / 2 - size * 0.6, height = block + size * 1.2;
+    const grad = ctx.createLinearGradient(0, top, 0, top + height);
+    grad.addColorStop(0, `rgba(${br},${bg},${bb},0)`);
+    grad.addColorStop(0.5, `rgba(${br},${bg},${bb},${alpha})`);
+    grad.addColorStop(1, `rgba(${br},${bg},${bb},0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, top, c.width, height);
+  } else if (backing === 'box' && alpha > 0) {
+    const pad = size * 0.35;
+    ctx.fillStyle = `rgba(${br},${bg},${bb},${alpha})`;
+    const bx = cx - widest / 2 - pad;
+    roundRect(ctx, bx, y - block / 2 - pad, widest + pad * 2, block + pad * 2, size * 0.18);
+    ctx.fill();
+  }
 
   lines.forEach((line, i) => {
     const ly = y - block / 2 + lineHeight * (i + 0.5);
+    // the outline is what keeps light text readable over a light frame
     ctx.lineWidth = size * 0.16;
     ctx.strokeStyle = 'rgba(0,0,0,.85)';
-    ctx.strokeText(line, c.width / 2, ly);
-    ctx.fillStyle = '#fff';
-    ctx.fillText(line, c.width / 2, ly);
+    ctx.strokeText(line, x, ly);
+    ctx.fillStyle = $('thumbColor').value || '#fff';
+    ctx.fillText(line, x, ly);
   });
+
+  thumbBox = { x: cx - widest / 2, y: y - block / 2, w: widest, h: block };
 }
+
+function roundRect(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/* Dragging the text. The canvas is displayed smaller than it is drawn, so
+   every pointer position is converted through the element's own rect. */
+(function enableThumbDrag() {
+  const c = $('thumbCanvas');
+  let dragging = false;
+
+  const at = e => {
+    const r = c.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+  };
+
+  c.addEventListener('pointerdown', e => {
+    if (!$('thumbText').value.trim()) return;
+    const p = at(e);
+    if (thumbBox) {
+      const px = p.x * c.width, py = p.y * c.height;
+      const pad = c.height * 0.04;      // a forgiving target
+      const inside = px >= thumbBox.x - pad && px <= thumbBox.x + thumbBox.w + pad &&
+                     py >= thumbBox.y - pad && py <= thumbBox.y + thumbBox.h + pad;
+      if (!inside) return;
+    }
+    dragging = true;
+    c.setPointerCapture(e.pointerId);
+    $('thumbPos').value = 'free';       // dragging IS choosing free placement
+    thumbLayout = at(e);
+    paintThumb();
+    e.preventDefault();
+  });
+
+  c.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    thumbLayout = at(e);
+    paintThumb();
+  });
+
+  const stop = () => { dragging = false; };
+  c.addEventListener('pointerup', stop);
+  c.addEventListener('pointercancel', stop);
+})();
 
 function wrapText(ctx, text, maxWidth) {
   const words = text.split(/\s+/);
@@ -1834,7 +2096,23 @@ function wrapText(ctx, text, maxWidth) {
   return lines.slice(0, 3);
 }
 $('thumbText').oninput = paintThumb;
-$('thumbPos').onchange = paintThumb;
+// every control redraws; the sliders and colours need 'input' to feel live
+['thumbPos', 'thumbAlign', 'thumbBack', 'thumbColor', 'thumbBackColor',
+ 'thumbSize', 'thumbOpacity'].forEach(id => {
+  $(id).oninput = paintThumb;
+  $(id).onchange = paintThumb;
+});
+$('thumbReset').onclick = () => {
+  thumbLayout = { ...THUMB_DEFAULT };
+  $('thumbPos').value = 'bottom';
+  $('thumbAlign').value = 'center';
+  $('thumbBack').value = 'fade';
+  $('thumbColor').value = '#ffffff';
+  $('thumbBackColor').value = '#000000';
+  $('thumbSize').value = 100;
+  $('thumbOpacity').value = 62;
+  paintThumb();
+};
 $('thumbAspect').onchange = paintThumb;
 
 $('saveThumb').onclick = async () => {
@@ -1866,6 +2144,7 @@ function listen() {
 (async function boot() {
   try {
     await loadEnv();
+    await loadContentTypes();
     const settings = await request('/api/recap/settings');
     $('geminiKey').value = settings.gemini_key || '';
     $('whisperModel').value = settings.whisper_model || 'small';

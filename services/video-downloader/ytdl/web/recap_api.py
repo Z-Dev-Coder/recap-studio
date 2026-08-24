@@ -26,6 +26,7 @@ from ..recap.gemini import MAX_OUTPUT_TOKENS, Gemini, GeminiError
 from ..recap import media as media_mod
 from ..recap.media import Cancelled, MediaError, have_ffmpeg, to_wav
 from ..recap.project import STEPS, Store
+from ..recap import content
 from ..recap.scrape import available as playwright_available
 from ..recap.scrape import install_hint as playwright_hint
 from ..recap import script as script_mod
@@ -179,10 +180,19 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
             )
         elif step == "thumbnail":
             pipeline.run_thumbnail(project, count=int(options.get("frame_count") or 16), cancel=stop)
+        elif step == "final":
+            def rendered(done: int, total: int) -> None:
+                project.mark("final", "running", message=f"rendering {done} of {total}")
+                push(project)
+
+            pipeline.run_final(project, on_progress=rendered, cancel=stop)
         else:
             raise ValueError(f"unknown step: {step}")
 
-        project.mark(step, "done", message="")
+        # a step that explained something while running keeps saying it
+        note = project.steps.get(step)
+        keep = (note.message or "") if note else ""
+        project.mark(step, "done", message=keep if step == "video" else "")
     except Cancelled:
         # stopping is a choice, not a failure: no red, nothing to fix
         project.mark(step, "idle", message="stopped")
@@ -235,6 +245,7 @@ class CreateRequest(BaseModel):
     source_file: str = ""      # a path on this machine, instead of a link
     mode: str = "reels"
     language: str = "en"
+    content_type: str = "recap"
     target_seconds: float = 0.0
     autorun: bool = True
     cookies_browser: str = ""
@@ -259,6 +270,8 @@ class EditRequest(BaseModel):
     shape: str | None = None
     burn_captions: bool | None = None
     fit_to_voice: bool | None = None
+    narration_speed: float | None = None
+    content_type: str | None = None
     caption_style: str | None = None
     caption_lang: str | None = None
     language: str | None = None
@@ -381,6 +394,12 @@ def _auto_model(key: str) -> str:
     return ""
 
 
+@router.get("/content-types")
+def content_types() -> dict:
+    """What kinds of piece this can make, for the picker."""
+    return {"content_types": content.listing()}
+
+
 @router.get("/models")
 def models() -> dict:
     """Models this key can use, with the output ceiling each one allows."""
@@ -415,6 +434,12 @@ def create(req: CreateRequest) -> dict:
     source_file = req.source_file.strip()
     if not url and not source_file:
         raise HTTPException(400, "give a video URL or pick a file")
+    if req.content_type and not content.is_valid(req.content_type):
+        raise HTTPException(
+            400,
+            "unknown content type {!r} -- choose one of: {}".format(
+                req.content_type, ", ".join(content.PROFILES)),
+        )
     if source_file and not Path(source_file).exists():
         raise HTTPException(400, f"no such file: {source_file}")
 
@@ -425,6 +450,7 @@ def create(req: CreateRequest) -> dict:
         project.url = ""
     project.mode = req.mode if req.mode in ("reels", "long") else "reels"
     project.language = req.language if req.language in ("en", "my") else "en"
+    project.content_type = content.normalise(req.content_type)
     project.target_seconds = max(0.0, float(req.target_seconds or 0))
     project.save()
 
@@ -496,6 +522,14 @@ def edit(pid: str, req: EditRequest) -> dict:
         raise HTTPException(404, "no such project")
 
     patch = req.model_dump(exclude_none=True)
+    if "content_type" in patch and not content.is_valid(patch["content_type"]):
+        raise HTTPException(
+            400,
+            "unknown content type {!r} -- choose one of: {}".format(
+                patch["content_type"], ", ".join(content.PROFILES)),
+        )
+    if "content_type" in patch:
+        patch["content_type"] = content.normalise(patch["content_type"])
     beats_changed = "beats" in patch
     mode_changed = "mode" in patch and patch["mode"] != project.mode
 
@@ -734,11 +768,14 @@ def upload_voice_reference(pid: str, req: VoiceReferenceRequest) -> dict:
     }
 
 
+# Short on purpose. An audition is for choosing between voices, and a long
+# sample makes that slower without making it easier -- a sentence is enough to
+# hear a speaker, and four of them generate in a fraction of the time.
 SAMPLE_LINE = {
-    "en": "Here is how this voice sounds reading a line of your recap.",
-    "my": "ပြန်လည်တင်ပြသော "
-          "စာသားကို "
-          "ဒီအသံဖြင့် ဖတ်ပြသည်။",
+    "en": "This is the voice your recap will be told in.",
+    "my": "ဒီအသံနဲ့ "
+          "ရီကပ်ကို "
+          "ပြောပြပါမယ်။",
 }
 
 
