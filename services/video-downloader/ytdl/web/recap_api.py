@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from ..downloader import default_out_dir
 from ..recap import pipeline
+from ..recap.gemini import DEFAULT_MODELS
 from ..recap.gemini import LIGHT_MODEL as gemini_light_default
 from ..recap.gemini import MAX_OUTPUT_TOKENS, Gemini, GeminiError
 
@@ -143,9 +144,6 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
                 cookies_browser=options.get("cookies_browser", ""),
                 quality=str(options.get("quality", "1080")),
                 cancel=stop,
-                light_model=settings.get("light_model", "") or gemini_light(),
-                light_analysis=bool(settings.get("light_analysis", False)),
-                quality=settings.get("quality", ""),
             )
         elif step == "transcript":
             pipeline.run_transcript(
@@ -167,6 +165,12 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
                 use_scrape=bool(options.get("use_scrape", settings.get("use_scrape", True))),
                 use_vision=bool(options.get("use_vision", settings.get("use_vision", True))),
                 cancel=stop,
+                light_model=settings.get("light_model", "") or gemini_light(),
+                light_analysis=bool(settings.get("light_analysis", False)),
+                quality=settings.get("quality", ""),
+                stage_models=settings.get("stage_models") or {},
+                keys={"gemini": key, "groq": settings.get("groq_key", "")},
+                ollama_url=settings.get("ollama_url", ""),
             )
         elif step == "video":
             def progress(done: int, total: int) -> None:
@@ -331,6 +335,9 @@ class VoicePreviewRequest(BaseModel):
 class SettingsRequest(BaseModel):
     light_analysis: bool | None = None
     quality: str | None = None
+    stage_models: dict | None = None
+    groq_key: str | None = None
+    ollama_url: str | None = None
     gemini_key: str | None = None
     gemini_model: str | None = None
     tts_model: str | None = None
@@ -676,6 +683,124 @@ def script_length(pid: str, lang: str = "") -> dict:
         "spoken_seconds": round(spoken, 1),
         "narration_seconds": round(spoken or estimated, 1),
     }
+
+
+@router.get("/llm/models")
+def llm_models() -> dict:
+    """Which providers and models are available to point a stage at."""
+    from ..recap import llm
+
+    settings = load_settings()
+    local = llm.ollama_models(settings.get("ollama_url", ""))
+    return {
+        "stages": [{"id": i, "label": la, "what": w} for i, la, w in llm.STAGES],
+        "providers": [
+            {"id": "gemini", "label": "Gemini", "ready": bool(settings.get("gemini_key")),
+             "note": "20 requests a day on the good model, 500 on the lite one",
+             "models": list(DEFAULT_MODELS)},
+            {"id": "ollama", "label": "Ollama (this machine)", "ready": bool(local),
+             "note": "no quota, no key -- but weaker at Burmese prose",
+             "models": local},
+            {"id": "groq", "label": "Groq", "ready": bool(settings.get("groq_key")),
+             "note": "free, and generous enough to stop counting",
+             "models": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant",
+                        "openai/gpt-oss-20b"]},
+        ],
+        "assigned": settings.get("stage_models") or {},
+    }
+
+
+@router.post("/projects/{pid}/script/stage/{stage}")
+def run_script_stage(pid: str, stage: str, req: StepRequest) -> dict:
+    """
+    Re-run ONE stage of the script.
+
+    Changing which model writes the Burmese should cost one call, not four.
+    Each stage reads what the ones before it left on the project -- the story
+    notes, the beats -- so any of them can be run again on its own, against a
+    different provider, without paying for the rest.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    if stage not in ("read", "pick", "write", "review"):
+        raise HTTPException(400, "unknown stage: " + stage)
+
+    from ..recap import burmese as burmese_mod
+    from ..recap import llm
+    from ..recap import story as story_mod
+    from ..recap.transcript import from_srt
+
+    settings = load_settings()
+    key = req.api_key or settings.get("gemini_key", "")
+    keys = {"gemini": key, "groq": settings.get("groq_key", "")}
+    assigned = settings.get("stage_models") or {}
+    spec = assigned.get(stage) or settings.get("gemini_model", "") or _auto_model(key)
+    client = llm.build(spec, keys=keys, ollama_url=settings.get("ollama_url", ""))
+
+    beats = [script_mod.Beat(**{k: v for k, v in b.items()
+                                if k in ("index", "start", "end", "en", "my",
+                                         "score", "why")})
+             for b in project.beats]
+    story = story_mod.from_dict(project.story or {}, project.duration or 0.0)
+    lang = project.voice_lang or "my"
+
+    def seconds_for(beat):
+        return max(1.5, beat.end - beat.start)
+
+    try:
+        if stage == "read":
+            cues = from_srt(project.transcript) if project.transcript else []
+            fresh = story_mod.analyse(
+                client, title=project.title, duration=project.duration or 0.0,
+                cues=cues, frames=[],
+            )
+            if not fresh:
+                raise HTTPException(400, "the reading produced nothing usable")
+            project.story = story_mod.as_dict(fresh)
+            project.save()
+            push(project)
+            return {"ok": True, "stage": stage, "events": len(fresh.events),
+                    "model": spec}
+
+        if stage == "pick":
+            raise HTTPException(
+                400,
+                "choosing the moments rewrites the whole script, so it runs as "
+                "the normal Script step rather than on its own.",
+            )
+
+        if stage == "write":
+            if not beats:
+                raise HTTPException(400, "write the recap script first")
+            written = burmese_mod.write(
+                client, beats, story, title=project.title,
+                seconds_for=seconds_for,
+                treatment=project.content_type or "recap",
+            )
+            if not written:
+                raise HTTPException(400, "nothing was written -- see the model's own error")
+            report = {"written": written}
+        else:
+            if not beats:
+                raise HTTPException(400, "write the recap script first")
+            report = burmese_mod.review(
+                client, beats, story, title=project.title,
+                seconds_for=seconds_for,
+                treatment=project.content_type or "recap",
+            )
+    except llm.LLMError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    project.beats = [b.as_dict() for b in beats]
+    project.narration = []
+    for step in ("voice", "video", "final"):
+        project.mark(step, "idle", message="script changed - run again")
+    pipeline.write_subtitles(project)
+    pipeline.write_text_assets(project)
+    project.save()
+    push(project)
+    return {"ok": True, "stage": stage, "model": spec, "lang": lang} | report
 
 
 @router.post("/projects/{pid}/script/extend")

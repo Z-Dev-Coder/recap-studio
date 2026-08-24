@@ -614,6 +614,9 @@ def generate(
     light_model: str = "",
     light_analysis: bool = False,
     quality: str = "",
+    stage_models: dict | None = None,
+    keys: dict | None = None,
+    ollama_url: str = "",
 ) -> dict:
     """
     Video in, recap package out, in four stages rather than one prompt.
@@ -675,6 +678,23 @@ def generate(
     reader = client if mode == "best" else light
     picker = client if mode in ("best",) else light
     writer = client if mode in ("best", "balanced") else light
+    reviewer = light
+
+    # A stage pointed at a provider of its own overrides the budget entirely:
+    # the budget divides Gemini's small daily allowance, and a stage running on
+    # a local model is not drawing on it at all.
+    if stage_models:
+        from . import llm
+
+        chosen = {}
+        for stage in ("read", "pick", "write", "review"):
+            spec = (stage_models.get(stage) or "").strip()
+            if spec:
+                chosen[stage] = llm.build(spec, keys=keys, ollama_url=ollama_url)
+        reader = chosen.get("read", reader)
+        picker = chosen.get("pick", picker)
+        writer = chosen.get("write", writer)
+        reviewer = chosen.get("review", reviewer)
 
     count, clip_len = beat_plan(duration, mode, target_seconds)
 
@@ -729,7 +749,7 @@ def generate(
     check()
     if written:
         review = burmese_mod.review(
-            light, beats, story, title=title, seconds_for=seconds_for,
+            reviewer, beats, story, title=title, seconds_for=seconds_for,
             treatment=treatment,
         )
     expanded = review.get("revised", 0)

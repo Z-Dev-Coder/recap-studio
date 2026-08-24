@@ -428,6 +428,9 @@
               </div>
               <div class="scroll" id="beatRows"></div>
               <div class="row" style="margin-top:14px">
+                <button class="sm" id="reReadStory" title="Re-read the video into story notes, one call">Re-read</button>
+                <button class="sm" id="reWriteBurmese" title="Rewrite the Burmese from the existing notes, one call">Rewrite Burmese</button>
+                <button class="sm" id="reReviewBurmese" title="Check the Burmese again, one call">Re-check</button>
                 <button class="sm" id="dlSrtRecap">SRT &middot; recap timing</button>
                 <button class="sm" id="dlSrtSource">SRT &middot; original timing</button>
                 <span class="tiny">Edits save themselves. Timing changes apply on rebuild.</span>
@@ -885,6 +888,26 @@
       </div>
       <div style="align-self:flex-end"><button class="sm" id="loadModels">Load</button></div>
       <div class="tiny" id="qualityNote" style="flex-basis:100%;margin-top:2px"></div>
+
+      <div style="flex-basis:100%;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+        <div class="row" style="margin-bottom:4px">
+          <h3 class="grow" style="margin:0;font-size:14px">Model per stage</h3>
+          <span class="tiny" id="stageModelsNote"></span>
+        </div>
+        <div class="tiny" style="margin-bottom:10px">
+          Leave a stage on "follow the setting above" and it uses the budget.
+          Point one at Ollama and it stops costing quota at all &mdash; local
+          models handle the structured stages well and the Burmese writing
+          noticeably less well, so that is usually the one to leave on Gemini.
+        </div>
+        <div id="stageModels"></div>
+        <div class="row" style="margin-top:12px">
+          <div class="field grow">
+            <label class="f">Groq API key &mdash; optional, free at console.groq.com</label>
+            <input type="password" id="groqKey" placeholder="gsk_...">
+          </div>
+        </div>
+      </div>
       <div class="field" style="max-width:230px">
         <label class="f">Where to spend the good model</label>
         <select id="qualityMode">
@@ -1054,6 +1077,66 @@ function paintQuality() {
   }[$('qualityMode').value] || '';
   $('qualityNote').textContent = note;
 }
+
+/* Which model runs which stage. Kept in settings rather than per project,
+   because it is a statement about this machine and this key rather than about
+   a particular video. */
+state.llm = { stages: [], providers: [], assigned: {} };
+
+async function loadStageModels() {
+  try {
+    state.llm = await request('/api/recap/llm/models');
+  } catch (e) { return; }
+
+  const options = spec => {
+    let html = '<option value="">follow the setting above</option>';
+    for (const p of state.llm.providers) {
+      if (!p.models.length) continue;
+      html += `<optgroup label="${escapeHtml(p.label)}${p.ready ? '' : ' - not set up'}">`;
+      for (const m of p.models) {
+        const value = `${p.id}:${m}`;
+        html += `<option value="${escapeHtml(value)}"${value === spec ? ' selected' : ''}>` +
+                `${escapeHtml(m)}</option>`;
+      }
+      html += '</optgroup>';
+    }
+    return html;
+  };
+
+  $('stageModels').innerHTML = state.llm.stages.map(s => `
+    <div class="row" style="padding:6px 0;border-top:1px solid var(--line)">
+      <div class="grow">
+        <div style="font-size:13px">${escapeHtml(s.label)}</div>
+        <div class="tiny">${escapeHtml(s.what)}</div>
+      </div>
+      <select data-stage="${s.id}" style="max-width:250px">
+        ${options((state.llm.assigned || {})[s.id] || '')}
+      </select>
+    </div>`).join('');
+
+  $('stageModels').querySelectorAll('[data-stage]').forEach(sel => {
+    sel.onchange = async () => {
+      const assigned = { ...(state.llm.assigned || {}) };
+      if (sel.value) assigned[sel.dataset.stage] = sel.value;
+      else delete assigned[sel.dataset.stage];
+      state.llm.assigned = assigned;
+      try {
+        await post('/api/recap/settings', { stage_models: assigned });
+        $('stageModelsNote').textContent = 'saved';
+        setTimeout(() => { $('stageModelsNote').textContent = ''; }, 1500);
+      } catch (e) { $('stageModelsNote').textContent = e.message; }
+    };
+  });
+
+  const local = state.llm.providers.find(p => p.id === 'ollama');
+  if (local && !local.ready) {
+    $('stageModelsNote').textContent = 'Ollama not detected on this machine';
+  }
+}
+
+$('groqKey').onchange = () => {
+  post('/api/recap/settings', { groq_key: $('groqKey').value.trim() }).catch(() => {});
+};
 
 $('qualityMode').onchange = () => {
   paintQuality();
@@ -2034,6 +2117,35 @@ $('extendScript').onclick = async () => {
   finally { btn.disabled = false; btn.textContent = before; }
 };
 
+/* Re-running one stage rather than the whole script. Changing which model
+   writes the Burmese should cost one call, not four -- each stage reads what
+   the ones before it left on the project, so any of them can be run again on
+   its own. */
+async function runScriptStage(stage, button, label) {
+  const p = current(); if (!p) return;
+  const was = button.textContent;
+  button.disabled = true;
+  button.textContent = 'working...';
+  showError($('stepErr'), '');
+  try {
+    const r = await post(`/api/recap/projects/${p.id}/script/stage/${stage}`, {});
+    upsert(await request(`/api/recap/projects/${p.id}`));
+    $('scriptNote').textContent =
+      `${label} with ${r.model}` +
+      (r.written ? ` - ${r.written} lines` : '') +
+      (r.revised !== undefined ? ` - ${r.revised} revised` : '') +
+      (r.events !== undefined ? ` - ${r.events} events` : '');
+  } catch (e) { showError($('stepErr'), e.message); }
+  finally { button.disabled = false; button.textContent = was; }
+}
+
+$('reReadStory').onclick = () =>
+  runScriptStage('read', $('reReadStory'), 're-read');
+$('reWriteBurmese').onclick = () =>
+  runScriptStage('write', $('reWriteBurmese'), 'Burmese rewritten');
+$('reReviewBurmese').onclick = () =>
+  runScriptStage('review', $('reReviewBurmese'), 'checked');
+
 $('renderFinal').onclick = () => runStep('final');
 
 $('regenScript').onclick = () => runStep('script');
@@ -2480,7 +2592,9 @@ function listen() {
     $('geminiKey').value = settings.gemini_key || '';
     $('whisperModel').value = settings.whisper_model || 'small';
     $('qualityMode').value = settings.quality || 'balanced';
+    $('groqKey').value = settings.groq_key || '';
     paintQuality();
+    loadStageModels();
     if (settings.gemini_model) {
       $('geminiModel').innerHTML =
         `<option value="">choose automatically</option><option selected>${escapeHtml(settings.gemini_model)}</option>`;

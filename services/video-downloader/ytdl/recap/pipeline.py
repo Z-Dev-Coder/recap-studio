@@ -240,6 +240,9 @@ def run_script(
     light_model: str = "",
     light_analysis: bool = False,
     quality: str = "",
+    stage_models: dict | None = None,
+    keys: dict | None = None,
+    ollama_url: str = "",
 ) -> None:
     """Ask Gemini for the recap script, description, hashtags and title."""
     if not project.transcript:
@@ -293,6 +296,9 @@ def run_script(
         light_model=light_model,
         light_analysis=light_analysis,
         quality=quality,
+        stage_models=stage_models,
+        keys=keys,
+        ollama_url=ollama_url,
     )
 
     project.duration = duration
