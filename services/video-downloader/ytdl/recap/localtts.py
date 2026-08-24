@@ -27,7 +27,16 @@ _model = None
 _model_lock = threading.Lock()
 _model_id = ""
 
-DEFAULT_MODEL = "openbmb/VoxCPM2"
+# The 0.5B model is the practical default: a third the size of VoxCPM2, so
+# roughly a third of the work per line, and it fits a 6GB card with room to
+# spare. VoxCPM2 sounds better but needs hardware to match.
+DEFAULT_MODEL = "openbmb/VoxCPM-0.5B"
+
+MODELS = {
+    "openbmb/VoxCPM-0.5B": "0.5B - 1.5GB, fastest, fits a 6GB card",
+    "openbmb/VoxCPM1.5": "1.5 - 1.8GB, a step up in quality",
+    "openbmb/VoxCPM2": "2B - 4.6GB, best quality, wants 8GB VRAM",
+}
 
 # Only a fallback: the real rate is read off the loaded model, because the
 # model decides it and a wrong header plays the narration at the wrong speed.
@@ -51,10 +60,13 @@ def install_hint() -> str:
         "Local narration needs VoxCPM. Install it once with:\n"
         r"  venv\Scripts\python.exe -m pip install voxcpm"
         "\n"
-        "The first run downloads about 4GB of model weights.\n"
-        "A CUDA build of PyTorch makes it several times faster:\n"
-        "  venv\\Scripts\\python.exe -m pip install torch --index-url "
-        "https://download.pytorch.org/whl/cu121"
+        "The first run downloads the weights: 1.5GB for the 0.5B default,\n"
+        "4.6GB for VoxCPM2.\n"
+        "On CPU this runs ~100x slower than realtime, which is not usable; a\n"
+        "CUDA build of PyTorch brings it to about a third of realtime. Match\n"
+        "the channel to the torch version -- cu126 carries 2.13:\n"
+        "  venv\\Scripts\\python.exe -m pip install --force-reinstall torch "
+        "torchaudio --index-url https://download.pytorch.org/whl/cu126"
     )
 
 
@@ -79,11 +91,14 @@ def device_note() -> str:
     if torch.cuda.is_available():
         name = torch.cuda.get_device_name(0)
         gb = torch.cuda.get_device_properties(0).total_memory / 1e9
-        note = f"{name} ({gb:.0f}GB)"
+        note = f"{name}, {gb:.0f}GB"
+        # measured here on a 6GB GTX 1660 Ti: the 0.5B model narrates at about
+        # a third of realtime, which is usable. VoxCPM2 wants a bigger card.
         if gb < 7.5:
-            note += " -- below the 8GB VoxCPM asks for, so it may fall back to CPU"
+            note += " -- good for the 0.5B model; VoxCPM2 wants 8GB"
     else:
-        note = "CPU only -- expect roughly 15-30 seconds per line"
+        note = ("CPU only -- around 100x slower than realtime, which is not "
+                "practical. A CUDA build of PyTorch fixes it.")
     _device_note = note
     return note
 
@@ -135,7 +150,14 @@ def load(model_id: str = DEFAULT_MODEL):
         if _model is None or _model_id != model_id:
             _stand_in_for_wetext()
             from voxcpm import VoxCPM
+
+            # The denoiser is a separate model pulled through modelscope, and
+            # it only exists to clean up reference audio before cloning. Plain
+            # narration never uses it, so it is left off rather than dragging
+            # in another dependency and another download.
             try:
+                _model = VoxCPM.from_pretrained(model_id, load_denoiser=False)
+            except TypeError:
                 _model = VoxCPM.from_pretrained(model_id)
             except Exception as exc:      # noqa: BLE001 - surfaced verbatim
                 raise LocalTTSError(f"could not load {model_id}: {exc}") from exc
@@ -144,12 +166,12 @@ def load(model_id: str = DEFAULT_MODEL):
 
 
 def _to_wav(audio, rate: int) -> bytes:
-    """
-    Normalise whatever the model returns into 16-bit PCM WAV.
+    """Model output straight to a WAV, for a single ungrouped clip."""
+    return wav_header(_pcm(audio), rate)
 
-    VoxCPM hands back float samples in -1..1; writing those into a 16-bit WAV
-    without scaling produces silence, which is a confusing way to fail.
-    """
+
+def _pcm(audio) -> bytes:
+    """Model output as raw 16-bit PCM, ready to be joined with other chunks."""
     try:
         import numpy as np
     except ImportError as exc:
@@ -163,14 +185,96 @@ def _to_wav(audio, rate: int) -> bytes:
         data = (data * 32767.0).astype("<i2")
     elif data.dtype != np.dtype("<i2"):
         data = data.astype("<i2")
+    return data.tobytes()
 
+
+def wav_header(pcm: bytes, rate: int) -> bytes:
+    """Wrap raw mono 16-bit PCM in a WAV container."""
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(int(rate))
-        w.writeframes(data.tobytes())
+        w.writeframes(pcm)
     return buf.getvalue()
+
+
+
+# Burmese ends sentences with U+104B and separates clauses with U+104A; the
+# ASCII marks appear in mixed text and in the English narration.
+_BREAKS = "\u104b\u104a.!?;\n"
+
+# VoxCPM keeps text and generated audio in one KV cache, so what overflows is
+# the pair, not the sentence. A 324-character line came through while a
+# 258-character one did not -- the difference was how much audio each produced.
+# Chunking well under the limit is the only reliable way to stay inside it.
+CHUNK_CHARS = 140
+
+# Measured on this model: 60 frames produced 4.80s of audio and 120 produced
+# 9.60s, exactly. VoxCPM's own runaway guard is scaled to the TOKEN count, and
+# Burmese tokenizes into far more tokens than Latin text, so that guard barely
+# binds -- an eleven word line came back as 30 seconds of continuous speech.
+# Capping in frames, derived from the seconds the clip actually lasts, is the
+# only limit that means the same thing in every language.
+FRAMES_PER_SECOND = 12.5
+
+
+def split_for_speech(text: str, limit: int = CHUNK_CHARS) -> list[str]:
+    """
+    Break a line into pieces small enough to speak in one pass.
+
+    Splits on sentence and clause punctuation, keeping the mark with the
+    phrase it ends, then packs those phrases into chunks under `limit`. A
+    single phrase longer than the limit is cut on whitespace rather than
+    mid-word, and only cut blindly if there is no whitespace at all.
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+
+    phrases, current = [], ""
+    for ch in text:
+        current += ch
+        if ch in _BREAKS:
+            if current.strip():
+                phrases.append(current.strip())
+            current = ""
+    if current.strip():
+        phrases.append(current.strip())
+
+    pieces = []
+    for phrase in phrases:
+        while len(phrase) > limit:
+            cut = phrase.rfind(" ", 0, limit)
+            if cut <= 0:
+                cut = limit          # no space to break on: cut where we must
+            pieces.append(phrase[:cut].strip())
+            phrase = phrase[cut:].strip()
+        if phrase:
+            pieces.append(phrase)
+
+    chunks, current = [], ""
+    for piece in pieces:
+        candidate = (current + " " + piece).strip() if current else piece
+        if len(candidate) > limit and current:
+            chunks.append(current)
+            current = piece
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _join_pcm(parts: list[bytes], rate: int, gap: float = 0.18) -> bytes:
+    """Concatenate spoken chunks with a short breath between them."""
+    silence = b"\x00\x00" * int(rate * gap)
+    joined = b""
+    for i, part in enumerate(parts):
+        if i:
+            joined += silence
+        joined += part
+    return joined
 
 
 def speak(
@@ -179,6 +283,7 @@ def speak(
     reference_text: str = "",
     model_id: str = DEFAULT_MODEL,
     cancel=None,
+    max_seconds: float = 0.0,
     **_ignored,
 ) -> bytes:
     """
@@ -203,16 +308,40 @@ def speak(
         if reference_text.strip():
             kwargs["prompt_text"] = reference_text.strip()
 
-    try:
-        audio = model.generate(**kwargs)
-    except TypeError:
-        # older signatures take the reference differently; retry plain rather
-        # than failing the whole narration over a keyword name
-        audio = model.generate(text=text)
-    except Exception as exc:      # noqa: BLE001
-        raise LocalTTSError(f"VoxCPM could not speak that line: {exc}") from exc
+    chunks = split_for_speech(text)
+    rate = sample_rate(model)
+    spoken: list[bytes] = []
 
-    return _to_wav(audio, sample_rate(model))
+    # Share the budget across the chunks, with headroom so a natural reading
+    # is never cut off mid-word -- the cap exists to stop a runaway, not to
+    # trim good speech.
+    per_chunk = 0
+    if max_seconds > 0 and chunks:
+        per_chunk = max(24, int((max_seconds / len(chunks)) * 1.25 * FRAMES_PER_SECOND))
+
+    for chunk in chunks:
+        if cancel is not None and cancel.is_set():
+            from .media import Cancelled
+            raise Cancelled()
+        kwargs["text"] = chunk
+        if per_chunk:
+            kwargs["max_len"] = per_chunk
+        try:
+            audio = model.generate(**kwargs)
+        except TypeError:
+            # older signatures take the reference differently; retry plain
+            # rather than failing the whole narration over a keyword name
+            audio = model.generate(text=chunk)
+        except Exception as exc:      # noqa: BLE001
+            raise LocalTTSError(
+                f"VoxCPM could not speak this part -- {str(exc)[:120]} "
+                f"(text was {len(chunk)} characters)"
+            ) from exc
+        spoken.append(_pcm(audio))
+
+    if not spoken:
+        raise LocalTTSError("there was nothing to say")
+    return wav_header(_join_pcm(spoken, rate), rate)
 
 
 def sample_rate(model) -> int:

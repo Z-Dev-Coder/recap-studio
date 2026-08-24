@@ -119,6 +119,37 @@ def _windows_block(cues: list[Cue], windows: list[tuple[float, float]]) -> str:
     return "\n\n".join(lines)
 
 
+# Measured against real narration rather than assumed. English prose reads at
+# roughly 2.3 words a second, but the Burmese line carrying the same content
+# takes about 1.45x as long to speak -- and the Burmese is what the final video
+# uses. Sizing to the slower of the two is what makes the audio fit the clip.
+WORDS_PER_SECOND = 1.6
+
+
+def _length_rule(clip_len: float, mode: str) -> str:
+    """
+    How much narration a clip of this length can actually carry.
+
+    Written after a reel came back with 594 seconds of speech for a 45 second
+    video: the script had been told to write three to five sentences per beat
+    regardless of how long the beat lasted. A four-second clip holds about ten
+    words, and no amount of detail changes that.
+    """
+    words = max(6, int(clip_len * WORDS_PER_SECOND))
+    if mode == "reels" or clip_len < 7:
+        kind = "reel" if mode == "reels" else "clip"
+        return (
+            "ONE punchy sentence of about {} words -- no more. This {} runs "
+            "{:.0f} seconds and that is all it holds. Cut every word that is "
+            "not carrying meaning.".format(words, kind, clip_len)
+        )
+    sentences = "two to three" if clip_len < 14 else "three to five"
+    return (
+        "{} sentences of recap narration, about {} words in total, in "
+        "English.".format(sentences.capitalize(), words)
+    )
+
+
 def build_prompt(
     *,
     title: str,
@@ -157,13 +188,13 @@ Return JSON with these fields.
      the single most interesting or quotable moment in it.
    - Aim for about {clip:.1f} seconds per beat ({minclip:.1f}s minimum).
    - Prefer starting on a sentence boundary so the clip does not open mid-word.
-   - "en": THREE to FIVE full sentences of recap narration for this moment, in
-     English -- roughly {words} words, which is what fits a {clip:.0f} second
-     clip read aloud at a natural pace. Say what actually happens: who does
-     what, to whom, and what it leads to. Name the people and the things on
-     screen. A one-line caption is not enough; this is spoken narration that
-     has to carry the clip on its own. Do not repeat the transcript verbatim --
-     retell it in your own words, sharper than the original.
+   - "en": {length_rule}
+     This is spoken narration read aloud over the clip, so it MUST fit in
+     {clip:.0f} seconds at a natural speaking pace. Going over means the voice
+     is still talking when the clip has moved on. Say what actually happens:
+     who does what, to whom, and what it leads to. Name the people and things
+     on screen. Do not repeat the transcript verbatim -- retell it in your own
+     words, sharper than the original.
    - "my": the SAME line in natural Burmese (Myanmar), carrying every piece of
      information the English carries -- the names, the actions, the outcome.
      Write how a Burmese creator would actually say it, not a word-for-word
@@ -214,8 +245,7 @@ Write for a real audience: concrete, specific, no filler like "in this video".
         chapters=_windows_block(cues, windows),
         clip=clip_len,
         minclip=clip_len * 0.6,
-        # ~2.3 words a second is a comfortable narration pace
-        words=max(35, int(clip_len * 2.3)),
+        length_rule=_length_rule(clip_len, mode),
     )
 
 

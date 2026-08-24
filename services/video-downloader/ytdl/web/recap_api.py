@@ -271,6 +271,7 @@ class EditRequest(BaseModel):
     transcript: list[dict] | None = None
     voice_lang: str | None = None
     voice_engine: str | None = None
+    local_model: str | None = None
     voice_reference_text: str | None = None
     voice_name: str | None = None
     voice_style: str | None = None
@@ -560,6 +561,11 @@ def voices() -> dict:
                 "ready": localtts_mod.available(),
                 "note": "no quota and clones a voice from a sample; "
                         + localtts_mod.device_note(),
+                "models": [
+                    {"id": k, "note": v}
+                    for k, v in localtts_mod.MODELS.items()
+                ],
+                "default_model": localtts_mod.DEFAULT_MODEL,
                 "hint": localtts_mod.install_hint(),
             },
         ],

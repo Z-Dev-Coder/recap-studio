@@ -17,7 +17,23 @@
     "productName": "Toolbox",
     "files": [
       "**/*",
-      "!dist/**"
+      "!dist/**",
+      "!services/video-downloader/venv/Lib/site-packages/torch/**",
+      "!services/video-downloader/venv/Lib/site-packages/torchaudio/**",
+      "!services/video-downloader/venv/Lib/site-packages/torchgen/**",
+      "!services/video-downloader/venv/Lib/site-packages/functorch/**",
+      "!services/video-downloader/venv/Lib/site-packages/nvidia/**",
+      "!services/video-downloader/venv/Lib/site-packages/sympy/**",
+      "!services/video-downloader/venv/Lib/site-packages/llvmlite/**",
+      "!services/video-downloader/venv/Lib/site-packages/numba/**",
+      "!services/video-downloader/venv/Lib/site-packages/transformers/**",
+      "!services/video-downloader/venv/Lib/site-packages/voxcpm/**",
+      "!services/video-downloader/venv/Lib/site-packages/librosa/**",
+      "!services/video-downloader/venv/Lib/site-packages/sklearn/**",
+      "!services/video-downloader/venv/Lib/site-packages/scipy/**",
+      "!services/video-downloader/venv/Lib/site-packages/datasets/**",
+      "!services/video-downloader/venv/Lib/site-packages/tokenizers/**",
+      "!services/video-downloader/venv/Lib/site-packages/safetensors/**"
     ],
     "win": {
       "target": [

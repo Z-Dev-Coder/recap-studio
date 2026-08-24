@@ -9,6 +9,8 @@ untouched.
 
 from __future__ import annotations
 
+import hashlib
+
 from pathlib import Path
 
 from . import scrape as scrape_mod
@@ -373,13 +375,32 @@ def run_voice(
     if not any((row.get(lang) or "").strip() for row in project.timeline):
         raise StepError(f"the recap script has no {lang} lines to speak")
 
-    # A re-run must not blend into the previous take -- but a line the user
-    # supplied themselves is theirs, and regenerating the machine voice must
-    # not throw it away.
-    if project.voice_dir.exists():
-        for old in project.voice_dir.glob("line_*.wav"):
-            if not old.name.endswith("_custom.wav"):
-                old.unlink(missing_ok=True)
+    # A re-run must not blend two different voices together -- but it must not
+    # throw away good work either. Lines cost a couple of minutes each locally,
+    # so a run that fails on line 10 should resume, not start from nothing.
+    # Previous clips are cleared only when the settings that shaped them have
+    # actually changed. A line the user supplied themselves is always kept.
+    # The words matter as much as the voice: a rewritten script must not be
+    # narrated with clips of the old wording just because the filenames match.
+    spoken_text = "\n".join((row.get(lang) or "") for row in project.timeline)
+    signature = "|".join([
+        project.voice_engine or "gemini",
+        project.local_model or "",
+        project.voice_name or "",
+        project.voice_style or "",
+        lang,
+        model or "",
+        hashlib.sha1(spoken_text.encode("utf-8")).hexdigest()[:12],
+    ])
+    stamp = project.voice_dir / "settings.txt"
+    previous = stamp.read_text(encoding="utf-8").strip() if stamp.exists() else ""
+
+    if project.voice_dir.exists() and previous != signature:
+        for stale in project.voice_dir.glob("line_*.wav"):
+            if not stale.name.endswith("_custom.wav"):
+                stale.unlink(missing_ok=True)
+    project.voice_dir.mkdir(parents=True, exist_ok=True)
+    stamp.write_text(signature, encoding="utf-8")
 
     reference = None
     if project.voice_reference:
@@ -398,6 +419,7 @@ def run_voice(
         on_progress=on_progress,
         cancel=cancel,
         engine=project.voice_engine or "gemini",
+        local_model=project.local_model or "",
         reference_audio=reference,
         reference_text=project.voice_reference_text,
     )

@@ -78,6 +78,7 @@ class Project:
 
     # narration
     voice_engine: str = "gemini"    # gemini | voxcpm (local, no quota)
+    local_model: str = ""           # which VoxCPM size; blank means the default
     voice_reference: str = ""       # a clip to clone, for the local engine
     voice_reference_text: str = ""
     voice_lang: str = "my"          # the final video is the Burmese recap
@@ -163,6 +164,7 @@ class Project:
             "pacing": self.pacing,
             "hook": self.hook,
             "voice_engine": self.voice_engine,
+            "local_model": self.local_model,
             "voice_reference": self.voice_reference,
             "voice_reference_text": self.voice_reference_text,
             "voice_lang": self.voice_lang,
@@ -237,6 +239,7 @@ class Project:
             pacing=data.get("pacing", ""),
             hook=data.get("hook") or {"en": "", "my": ""},
             voice_engine=data.get("voice_engine", "gemini"),
+            local_model=data.get("local_model", ""),
             voice_reference=data.get("voice_reference", ""),
             voice_reference_text=data.get("voice_reference_text", ""),
             voice_lang=data.get("voice_lang", "my"),

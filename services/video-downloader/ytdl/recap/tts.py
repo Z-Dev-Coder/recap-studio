@@ -274,6 +274,7 @@ def narrate(
     engine: str = "gemini",
     reference_audio=None,
     reference_text: str = "",
+    local_model: str = "",
 ) -> list[dict]:
     """
     Speak every line of the recap, one clip per beat.
@@ -317,11 +318,19 @@ def narrate(
         if engine == "voxcpm":
             # nothing to pace: it runs here, and there is no quota to respect
             from . import localtts
+            # the clip this line plays over is the budget: narration that
+            # outruns its clip is narration nobody hears in place
+            clip_seconds = max(
+                0.0,
+                float(row.get("recap_end") or 0) - float(row.get("recap_start") or 0),
+            )
             audio = localtts.speak(
                 row[lang],
                 reference_audio=reference_audio,
                 reference_text=reference_text,
+                model_id=local_model or localtts.DEFAULT_MODEL,
                 cancel=cancel,
+                max_seconds=clip_seconds,
             )
         else:
             # keep under the per-minute ceiling instead of colliding with it

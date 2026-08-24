@@ -179,7 +179,13 @@
   .vrow.on { background: var(--accent-soft); }
   .frame b { position: absolute; left: 5px; bottom: 5px; background: rgba(0,0,0,.72); color: #fff; border-radius: 20px; padding: 1px 7px; font-size: 10.5px; font-weight: 600; }
   #thumbCanvas { width: 100%; border-radius: var(--r-sm); border: 1px solid var(--line); display: block; }
-  video { width: 100%; border-radius: var(--r-sm); background: #000; display: block; max-height: 58vh; }
+  /* width:auto lets a 9:16 reel hug its own shape instead of being stretched
+     across the card and letterboxed with huge black bars either side */
+  video {
+    width: auto; max-width: 100%; max-height: 58vh;
+    border-radius: var(--r-sm); background: #000;
+    display: block; margin-inline: auto;
+  }
 
   .tags { display: flex; flex-wrap: wrap; gap: 6px; }
   .tag { background: var(--accent-soft); color: var(--accent); border-radius: 20px; padding: 3px 10px; font-size: 12.5px; }
@@ -425,7 +431,8 @@
                   <h3 class="grow" style="margin:0">Voice</h3>
                   <button class="sm" id="suggestVoice">Suggest for this video</button>
                 </div>
-                <div id="voiceReason" class="tiny" style="margin-bottom:10px"></div>
+                <div id="voiceReason" class="tiny" style="margin-bottom:4px"></div>
+                <div id="voiceEngineNote" class="tiny" style="margin-bottom:10px"></div>
 
                 <div class="row">
                   <div class="field" style="max-width:190px">
@@ -434,6 +441,10 @@
                       <option value="gemini">Gemini (cloud)</option>
                       <option value="voxcpm">VoxCPM (local, no quota)</option>
                     </select>
+                  </div>
+                  <div class="field hide" id="localModelWrap" style="max-width:230px">
+                    <label class="f">Local model</label>
+                    <select id="localModel"></select>
                   </div>
                   <div class="field" style="max-width:150px">
                     <label class="f">Narrate in</label>
@@ -639,7 +650,7 @@ const patch = (path, body) => request(path, { method: 'PATCH', headers: { 'Conte
 
 const state = { projects: [], current: null, mode: 'reels', lang: 'en', wsLang: 'en',
                 frame: null, tab: 'cut', env: {}, voices: [], lines: [], uploadFor: null,
-                audio: null, pickedFile: '' };
+                audio: null, pickedFile: '', localModels: [], defaultLocalModel: '', localNote: '' };
 
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g,
@@ -908,8 +919,18 @@ function renderVoice(p) {
   if (document.activeElement !== $('voiceStyle')) $('voiceStyle').value = p.voice_style || '';
   $('voiceLang').value = p.voice_lang || 'my';
   $('voiceEngine').value = p.voice_engine || 'gemini';
-  // the voice list only means anything for the cloud engine
-  $('voiceList').classList.toggle('hide', p.voice_engine === 'voxcpm');
+  const local = p.voice_engine === 'voxcpm';
+  // the named voices are a cloud concept; locally the voice comes from a
+  // reference clip, so the list would only mislead
+  $('voiceList').classList.toggle('hide', local);
+  $('localModelWrap').classList.toggle('hide', !local);
+  if (local && state.localModels.length) {
+    const chosen = p.local_model || state.defaultLocalModel;
+    $('localModel').innerHTML = state.localModels
+      .map(m => `<option value="${escapeHtml(m.id)}"${m.id === chosen ? ' selected' : ''}>${escapeHtml(m.note)}</option>`)
+      .join('');
+  }
+  $('voiceEngineNote').textContent = local ? (state.localNote || '') : '';
   $('voiceReason').textContent = p.voice_reason || '';
   if (document.activeElement !== $('origVolSlider')) {
     $('origVolSlider').value = Math.round((p.original_volume == null ? 0.25 : p.original_volume) * 100);
@@ -1049,6 +1070,12 @@ $('lineFile').onchange = async () => {
     } catch (e) { showError($('stepErr'), e.message); }
   };
   reader.readAsDataURL(file);
+};
+
+$('localModel').onchange = async () => {
+  const p = current(); if (!p) return;
+  try { upsert(await patch(`/api/recap/projects/${p.id}`, { local_model: $('localModel').value })); }
+  catch (e) { showError($('stepErr'), e.message); }
 };
 
 $('voiceEngine').onchange = async () => {
@@ -1383,7 +1410,14 @@ function listen() {
     // the voice catalogue can be slow the first time (the local engine reports
     // its device), so the project list must not wait behind it
     request('/api/recap/voices')
-      .then(d => { state.voices = d.voices || []; if (current()) renderVoice(current()); })
+      .then(d => {
+        state.voices = d.voices || [];
+        const local = (d.engines || []).find(e => e.id === 'voxcpm') || {};
+        state.localModels = local.models || [];
+        state.defaultLocalModel = local.default_model || '';
+        state.localNote = local.ready ? local.note : (local.hint || '');
+        if (current()) renderVoice(current());
+      })
       .catch(() => {});
     renderList();
     renderProject();
