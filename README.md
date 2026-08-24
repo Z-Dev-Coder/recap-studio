@@ -132,9 +132,24 @@ point these at wherever you installed:
 
 ```powershell
 cd "D:\Toolbox\resources\app\services\video-downloader"
-.\venv\Scripts\python.exe -m pip install voxcpm
+
+# 1. VoxCPM itself, WITHOUT its dependency chain
+.\venv\Scripts\python.exe -m pip install voxcpm --no-deps
+
+# 2. the dependencies it actually needs
+.\venv\Scripts\python.exe -m pip install torch torchaudio transformers safetensors huggingface-hub soundfile librosa einops inflect addict tqdm pydantic
+
+# 3. swap in the CUDA build so it runs on the GPU
 .\venv\Scripts\python.exe -m pip install --force-reinstall torch torchaudio --index-url https://download.pytorch.org/whl/cu126
 ```
+
+> **Why `--no-deps`.** A plain `pip install voxcpm` fails on Python 3.13+
+> with *"Failed building wheel for kaldifst"*. `kaldifst` publishes no
+> wheel for these versions and building it needs CMake and a C++ compiler.
+> It arrives through `wetext`, which VoxCPM uses in exactly one place — to
+> expand Chinese and English numbers into words. Burmese narration never
+> touches it, and the app supplies a pass-through stand-in, so skipping the
+> chain costs nothing but the number formatting in English narration.
 
 About 4.5 GB and ten minutes. **No administrator rights are needed** as long as
 you did not install into Program Files. Model weights are cached in your user
@@ -267,12 +282,22 @@ lines. VoxCPM runs on your own machine with no quota at all, supports Burmese,
 and can clone a voice from a few seconds of audio.
 
 ```powershell
-venv\Scripts\python.exe -m pip install voxcpm
+# VoxCPM without its dependency chain -- see the note below
+venv\Scripts\python.exe -m pip install voxcpm --no-deps
+
+# what it actually needs
+venv\Scripts\python.exe -m pip install torch torchaudio transformers safetensors huggingface-hub soundfile librosa einops inflect addict tqdm pydantic
 ```
 
+> **`--no-deps` is not optional.** A plain `pip install voxcpm` fails on
+> Python 3.13+ with *"Failed building wheel for kaldifst"* — no wheel is
+> published and building it needs CMake and a C++ compiler. It comes in
+> through `wetext`, which VoxCPM uses only to expand Chinese and English
+> numbers into words; the app supplies a pass-through stand-in for it.
+
 **On CPU this is roughly 100× slower than realtime — not usable.** With an
-NVIDIA card, install the CUDA build of PyTorch. Match the channel to your torch
-version — `cu126` carries 2.13:
+NVIDIA card, install the CUDA build of PyTorch. Match the channel to your
+torch version — `cu126` carries 2.13:
 
 ```powershell
 venv\Scripts\python.exe -m pip install --force-reinstall torch torchaudio --index-url https://download.pytorch.org/whl/cu126
@@ -287,11 +312,11 @@ venv\Scripts\python.exe -c "import torch; print(torch.cuda.is_available())"
 `True` means narration runs at about a third of realtime instead. On a 6 GB
 GTX 1660 Ti, ten lines take roughly five minutes.
 
-> **Choose the model by language, never by size.** Only **VoxCPM2** speaks
-> anything beyond Chinese and English. `VoxCPM-0.5B` and `VoxCPM1.5` are three
-> times faster and a third the size, but handed Burmese they do not fail —
-> they produce fluent Chinese-sounding speech. The model list in the app says
-> so in capitals.
+> **Only VoxCPM2 is offered, deliberately.** `VoxCPM-0.5B` and `VoxCPM1.5` are
+> a third the size and three times faster, but they are trained on Chinese and
+> English alone — and handed Burmese they do not fail, they speak fluent
+> Chinese-sounding nonsense. A faster model that silently produces the wrong
+> language is not a choice worth offering, so the app does not offer it.
 
 ---
 
@@ -439,12 +464,21 @@ the heavy user — switch to the local engine to stop hitting the limit at all.
 Lines already spoken are kept, so a retry resumes rather than starting over.
 
 **Narration sounds like the wrong language**
-You are on `VoxCPM-0.5B` or `VoxCPM1.5`. Both are Chinese and English only and
-will not tell you so. Switch to **VoxCPM2** in the Voice tab.
+Check the model is `openbmb/VoxCPM2`. The smaller VoxCPM models are trained on
+Chinese and English alone and will speak anything else as Chinese-sounding
+nonsense without complaining. The app only offers VoxCPM2 for that reason, but
+a project saved before that change may still name one of them.
 
 **Narration is impossibly slow**
 `torch.cuda.is_available()` is `False` — you have the CPU build of PyTorch.
 Install the CUDA build (above).
+
+**"Failed building wheel for kaldifst" when installing voxcpm**
+Use `pip install voxcpm --no-deps` and then install its dependencies
+separately, as in [Optional extras](#optional-extras). `kaldifst` has no
+wheel for Python 3.13+ and needs CMake and a C++ compiler to build. VoxCPM
+does not import it — it arrives through `wetext`, which the app stands in
+for.
 
 **"VoxCPM could not speak this part"**
 A line was too long for the model's context. Lines are split on sentence

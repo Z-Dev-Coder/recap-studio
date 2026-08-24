@@ -996,6 +996,8 @@ function renderVoice(p) {
   // reference clip, so the list would only mislead
   $('voiceList').classList.toggle('hide', local);
   $('localModelWrap').classList.toggle('hide', !local);
+  // with a single model the picker is just noise
+  $('localModelWrap').classList.toggle('hide', !local || state.localModels.length < 2);
   if (local && state.localModels.length) {
     const chosen = p.local_model || state.defaultLocalModel;
     $('localModel').innerHTML = state.localModels

@@ -33,14 +33,14 @@ _model_id = ""
 # nonsense rather than failing, so size must never be chosen over language.
 DEFAULT_MODEL = "openbmb/VoxCPM2"
 
+# Only VoxCPM2 is offered. The 0.5B and 1.5 models are a third the size and
+# three times faster, but they are trained on Chinese and English alone, and
+# given Burmese they do not fail -- they speak fluent Chinese-sounding nonsense.
+# A faster model that silently produces the wrong language is not a choice
+# worth offering, so the list has one entry and cannot be got wrong.
 MODELS = {
-    "openbmb/VoxCPM2": "2B - 4.6GB - 30 languages incl. Burmese. The only one for Burmese.",
-    "openbmb/VoxCPM-0.5B": "0.5B - 1.5GB - ENGLISH AND CHINESE ONLY, fastest",
-    "openbmb/VoxCPM1.5": "1.5 - 1.8GB - ENGLISH AND CHINESE ONLY",
+    "openbmb/VoxCPM2": "2B - 4.6GB - 30 languages including Burmese",
 }
-
-# Anything not in here will be spoken by a model that was never trained on it.
-MULTILINGUAL_MODELS = {"openbmb/VoxCPM2"}
 
 # Only a fallback: the real rate is read off the loaded model, because the
 # model decides it and a wrong header plays the narration at the wrong speed.
@@ -150,6 +150,11 @@ def load(model_id: str = DEFAULT_MODEL):
     global _model, _model_id
     if not available():
         raise LocalTTSError(install_hint())
+
+    # A project saved before the smaller models were dropped may still name
+    # one. Honouring that would download 1.5GB to speak the wrong language.
+    if model_id not in MODELS:
+        model_id = DEFAULT_MODEL
     with _model_lock:
         if _model is None or _model_id != model_id:
             _stand_in_for_wetext()
