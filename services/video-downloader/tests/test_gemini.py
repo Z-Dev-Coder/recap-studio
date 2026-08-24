@@ -88,3 +88,56 @@ def test_other_failures_are_not_retried(monkeypatch, no_sleep):
         gm.Gemini("key", "model").generate_json("p", {})
     assert "API key" in str(err.value)
     assert len(calls) == 1
+
+
+def daily_limited(seconds=55):
+    """A daily cap as Google actually reports it: a short retry delay attached."""
+    return FakeResponse(429, {"error": {"details": [
+        {"@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": [
+            {"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+             "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests"}]},
+        {"@type": "type.googleapis.com/google.rpc.RetryInfo",
+         "retryDelay": f"{seconds}s"}]}})
+
+
+def minute_limited(seconds=20):
+    return FakeResponse(429, {"error": {"details": [
+        {"@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": [
+            {"quotaId": "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"}]},
+        {"@type": "type.googleapis.com/google.rpc.RetryInfo",
+         "retryDelay": f"{seconds}s"}]}})
+
+
+def test_the_two_limits_are_told_apart():
+    assert gm.quota_scope(daily_limited()) == "day"
+    assert gm.quota_scope(minute_limited()) == "minute"
+    assert gm.quota_scope(limited(30)) == ""          # no violation block
+
+
+def test_a_daily_cap_is_not_waited_out_however_short_the_delay(monkeypatch, no_sleep):
+    """
+    The reported delay is the per-minute window, so a daily cap arrives saying
+    'retry in 55s'. Waiting on that twice makes the failure slower, not softer.
+    """
+    calls = []
+
+    def post(*a, **k):
+        calls.append(1)
+        return daily_limited(55)
+
+    monkeypatch.setattr(gm.requests, "post", post)
+    with pytest.raises(gm.GeminiError) as err:
+        gm.Gemini("key", "gemini-3.6-flash").generate_json("p", {})
+    message = str(err.value)
+    assert "per day" in message
+    assert "midnight Pacific" in message
+    assert "gemini-3.6-flash" in message
+    assert no_sleep == []          # never waited
+    assert len(calls) == 1         # never retried
+
+
+def test_a_per_minute_limit_is_still_waited_out(monkeypatch, no_sleep):
+    replies = [minute_limited(20), ok()]
+    monkeypatch.setattr(gm.requests, "post", lambda *a, **k: replies.pop(0))
+    assert gm.Gemini("key", "m").generate_json("p", {}) == {"answer": 1}
+    assert no_sleep

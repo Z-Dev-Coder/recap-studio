@@ -73,6 +73,43 @@ def retry_after(resp) -> float:
         return 0.0
 
 
+def quota_scope(resp) -> str:
+    """
+    Which allowance ran out: "day", "minute", or "" when Google does not say.
+
+    This matters because the two are not the same problem and one of them is
+    not worth waiting for. A 429 carries a RetryInfo delay whatever the cause,
+    so a daily cap arrives saying "retry in 55s" -- which is true of the
+    per-minute window and useless for a limit that resets at midnight. Telling
+    someone to try again in a minute, twice, when they have no requests left
+    until tomorrow is worse than telling them nothing.
+    """
+    try:
+        for detail in resp.json().get("error", {}).get("details", []) or []:
+            for violation in detail.get("violations", []) or []:
+                marker = "{} {}".format(
+                    violation.get("quotaId") or "",
+                    violation.get("quotaMetric") or "",
+                ).lower()
+                if "perday" in marker or "per_day" in marker:
+                    return "day"
+                if "perminute" in marker or "per_minute" in marker:
+                    return "minute"
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return ""
+
+
+def daily_limit_message(model: str) -> str:
+    """What to say when the day's requests are gone."""
+    return (
+        "The free tier allows a fixed number of requests per day for {} and "
+        "this key has used them. It resets at midnight Pacific time. Until "
+        "then: pick a lighter model in Settings -- the lite models have a much "
+        "larger daily allowance -- or use a script you write yourself."
+    ).format(model or "this model")
+
+
 def retry_hint(resp) -> str:
     secs = retry_after(resp)
     if secs <= 0:
@@ -152,6 +189,10 @@ class Gemini:
 
             if resp.status_code != 429:
                 break
+            # a daily cap does not come back in a minute, however short the
+            # delay it reports; waiting on it just makes the failure slower
+            if quota_scope(resp) == "day":
+                raise GeminiError(daily_limit_message(self.model))
             wait = retry_after(resp)
             if attempt >= RATE_LIMIT_RETRIES or not 0 < wait <= MAX_RATE_WAIT:
                 break
@@ -161,6 +202,8 @@ class Gemini:
             time.sleep(wait + 1.0)
 
         if resp.status_code == 429:
+            if quota_scope(resp) == "day":
+                raise GeminiError(daily_limit_message(self.model))
             raise GeminiError(
                 "Gemini free-tier limit reached. " + retry_hint(resp)
             )
