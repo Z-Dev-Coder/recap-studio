@@ -333,6 +333,10 @@ def narrate(
         if engine == "voxcpm":
             # nothing to pace: it runs here, and there is no quota to respect
             from . import localtts
+            if not localtts.available():
+                # local narration is the default, so a machine without it must
+                # still be able to speak rather than failing the step outright
+                engine = "gemini"
             # the clip this line plays over is the budget: narration that
             # outruns its clip is narration nobody hears in place
             clip_seconds = max(

@@ -612,6 +612,7 @@ def generate(
     treatment: str = "recap",
     cancel=None,
     light_model: str = "",
+    light_analysis: bool = False,
 ) -> dict:
     """
     Video in, recap package out, in four stages rather than one prompt.
@@ -662,12 +663,20 @@ def generate(
     # and the other two stopped competing for it at all.
     light = Gemini(api_key, light_model or LIGHT_MODEL) if (light_model or LIGHT_MODEL) else client
 
+    # Reviewing always uses the light model: it only revises lines already
+    # flagged as wrong, so a weaker reviewer mostly declines to act, which
+    # costs nothing. Reading is different -- every later stage is built on
+    # those notes, and a shallow reading is not recoverable further down. So
+    # that one is the user's call, traded against how many scripts a day the
+    # quota allows.
+    reader = light if light_analysis else client
+
     count, clip_len = beat_plan(duration, mode, target_seconds)
 
     # ---------------------------------------------------------- 1. read it
     check()
     story = story_mod.analyse(
-        light, title=title, duration=duration, cues=cues,
+        reader, title=title, duration=duration, cues=cues,
         context=context, frames=frames,
     )
 

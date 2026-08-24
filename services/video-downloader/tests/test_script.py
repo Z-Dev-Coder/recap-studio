@@ -395,6 +395,7 @@ def test_the_cheap_stages_use_the_lighter_model(monkeypatch, fake_gemini, story_
                         uploader="u", duration=60.0, cues=[], mode="long",
                         target_seconds=60.0)
 
+    # two clients are built: the good one, and a lighter one for the cheap work
     assert "gemini-3.6-flash" in seen
     assert any("lite" in m for m in seen), f"no light model used: {seen}"
 
@@ -408,3 +409,20 @@ def test_an_explicit_light_model_is_respected(monkeypatch, fake_gemini, story_re
                         duration=60.0, cues=[], mode="long", target_seconds=60.0,
                         light_model="my-light-model")
     assert "my-light-model" in seen
+
+
+def test_reading_can_be_moved_to_the_light_model(monkeypatch, fake_gemini, story_reply):
+    """
+    Offered as a choice, not a default: every later stage is built on the
+    reading, and a shallow reading is not recoverable further down.
+    """
+    seen = []
+    shared = fake_gemini([story_reply, _package(7), {"lines": []}])
+    monkeypatch.setattr(script_mod, "Gemini",
+                        lambda key, model, *a, **k: (seen.append(model), shared)[1])
+    script_mod.generate(api_key="k", model="big", title="t", uploader="u",
+                        duration=60.0, cues=[], mode="long", target_seconds=60.0,
+                        light_model="lite", light_analysis=True)
+    # the reading call is the first one made
+    assert seen and seen[0] in ("big", "lite")
+    assert "lite" in seen

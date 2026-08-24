@@ -238,6 +238,7 @@ def run_script(
     use_vision: bool = True,
     cancel=None,
     light_model: str = "",
+    light_analysis: bool = False,
 ) -> None:
     """Ask Gemini for the recap script, description, hashtags and title."""
     if not project.transcript:
@@ -289,6 +290,7 @@ def run_script(
         treatment=project.content_type or "recap",
         cancel=cancel,
         light_model=light_model,
+        light_analysis=light_analysis,
     )
 
     project.duration = duration

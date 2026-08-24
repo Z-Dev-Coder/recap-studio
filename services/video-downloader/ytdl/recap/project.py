@@ -82,7 +82,12 @@ class Project:
     hook: dict = field(default_factory=lambda: {"en": "", "my": ""})
 
     # narration
-    voice_engine: str = "gemini"    # gemini | voxcpm (local, no quota)
+    # Local by default. Gemini's TTS has its own daily allowance -- ten
+    # requests, which is a line or two of narration -- and spending the quota
+    # on speech when a local engine does it for nothing, in the same voice
+    # every time, was the wrong default. Falls back to Gemini if VoxCPM is not
+    # installed; see tts.narrate.
+    voice_engine: str = "voxcpm"    # voxcpm (local, no quota) | gemini
     local_model: str = ""           # which VoxCPM size; blank means the default
     # trim the footage to the narration rather than to a length picked before
     # the narration existed -- see plan_fitted
@@ -281,7 +286,7 @@ class Project:
             video_type=data.get("video_type", ""),
             pacing=data.get("pacing", ""),
             hook=data.get("hook") or {"en": "", "my": ""},
-            voice_engine=data.get("voice_engine", "gemini"),
+            voice_engine=data.get("voice_engine", "voxcpm"),
             local_model=data.get("local_model", ""),
             fit_to_voice=bool(data.get("fit_to_voice", True)),
             # "treatment" was the name this shipped under for a few hours
