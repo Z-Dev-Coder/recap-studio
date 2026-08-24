@@ -30,6 +30,21 @@ API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
 # need the better model should not spend its quota. See LIGHT_MODEL.
 LIGHT_MODEL = "gemini-3.1-flash-lite"
 
+# Where the good model's small daily allowance gets spent. The free tier
+# gives gemini-3.6-flash 20 requests a day and gemini-3.1-flash-lite 500, and
+# a script costs four calls -- so this choice is the difference between five
+# scripts a day and a hundred and twenty-five.
+#
+#   best      read + pick + write on the good model     ~6 scripts a day
+#   balanced  write on the good model, rest light      ~20 scripts a day
+#   most      everything on the light model           ~125 scripts a day
+#
+# "balanced" is the default because writing the Burmese is the stage whose
+# quality is most visible in the finished video, and it is the one stage that
+# cannot be checked cheaply afterwards.
+QUALITY_MODES = ("best", "balanced", "most")
+DEFAULT_QUALITY = "balanced"
+
 RATE_LIMIT_RETRIES = 2
 MAX_RATE_WAIT = 75.0
 

@@ -426,3 +426,53 @@ def test_reading_can_be_moved_to_the_light_model(monkeypatch, fake_gemini, story
     # the reading call is the first one made
     assert seen and seen[0] in ("big", "lite")
     assert "lite" in seen
+
+
+def _models_used(monkeypatch, fake_gemini, story_reply, **kw):
+    """Which model each of the four stages was given, in call order."""
+    seen = []
+    n, _ = script_mod.beat_plan(60.0, "long", 60.0)
+    shared = fake_gemini([story_reply, _package(n),
+                          {"lines": [{"index": i, "my": "မ" * 80} for i in range(n)]},
+                          {"lines": []}])
+
+    class Tagging:
+        def __init__(self, model):
+            self.model = model
+
+        def generate_json(self, *a, **k):
+            seen.append(self.model)
+            return shared.generate_json(*a, **k)
+
+    monkeypatch.setattr(script_mod, "Gemini", lambda key, model, *a, **k: Tagging(model))
+    script_mod.generate(api_key="k", model="GOOD", title="t", uploader="u",
+                        duration=60.0, cues=[], mode="long", target_seconds=60.0,
+                        light_model="LITE", **kw)
+    return seen
+
+
+def test_best_spends_the_good_model_on_everything_but_the_review(
+        monkeypatch, fake_gemini, story_reply):
+    seen = _models_used(monkeypatch, fake_gemini, story_reply, quality="best")
+    assert seen == ["GOOD", "GOOD", "GOOD", "LITE"]      # read, pick, write, review
+
+
+def test_balanced_keeps_only_the_writing_on_the_good_model(
+        monkeypatch, fake_gemini, story_reply):
+    """
+    The default. Writing the Burmese is the stage whose quality shows in the
+    finished video, and one good call a script is twenty scripts a day.
+    """
+    seen = _models_used(monkeypatch, fake_gemini, story_reply, quality="balanced")
+    assert seen == ["LITE", "LITE", "GOOD", "LITE"]
+    assert seen.count("GOOD") == 1
+
+
+def test_most_uses_no_quota_of_the_good_model(monkeypatch, fake_gemini, story_reply):
+    seen = _models_used(monkeypatch, fake_gemini, story_reply, quality="most")
+    assert "GOOD" not in seen
+
+
+def test_an_unknown_budget_falls_back_to_the_default(monkeypatch, fake_gemini, story_reply):
+    seen = _models_used(monkeypatch, fake_gemini, story_reply, quality="nonsense")
+    assert seen.count("GOOD") == 1          # same as balanced

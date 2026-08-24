@@ -613,6 +613,7 @@ def generate(
     cancel=None,
     light_model: str = "",
     light_analysis: bool = False,
+    quality: str = "",
 ) -> dict:
     """
     Video in, recap package out, in four stages rather than one prompt.
@@ -639,7 +640,7 @@ def generate(
     """
     from . import burmese as burmese_mod
     from . import story as story_mod
-    from .gemini import LIGHT_MODEL
+    from .gemini import DEFAULT_QUALITY, LIGHT_MODEL, QUALITY_MODES
     from .media import Cancelled
 
     def check() -> None:
@@ -665,11 +666,15 @@ def generate(
 
     # Reviewing always uses the light model: it only revises lines already
     # flagged as wrong, so a weaker reviewer mostly declines to act, which
-    # costs nothing. Reading is different -- every later stage is built on
-    # those notes, and a shallow reading is not recoverable further down. So
-    # that one is the user's call, traded against how many scripts a day the
-    # quota allows.
-    reader = light if light_analysis else client
+    # costs nothing. The rest is the quality budget's to decide -- see
+    # gemini.QUALITY_MODES for what each setting costs in scripts per day.
+    mode = quality if quality in QUALITY_MODES else DEFAULT_QUALITY
+    if light_analysis:
+        mode = "most" if mode == "most" else "balanced"
+
+    reader = client if mode == "best" else light
+    picker = client if mode in ("best",) else light
+    writer = client if mode in ("best", "balanced") else light
 
     count, clip_len = beat_plan(duration, mode, target_seconds)
 
@@ -705,7 +710,7 @@ def generate(
         context=context, frame_note=frame_note, story=story or None,
         treatment=treatment,
     )
-    data = client.generate_json(prompt, _SCHEMA, temperature, images=resend)
+    data = picker.generate_json(prompt, _SCHEMA, temperature, images=resend)
     beats = repair_beats(data.get("beats") or [], windows, clip_len, duration)
 
     # the clip a line is spoken over is the only length that matters
@@ -715,7 +720,7 @@ def generate(
     # ------------------------------------------------- 3. write the Burmese
     check()
     written = burmese_mod.write(
-        client, beats, story, title=title, seconds_for=seconds_for,
+        writer, beats, story, title=title, seconds_for=seconds_for,
         temperature=min(0.9, temperature + 0.1), treatment=treatment,
     )
 

@@ -145,6 +145,7 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
                 cancel=stop,
                 light_model=settings.get("light_model", "") or gemini_light(),
                 light_analysis=bool(settings.get("light_analysis", False)),
+                quality=settings.get("quality", ""),
             )
         elif step == "transcript":
             pipeline.run_transcript(
@@ -329,6 +330,7 @@ class VoicePreviewRequest(BaseModel):
 
 class SettingsRequest(BaseModel):
     light_analysis: bool | None = None
+    quality: str | None = None
     gemini_key: str | None = None
     gemini_model: str | None = None
     tts_model: str | None = None
