@@ -280,6 +280,18 @@
             <div id="stepErr"></div>
           </div>
 
+          <div class="card hide" id="guide" style="border-color:var(--accent)">
+            <div class="row" style="align-items:flex-start">
+              <div class="grow">
+                <div class="sec-label" style="padding:0 0 4px">Next step</div>
+                <div id="guideTitle" style="font-weight:650;font-size:15px"></div>
+                <div class="note" id="guideWhat" style="margin-top:4px"></div>
+                <div class="tiny" id="guideSet" style="margin-top:6px"></div>
+              </div>
+              <button class="primary" id="guideRun"></button>
+            </div>
+          </div>
+
           <div class="tabs" id="tabs">
             <button data-tab="cut" class="on">Recap cut</button>
             <button data-tab="script">Script</button>
@@ -647,6 +659,14 @@
         </div>
       </div>
     </div>
+    <label class="note" style="display:block;margin-top:16px">
+      <input type="checkbox" id="autorun"> Run every step now without stopping
+    </label>
+    <div class="tiny" style="margin-top:4px">
+      Left unticked, the video is downloaded and transcribed and then it waits,
+      so the length, language and voice can be set before anything is written
+      or spoken.
+    </div>
     <div id="createErr"></div>
     <div class="row" style="margin-top:18px;justify-content:flex-end">
       <button class="ghost" id="newCancel">Cancel</button>
@@ -807,8 +827,13 @@ $('create').onclick = async () => {
   try {
     const p = await post('/api/recap/projects', {
       url, source_file: state.pickedFile || '',
-      mode: state.mode, language: state.lang, autorun: true
+      mode: state.mode, language: state.lang,
+      autorun: $('autorun').checked
     });
+    // without autorun, fetch what is needed to decide the settings and stop
+    if (!$('autorun').checked) {
+      post(`/api/recap/projects/${p.id}/steps/source`, {}).catch(() => {});
+    }
     state.current = p.id;
     state.wsLang = state.lang;
     [...$('wsLangSeg').children].forEach(x => x.classList.toggle('on', x.dataset.lang === state.lang));
@@ -960,12 +985,56 @@ function renderProject() {
 
   renderFrames(p);
   renderVoice(p);
+  renderGuide(p);
 
   // Stop replaces Run all whenever something is actually running
   const busy = Object.values(p.steps || {}).some(st => st.status === 'running');
   $('stopBtn').classList.toggle('hide', !busy);
   $('runAll').classList.toggle('hide', busy);
   [...$('modeSwitch').children].forEach(b => b.classList.toggle('on', b.dataset.m === p.mode));
+}
+
+/* The ordered walkthrough. Pasting a link used to start everything at once,
+   which left no moment to choose a length, a language or a voice -- all of
+   which change what gets written and spoken. */
+const GUIDE = [
+  { key: 'source', title: 'Download the video',
+    what: 'Fetches the original and reads its length and description.',
+    set: '', run: 'Download' },
+  { key: 'transcript', title: 'Get the transcript',
+    what: 'Uses the platform captions if there are any, otherwise transcribes the audio here.',
+    set: '', run: 'Transcribe' },
+  { key: 'script', title: 'Write the recap script',
+    what: 'Picks the moments and writes the narration, title, description and hashtags in both languages.',
+    set: 'Set the format (Reel or Long) in the header first — it decides how long each line is written to be.',
+    run: 'Write the script' },
+  { key: 'video', title: 'Cut the recap',
+    what: 'Splices the chosen moments together.',
+    set: 'Set the length, shape and captions on the Recap cut tab before running this.',
+    run: 'Build the cut' },
+  { key: 'thumbnail', title: 'Find thumbnail frames',
+    what: 'Pulls candidate frames and ranks them by the script\'s own scores.',
+    set: '', run: 'Find frames' },
+  { key: 'voice', title: 'Speak the narration',
+    what: 'Narrates the script over the cut and mixes it with the original audio.',
+    set: 'Choose the language, voice and how loud the original stays on the Voice tab first.',
+    run: 'Generate narration' },
+];
+
+function renderGuide(p) {
+  const steps = p.steps || {};
+  const busy = Object.values(steps).some(s => s.status === 'running');
+  const next = GUIDE.find(g => (steps[g.key] || {}).status !== 'done');
+
+  $('guide').classList.toggle('hide', !next || busy);
+  if (!next || busy) return;
+
+  $('guideTitle').textContent = next.title;
+  $('guideWhat').textContent = next.what;
+  $('guideSet').textContent = next.set;
+  $('guideSet').style.display = next.set ? '' : 'none';
+  $('guideRun').textContent = next.run;
+  $('guideRun').onclick = () => runStep(next.key);
 }
 
 /* ------------------------------------------------------------------ voice */

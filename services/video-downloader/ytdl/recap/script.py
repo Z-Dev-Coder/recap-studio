@@ -200,7 +200,9 @@ Return JSON with these fields.
      Write how a Burmese creator would actually say it, not a word-for-word
      transliteration, and never a shortened gloss: if the English runs to four
      sentences, so does the Burmese. A Burmese line visibly briefer than its
-     English twin is wrong and must be rewritten longer and fuller.
+     English twin is wrong and must be rewritten longer and fuller. The Burmese
+     lines must join up the same way the English ones do, with the connecting
+     words Burmese narration actually uses.
    - "score": 1-10, how strongly this moment would hold a scrolling viewer.
      Score against these, and say which one applies in "why":
        hook (makes you stop scrolling), emotional peak, strong opinion,
@@ -213,6 +215,13 @@ Return JSON with these fields.
    - "why": which criterion above it hits, and why, in a few words.
    - Together the beats must tell the story of the WHOLE video from start to
      finish, so early chapters set up and the final chapter lands the payoff.
+   - Write them as ONE narration read straight through, not as captions that
+     happen to sit next to each other. Each line must follow on from the one
+     before it: carry the thread forward with the ordinary words a narrator
+     uses -- then, so, but, after that, meanwhile, in the end -- and refer back
+     to what was already said instead of reintroducing it. Once a person has
+     been named, later lines say "he" or "she". A line that would read the same
+     if the beats were shuffled is wrong.
 
 2. "title_en" / "title_my": a scroll-stopping title, under 80 characters.
 3. "description_en" / "description_my": a post description of 2-4 short

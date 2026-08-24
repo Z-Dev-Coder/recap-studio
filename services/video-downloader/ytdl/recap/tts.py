@@ -325,13 +325,19 @@ def narrate(
                 0.0,
                 float(row.get("recap_end") or 0) - float(row.get("recap_start") or 0),
             )
+            # One voice for the whole narration: without a reference clip
+            # VoxCPM picks a new voice per call, so line two sounded like a
+            # different person from line one. The first line written becomes
+            # the reference for every line after it.
+            anchor = out_dir / f"_voice_{lang}.wav"
             audio = localtts.speak(
                 row[lang],
-                reference_audio=reference_audio,
+                reference_audio=reference_audio or (anchor if anchor.exists() else None),
                 reference_text=reference_text,
                 model_id=local_model or localtts.DEFAULT_MODEL,
                 cancel=cancel,
                 max_seconds=clip_seconds,
+                voice_anchor=anchor,
             )
         else:
             # keep under the per-minute ceiling instead of colliding with it

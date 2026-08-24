@@ -295,6 +295,7 @@ def speak(
     model_id: str = DEFAULT_MODEL,
     cancel=None,
     max_seconds: float = 0.0,
+    voice_anchor: Path | None = None,
     **_ignored,
 ) -> bytes:
     """
@@ -323,6 +324,26 @@ def speak(
     rate = sample_rate(model)
     spoken: list[bytes] = []
 
+    # VoxCPM has no seed: given no reference clip it invents a fresh voice on
+    # every call. Each chunk is its own call, so a line split into three came
+    # back in three different voices, changing speaker mid-sentence. The first
+    # chunk is therefore written out and handed to the rest as their reference,
+    # which is also what keeps one line sounding like the line before it.
+    anchor = None
+    anchor_text = ""
+    if reference_audio and Path(reference_audio).exists():
+        anchor = Path(reference_audio)
+        anchor_text = (reference_text or "").strip()
+        # an anchor written by an earlier line keeps its text in a sidecar, so
+        # the closer prompt mode survives across separate calls
+        if not anchor_text:
+            sidecar = anchor.with_suffix(".txt")
+            if sidecar.exists():
+                try:
+                    anchor_text = sidecar.read_text(encoding="utf-8").strip()
+                except OSError:
+                    anchor_text = ""
+
     # Share the budget across the chunks, with headroom so a natural reading
     # is never cut off mid-word -- the cap exists to stop a runaway, not to
     # trim good speech.
@@ -337,6 +358,19 @@ def speak(
         kwargs["text"] = chunk
         if per_chunk:
             kwargs["max_len"] = per_chunk
+        kwargs.pop("prompt_wav_path", None)
+        kwargs.pop("prompt_text", None)
+        kwargs.pop("reference_wav_path", None)
+        if anchor is not None and anchor.exists():
+            if anchor_text:
+                # prompt mode: the model is told what the reference says, which
+                # copies the voice most closely. Both or neither -- VoxCPM
+                # rejects a prompt_wav_path with no prompt_text.
+                kwargs["prompt_wav_path"] = str(anchor)
+                kwargs["prompt_text"] = anchor_text
+            else:
+                # plain voice cloning, no transcript needed
+                kwargs["reference_wav_path"] = str(anchor)
         try:
             audio = model.generate(**kwargs)
         except TypeError:
@@ -348,7 +382,19 @@ def speak(
                 f"VoxCPM could not speak this part -- {str(exc)[:120]} "
                 f"(text was {len(chunk)} characters)"
             ) from exc
-        spoken.append(_pcm(audio))
+        piece = _pcm(audio)
+        spoken.append(piece)
+
+        # the first thing spoken becomes the voice everything after it copies
+        if anchor is None and voice_anchor is not None:
+            try:
+                voice_anchor.parent.mkdir(parents=True, exist_ok=True)
+                voice_anchor.write_bytes(wav_header(piece, rate))
+                voice_anchor.with_suffix(".txt").write_text(chunk, encoding="utf-8")
+                anchor = voice_anchor
+                anchor_text = chunk
+            except OSError:
+                pass       # no anchor is worse, but not worth failing over
 
     if not spoken:
         raise LocalTTSError("there was nothing to say")
