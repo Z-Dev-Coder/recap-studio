@@ -183,7 +183,7 @@ class GroqBackend:
     name = "groq"
 
     def __init__(self, model: str, api_key: str = "", timeout: int = 180):
-        self.model = model or "llama-3.3-70b-versatile"
+        self.model = model or "openai/gpt-oss-120b"
         self.api_key = (api_key or "").strip()
         self.timeout = timeout
 
@@ -196,14 +196,24 @@ class GroqBackend:
             "temperature": temperature,
             "response_format": {"type": "json_object"},
         }
-        try:
-            resp = requests.post(
-                GROQ_URL, json=body, timeout=self.timeout,
-                headers={"Authorization": f"Bearer {self.api_key}",
-                         "Content-Type": "application/json"},
-            )
-        except requests.RequestException as exc:
-            raise LLMError(f"Could not reach Groq: {exc}") from exc
+        headers = {"Authorization": f"Bearer {self.api_key}",
+                   "Content-Type": "application/json"}
+
+        # Not every model on Groq honours JSON mode -- some reject the request
+        # outright with a 400 rather than answering. Asking again without it
+        # still works, because the shape is in the prompt as well and the
+        # answer is parsed out of whatever wrapping comes back.
+        for enforce_json in (True, False):
+            if not enforce_json:
+                body.pop("response_format", None)
+            try:
+                resp = requests.post(GROQ_URL, json=body, timeout=self.timeout,
+                                     headers=headers)
+            except requests.RequestException as exc:
+                raise LLMError(f"Could not reach Groq: {exc}") from exc
+            if not (resp.status_code == 400 and enforce_json
+                    and "json" in resp.text.lower()):
+                break
 
         if resp.status_code == 401:
             raise LLMError("Groq rejected the API key. Check it in Settings.")

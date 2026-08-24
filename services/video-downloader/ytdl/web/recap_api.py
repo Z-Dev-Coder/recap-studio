@@ -16,6 +16,8 @@ import threading
 import time
 from pathlib import Path
 
+import requests
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel
@@ -685,6 +687,31 @@ def script_length(pid: str, lang: str = "") -> dict:
     }
 
 
+def groq_models(key: str) -> list[str]:
+    """
+    What this Groq key can actually run.
+
+    Hard-coding a list went stale immediately -- the names in the first cut of
+    this were not on the account at all. Asked directly, and filtered to the
+    models that generate text, since speech and moderation models would only
+    be confusing in a picker about writing.
+    """
+    if not key:
+        return ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    try:
+        resp = requests.get("https://api.groq.com/openai/v1/models",
+                            headers={"Authorization": f"Bearer {key}"}, timeout=6)
+        if resp.status_code >= 400:
+            return []
+        skip = ("whisper", "tts", "guard", "vision", "orpheus")
+        names = [m.get("id", "") for m in resp.json().get("data", [])
+                 if m.get("active", True)]
+        return sorted(n for n in names
+                      if n and not any(k in n.lower() for k in skip))
+    except (requests.RequestException, ValueError):
+        return []
+
+
 @router.get("/llm/models")
 def llm_models() -> dict:
     """Which providers and models are available to point a stage at."""
@@ -703,8 +730,7 @@ def llm_models() -> dict:
              "models": local},
             {"id": "groq", "label": "Groq", "ready": bool(settings.get("groq_key")),
              "note": "free, and generous enough to stop counting",
-             "models": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant",
-                        "openai/gpt-oss-20b"]},
+             "models": groq_models(settings.get("groq_key", ""))},
         ],
         "assigned": settings.get("stage_models") or {},
     }
