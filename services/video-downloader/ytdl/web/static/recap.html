@@ -573,6 +573,23 @@
               </div>
               <div id="fileGroups"></div>
             </div>
+
+            <div class="card">
+              <div class="row" style="margin-bottom:6px">
+                <h3 class="grow" style="margin:0">Free up space</h3>
+                <span class="note" id="spaceNote"></span>
+              </div>
+              <div class="tiny" style="margin-bottom:14px">
+                The working files are far larger than the video they produced.
+                The finished videos, script, subtitles, thumbnail and text are
+                never removed, whatever you tick here.
+              </div>
+              <div id="cleanupGroups"></div>
+              <div class="row" style="margin-top:14px">
+                <button class="sm danger" id="doCleanup">Delete selected</button>
+                <span class="note" id="cleanupResult"></span>
+              </div>
+            </div>
           </section>
 
           <section data-panel="source" class="hide">
@@ -852,7 +869,7 @@ $('tabs').onclick = e => {
   document.querySelectorAll('[data-panel]').forEach(s =>
     s.classList.toggle('hide', s.dataset.panel !== state.tab));
   if (state.tab === 'voice' && current()) loadVoiceLines(current());
-  if (state.tab === 'files' && current()) loadFiles(current());
+  if (state.tab === 'files' && current()) { loadFiles(current()); loadCleanup(current()); }
 };
 
 function renderProject() {
@@ -1135,6 +1152,60 @@ async function loadFiles(p) {
     });
   } catch (e) { box.innerHTML = `<div class="banner err">${escapeHtml(e.message)}</div>`; }
 }
+
+async function loadCleanup(p) {
+  const box = $('cleanupGroups');
+  const size = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB'
+                  : b > 1024 ? Math.round(b / 1024) + ' KB' : b + ' B';
+  try {
+    const d = await request(`/api/recap/projects/${p.id}/cleanup`);
+    $('spaceNote').textContent =
+      `${size(d.total_bytes)} on disk, of which ${size(d.final_bytes)} is the finished video`;
+
+    box.innerHTML = d.groups.map(g => `
+      <label class="row" style="padding:8px 0;border-top:1px solid var(--line);align-items:flex-start">
+        <input type="checkbox" data-key="${g.key}" ${g.key === 'working' ? 'checked' : ''}
+               ${g.files ? '' : 'disabled'} style="width:auto;margin-top:3px">
+        <span class="grow">
+          <span style="font-size:13px">${escapeHtml(g.label)}</span>
+          <span class="tiny"> &middot; ${g.files} files &middot; ${size(g.bytes)}</span>
+          <div class="tiny" style="color:${g.key === 'source' ? 'var(--err)' : 'var(--faint)'}">
+            ${escapeHtml(g.cost)}
+          </div>
+        </span>
+      </label>`).join('');
+  } catch (e) { box.innerHTML = `<div class="banner err">${escapeHtml(e.message)}</div>`; }
+}
+
+$('doCleanup').onclick = async () => {
+  const p = current(); if (!p) return;
+  const picked = {};
+  [...$('cleanupGroups').querySelectorAll('input[data-key]')].forEach(
+    b => { picked[b.dataset.key] = b.checked; });
+
+  if (!Object.values(picked).some(Boolean)) {
+    $('cleanupResult').textContent = 'Nothing selected.';
+    return;
+  }
+  // losing the source is the one that cannot be undone by re-running a step
+  if (picked.source && !confirm(
+      'Delete the original downloaded video?\n\n' +
+      'The finished video, script, subtitles and thumbnail all stay, but ' +
+      'nothing can be rebuilt afterwards without downloading it again.')) {
+    return;
+  }
+
+  $('doCleanup').disabled = true;
+  $('cleanupResult').textContent = 'deleting...';
+  try {
+    const r = await post(`/api/recap/projects/${p.id}/cleanup`, picked);
+    const mb = (r.freed_bytes / 1048576).toFixed(1);
+    $('cleanupResult').textContent = `freed ${mb} MB across ${r.files_removed} files`;
+    loadCleanup(p);
+    loadFiles(p);
+  } catch (e) { showError($('stepErr'), e.message); $('cleanupResult').textContent = ''; }
+  finally { $('doCleanup').disabled = false; }
+};
 
 $('openFolder2').onclick = () => {
   const p = current(); if (!p) return;

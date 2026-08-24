@@ -840,6 +840,149 @@ def transcript_srt(pid: str, lang: str = "") -> PlainTextResponse:
     )
 
 
+class CleanupRequest(BaseModel):
+    """Which categories of working file to remove."""
+
+    working: bool = True      # frames, vision shots, page screenshot
+    narration: bool = False   # the spoken clips, once they are in the video
+    cuts: bool = False        # the recap cuts, rebuildable from source + beats
+    source: bool = False      # the original download -- nothing rebuilds after
+
+
+def _cleanup_plan(project) -> dict:
+    """
+    What each category holds, and what losing it costs.
+
+    Kept out of the delete path on purpose: the same function answers "what
+    would this free" for the preview and "what should go" for the deletion, so
+    the number shown is the number acted on.
+    """
+    def files(*globs):
+        found = []
+        for pattern in globs:
+            found += [p for p in project.dir.glob(pattern) if p.is_file()]
+        return found
+
+    finals = set(project.finals().values())
+
+    cuts = [
+        p for p in files("recap_*.mp4")
+        if p.name not in finals
+    ]
+
+    return {
+        "working": {
+            "files": files("frames/*", "vision/*", "page.png", "*.tmp"),
+            "label": "Thumbnail candidates, the frames sent to the model, page screenshot",
+            "cost": "Re-run Frames to get thumbnail candidates back.",
+        },
+        "narration": {
+            "files": [
+                p for p in files("voice/*")
+                if not p.name.endswith("_custom.wav") and p.name != "reference.wav"
+            ],
+            "label": "The spoken clips, already mixed into the final video",
+            "cost": "Regenerating the voice re-speaks every line.",
+        },
+        "cuts": {
+            "files": cuts,
+            "label": "Recap cuts without narration",
+            "cost": "Rebuild the cut to get them back -- needs the source video.",
+        },
+        "source": {
+            "files": files("source.*"),
+            "label": "The original video, as downloaded",
+            "cost": "NOTHING can be rebuilt afterwards. The finished video, "
+                    "script, subtitles and thumbnail all stay.",
+        },
+    }
+
+
+@router.get("/projects/{pid}/cleanup")
+def cleanup_preview(pid: str) -> dict:
+    """How much each category would free, without deleting anything."""
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+
+    plan = _cleanup_plan(project)
+    groups = []
+    for key, entry in plan.items():
+        size = sum(p.stat().st_size for p in entry["files"] if p.exists())
+        groups.append({
+            "key": key,
+            "label": entry["label"],
+            "cost": entry["cost"],
+            "files": len(entry["files"]),
+            "bytes": size,
+        })
+
+    total = sum(
+        p.stat().st_size
+        for p in project.dir.rglob("*")
+        if p.is_file()
+    )
+    kept = sum(
+        p.stat().st_size
+        for p in project.dir.glob("final_*.mp4")
+        if p.is_file()
+    )
+    return {"groups": groups, "total_bytes": total, "final_bytes": kept}
+
+
+@router.post("/projects/{pid}/cleanup")
+def cleanup(pid: str, req: CleanupRequest) -> dict:
+    """
+    Delete the working files, keeping everything that cannot be remade.
+
+    The finished videos, the script, both subtitle sets, the thumbnail and the
+    text are never touched, whatever is asked for -- those are the reason the
+    project exists.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+
+    wanted = {
+        "working": req.working,
+        "narration": req.narration,
+        "cuts": req.cuts,
+        "source": req.source,
+    }
+    plan = _cleanup_plan(project)
+
+    freed = 0
+    removed = 0
+    for key, entry in plan.items():
+        if not wanted.get(key):
+            continue
+        for path in entry["files"]:
+            try:
+                size = path.stat().st_size
+                path.unlink()
+                freed += size
+                removed += 1
+            except OSError:
+                continue
+
+    # empty folders left behind read as clutter
+    for folder in ("frames", "vision", "voice"):
+        target = project.dir / folder
+        if target.is_dir() and not any(target.iterdir()):
+            try:
+                target.rmdir()
+            except OSError:
+                pass
+
+    if wanted.get("working"):
+        project.thumbnail_candidates = []
+    if wanted.get("narration"):
+        project.narration = []
+    project.save()
+    push(project)
+    return {"ok": True, "freed_bytes": freed, "files_removed": removed}
+
+
 @router.get("/projects/{pid}/files")
 def project_files(pid: str) -> dict:
     """
