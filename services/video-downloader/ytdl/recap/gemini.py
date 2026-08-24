@@ -23,6 +23,13 @@ API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
 # How many times to sit out a rate limit, and the longest wait worth
 # sitting out. Beyond this it is a daily cap rather than a burst, and the user
 # needs telling rather than a frozen button.
+# The free tier's binding limit is requests per DAY, not per minute:
+# gemini-3.6-flash allows 20, while gemini-3.1-flash-lite allows 500. Four
+# calls per script therefore means five scripts a day on the better model and
+# a hundred and twenty-five on the lighter one -- so the stages that do not
+# need the better model should not spend its quota. See LIGHT_MODEL.
+LIGHT_MODEL = "gemini-3.1-flash-lite"
+
 RATE_LIMIT_RETRIES = 2
 MAX_RATE_WAIT = 75.0
 

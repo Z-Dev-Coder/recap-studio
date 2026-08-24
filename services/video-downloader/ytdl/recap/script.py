@@ -611,6 +611,7 @@ def generate(
     frames: list[tuple[str, bytes]] | None = None,
     treatment: str = "recap",
     cancel=None,
+    light_model: str = "",
 ) -> dict:
     """
     Video in, recap package out, in four stages rather than one prompt.
@@ -637,6 +638,7 @@ def generate(
     """
     from . import burmese as burmese_mod
     from . import story as story_mod
+    from .gemini import LIGHT_MODEL
     from .media import Cancelled
 
     def check() -> None:
@@ -653,12 +655,19 @@ def generate(
             raise Cancelled()
 
     client = Gemini(api_key, model)
+    # Reading the video and checking the Burmese are comprehension work, not
+    # writing, and the free tier allows twenty-five times as many calls on the
+    # lighter model. Spending the good model's daily twenty on all four stages
+    # bought five scripts a day; spending it on the two that write bought ten,
+    # and the other two stopped competing for it at all.
+    light = Gemini(api_key, light_model or LIGHT_MODEL) if (light_model or LIGHT_MODEL) else client
+
     count, clip_len = beat_plan(duration, mode, target_seconds)
 
     # ---------------------------------------------------------- 1. read it
     check()
     story = story_mod.analyse(
-        client, title=title, duration=duration, cues=cues,
+        light, title=title, duration=duration, cues=cues,
         context=context, frames=frames,
     )
 
@@ -706,7 +715,7 @@ def generate(
     check()
     if written:
         review = burmese_mod.review(
-            client, beats, story, title=title, seconds_for=seconds_for,
+            light, beats, story, title=title, seconds_for=seconds_for,
             treatment=treatment,
         )
     expanded = review.get("revised", 0)

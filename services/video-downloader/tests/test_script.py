@@ -361,3 +361,50 @@ def test_respread_covers_the_whole_video_again():
 def test_respread_drops_blank_rows():
     beats = script_mod.respread([{"my": "a"}, {"my": "   "}, {"en": "b"}], 60.0)
     assert len(beats) == 2
+
+
+def test_the_cheap_stages_use_the_lighter_model(monkeypatch, fake_gemini, story_reply):
+    """
+    The free tier's binding limit is requests per DAY -- 20 on the good model,
+    500 on the light one. Reading the video and checking the Burmese do not
+    need the good model, and spending its daily twenty on them bought five
+    scripts a day instead of ten.
+    """
+    made = []
+
+    def client_for(key, model, *a, **k):
+        c = fake_gemini([story_reply, _package(6),
+                         {"lines": [{"index": i, "my": "မ" * 80} for i in range(6)]},
+                         {"lines": []}])
+        made.append((model, c))
+        return c
+
+    # both clients draw from one scripted set, in call order
+    replies = [story_reply, _package(7),
+               {"lines": [{"index": i, "my": "မ" * 80} for i in range(7)]},
+               {"lines": []}]
+    shared = fake_gemini(replies)
+    seen = []
+
+    def factory(key, model, *a, **k):
+        seen.append(model)
+        return shared
+
+    monkeypatch.setattr(script_mod, "Gemini", factory)
+    script_mod.generate(api_key="k", model="gemini-3.6-flash", title="t",
+                        uploader="u", duration=60.0, cues=[], mode="long",
+                        target_seconds=60.0)
+
+    assert "gemini-3.6-flash" in seen
+    assert any("lite" in m for m in seen), f"no light model used: {seen}"
+
+
+def test_an_explicit_light_model_is_respected(monkeypatch, fake_gemini, story_reply):
+    seen = []
+    shared = fake_gemini([story_reply, _package(7), {"lines": []}])
+    monkeypatch.setattr(script_mod, "Gemini",
+                        lambda key, model, *a, **k: (seen.append(model), shared)[1])
+    script_mod.generate(api_key="k", model="big", title="t", uploader="u",
+                        duration=60.0, cues=[], mode="long", target_seconds=60.0,
+                        light_model="my-light-model")
+    assert "my-light-model" in seen

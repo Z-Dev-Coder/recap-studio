@@ -22,7 +22,13 @@ from pydantic import BaseModel
 
 from ..downloader import default_out_dir
 from ..recap import pipeline
+from ..recap.gemini import LIGHT_MODEL as gemini_light_default
 from ..recap.gemini import MAX_OUTPUT_TOKENS, Gemini, GeminiError
+
+
+def gemini_light() -> str:
+    """The model the cheap stages use; see gemini.LIGHT_MODEL."""
+    return gemini_light_default
 from ..recap import media as media_mod
 from ..recap.media import Cancelled, MediaError, have_ffmpeg, to_wav
 from ..recap.project import STEPS, Store
@@ -137,6 +143,7 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
                 cookies_browser=options.get("cookies_browser", ""),
                 quality=str(options.get("quality", "1080")),
                 cancel=stop,
+                light_model=settings.get("light_model", "") or gemini_light(),
             )
         elif step == "transcript":
             pipeline.run_transcript(
