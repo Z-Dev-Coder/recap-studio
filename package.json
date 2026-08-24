@@ -46,7 +46,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Toolbox"
+      "shortcutName": "Toolbox",
+      "menuCategory": false,
+      "warningsAsErrors": false
     },
     "asar": false
   }

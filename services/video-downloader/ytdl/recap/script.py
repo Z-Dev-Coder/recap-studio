@@ -437,35 +437,72 @@ def translate_cues(
     client: Gemini,
     cues: list[Cue],
     target: str = "my",
-    batch: int = 60,
+    batch: int = 40,
+    overlap: int = 6,
+    title: str = "",
+    glossary: str = "",
 ) -> list[str]:
     """
-    Translate a transcript line by line, keeping the line count intact.
+    Translate a transcript into `target`, keeping the line count intact.
 
-    Subtitles are translated in batches with their indexes attached rather than
-    as one blob, because a translation that merges or splits lines no longer
-    lines up with the timings it has to be shown against. Anything the model
-    drops keeps its original text instead of leaving a gap.
+    Auto-captions break mid-sentence -- "papey oh papey did you get the fi" is
+    a whole line -- so translating each one on its own produces disjointed,
+    unnatural results. The model is given the passage as continuous speech and
+    asked to translate it as such before splitting it back across the same
+    lines, with `overlap` lines of the previous batch carried forward so the
+    seam between batches does not break a sentence either.
+
+    Line counts must survive because each line is shown against a timestamp;
+    anything the model drops keeps its original text rather than leaving a gap.
     """
     language = LANGUAGES.get(target, target)
     out = [c.text for c in cues]
 
-    for start in range(0, len(cues), batch):
+    start = 0
+    while start < len(cues):
         chunk = cues[start:start + batch]
+        # lines before this batch, for context only -- not to be returned
+        lead = cues[max(0, start - overlap):start]
+
         listing = "\n".join(
             "{}: {}".format(start + i, c.text) for i, c in enumerate(chunk)
         )
-        prompt = (
-            "Translate these subtitle lines into " + language + ".\n\n"
-            + listing
-            + "\n\nReturn one object per line with the SAME index. Translate "
-            "every line, keep them separate, and keep each one about as long "
-            "as the original so it still fits the time it is on screen. "
-            "Natural spoken phrasing, not a literal word-for-word rendering."
-        )
+        before = ""
+        if lead:
+            before = (
+                "The lines immediately before this batch, for continuity "
+                "(do NOT translate these, they are already done):\n"
+                + "\n".join(c.text for c in lead)
+                + "\n\n"
+            )
+
+        prompt = "\n\n".join(filter(None, [
+            "This is the transcript of a video" + (f' titled "{title}"' if title else "")
+            + ", cut into timed subtitle lines. The lines are consecutive "
+            "fragments of ONE continuous piece of speech -- many of them start "
+            "or end mid-sentence.",
+            before + "Lines to translate:\n" + listing,
+            glossary,
+            "Read the whole passage first and translate it into {} as "
+            "continuous, natural speech -- the way a person actually talks, "
+            "not a word-for-word rendering of each fragment. Then split that "
+            "translation back across the SAME line numbers.\n\n"
+            "Requirements:\n"
+            "- Return every index given above, exactly once.\n"
+            "- Consecutive lines must read as one flowing passage: a sentence "
+            "may begin on one line and finish on the next, exactly as it does "
+            "in the original.\n"
+            "- Do NOT compress. Write the full natural phrasing even where "
+            "that runs longer than the English fragment; a clipped, "
+            "telegraphic line is wrong.\n"
+            "- Keep names and recurring terms spelled consistently throughout."
+            .format(language),
+        ]))
+
         try:
             data = client.generate_json(prompt, _TRANSLATE_SCHEMA, temperature=0.3)
         except GeminiError:
+            start += batch
             continue        # this batch keeps the original text
         for item in data.get("lines") or []:
             try:
@@ -475,6 +512,7 @@ def translate_cues(
             text = (item.get("text") or "").strip()
             if text and 0 <= i < len(out):
                 out[i] = text
+        start += batch
     return out
 
 

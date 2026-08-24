@@ -178,7 +178,11 @@
   .vrow:hover { background: var(--surface-2); }
   .vrow.on { background: var(--accent-soft); }
   .frame b { position: absolute; left: 5px; bottom: 5px; background: rgba(0,0,0,.72); color: #fff; border-radius: 20px; padding: 1px 7px; font-size: 10.5px; font-weight: 600; }
-  #thumbCanvas { width: 100%; border-radius: var(--r-sm); border: 1px solid var(--line); display: block; }
+  #thumbCanvas {
+    width: auto; max-width: 100%; max-height: 46vh;
+    border-radius: var(--r-sm); border: 1px solid var(--line);
+    display: block; margin-inline: auto;
+  }
   /* width:auto lets a 9:16 reel hug its own shape instead of being stretched
      across the card and letterboxed with huge black bars either side */
   video {
@@ -513,7 +517,16 @@
           <section data-panel="thumb" class="hide">
             <div class="cols">
               <div class="card">
-                <h3>Preview</h3>
+                <div class="row" style="margin-bottom:12px">
+                  <h3 class="grow" style="margin:0">Preview</h3>
+                  <select id="thumbAspect" style="max-width:190px">
+                    <option value="auto">Match the video</option>
+                    <option value="16:9">16:9 landscape</option>
+                    <option value="9:16">9:16 vertical</option>
+                    <option value="1:1">1:1 square</option>
+                    <option value="4:5">4:5 portrait</option>
+                  </select>
+                </div>
                 <canvas id="thumbCanvas" width="1280" height="720"></canvas>
                 <label class="f" style="margin-top:12px">Overlay text</label>
                 <input type="text" id="thumbText" placeholder="2-5 words">
@@ -921,6 +934,7 @@ function renderProject() {
   if (document.activeElement !== $('tagsField')) $('tagsField').value = (p.hashtags || []).join(' ');
   $('tagPreview').innerHTML = (p.hashtags || []).map(t => `<span class="tag">#${escapeHtml(t)}</span>`).join('');
   if (document.activeElement !== $('thumbText')) $('thumbText').value = (p.thumbnail_text || {})[lang] || '';
+  paintThumb();
 
   /* transcript */
   $('transcriptField').value = (p.transcript || []).map(c => `[${fmt(c.start)}] ${c.text}`).join('\n');
@@ -1440,8 +1454,28 @@ function drawThumb(src) {
   img.src = src;
 }
 
+// A thumbnail has to be the shape of the thing it fronts: a 16:9 image on a
+// 9:16 reel gets letterboxed or cropped by whoever displays it.
+const THUMB_SHAPES = {
+  '16:9': [1280, 720],
+  '9:16': [1080, 1920],
+  '1:1':  [1080, 1080],
+  '4:5':  [1080, 1350],
+};
+
+function thumbShape(p) {
+  const chosen = $('thumbAspect').value;
+  if (chosen !== 'auto') return THUMB_SHAPES[chosen] || THUMB_SHAPES['16:9'];
+  // "match the video" follows the cut's own shape
+  const byShape = { reels: '9:16', square: '1:1', portrait: '4:5' };
+  const key = byShape[p && p.shape] || (p && p.mode === 'reels' ? '9:16' : '16:9');
+  return THUMB_SHAPES[key];
+}
+
 function paintThumb() {
   const c = $('thumbCanvas'), ctx = c.getContext('2d');
+  const [w, h] = thumbShape(current());
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, c.width, c.height);
   if (thumbImage) {
@@ -1496,6 +1530,7 @@ function wrapText(ctx, text, maxWidth) {
 }
 $('thumbText').oninput = paintThumb;
 $('thumbPos').onchange = paintThumb;
+$('thumbAspect').onchange = paintThumb;
 
 $('saveThumb').onclick = async () => {
   const p = current(); if (!p) return;

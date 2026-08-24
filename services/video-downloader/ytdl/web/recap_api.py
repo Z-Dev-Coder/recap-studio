@@ -804,8 +804,28 @@ def transcript_srt(pid: str, lang: str = "") -> PlainTextResponse:
                 headers={"Content-Disposition": f'attachment; filename="transcript_{lang}.srt"'},
                 media_type="application/x-subrip",
             )
+        # Hand over the recap script in the same language as a glossary: the
+        # user reads both, and a name spelled two different ways across the two
+        # files reads as sloppiness rather than as two translations.
+        known = [
+            (b.get(lang) or "").strip()
+            for b in (project.beats or [])
+            if (b.get(lang) or "").strip()
+        ][:12]
+        glossary = ""
+        if known:
+            glossary = (
+                "The recap script for this same video is already written in "
+                + ("Burmese" if lang == "my" else "English")
+                + ". Match its spelling of names and its wording for recurring "
+                "terms:\n" + "\n".join("- " + k for k in known)
+            )
+
         try:
-            texts = script_mod.translate_cues(Gemini(key, model), cues, lang)
+            texts = script_mod.translate_cues(
+                Gemini(key, model), cues, lang,
+                title=project.title, glossary=glossary,
+            )
         except GeminiError as exc:
             raise HTTPException(400, str(exc)) from exc
         for cue, text in zip(cues, texts):
