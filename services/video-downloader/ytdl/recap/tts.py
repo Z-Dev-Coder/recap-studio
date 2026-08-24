@@ -271,6 +271,7 @@ def narrate(
     on_progress=None,
     cancel=None,
     min_interval: float = 20.0,
+    label: str = "",
     engine: str = "gemini",
     reference_audio=None,
     reference_text: str = "",

@@ -81,7 +81,8 @@ class Project:
     local_model: str = ""           # which VoxCPM size; blank means the default
     voice_reference: str = ""       # a clip to clone, for the local engine
     voice_reference_text: str = ""
-    voice_lang: str = "my"          # the final video is the Burmese recap
+    voice_lang: str = "my"          # the language shown in the UI
+    voice_langs: list = field(default_factory=list)   # every language to render
     voice_name: str = "Kore"
     voice_style: str = ""
     voice_reason: str = ""          # why the suggestion picked it
@@ -102,9 +103,23 @@ class Project:
         return self.dir / f"recap_{self.mode}.mp4"
 
     @property
+    def captioned_path(self) -> Path:
+        """The cut with captions burned in, kept beside the clean one."""
+        return self.dir / f"recap_{self.mode}_captioned.mp4"
+
+    @property
     def final_path(self) -> Path:
         """The deliverable: the cut with narration over it."""
         return self.dir / f"final_{self.mode}_{self.voice_lang}.mp4"
+
+    def finals(self) -> dict:
+        """Which narrated videos exist, by language."""
+        out = {}
+        for code in ("en", "my"):
+            path = self.dir / f"final_{self.mode}_{code}.mp4"
+            if path.exists():
+                out[code] = path.name
+        return out
 
     @property
     def voice_dir(self) -> Path:
@@ -168,6 +183,8 @@ class Project:
             "voice_reference": self.voice_reference,
             "voice_reference_text": self.voice_reference_text,
             "voice_lang": self.voice_lang,
+            "voice_langs": self.voice_langs,
+            "finals": self.finals(),
             "voice_name": self.voice_name,
             "voice_style": self.voice_style,
             "voice_reason": self.voice_reason,
@@ -178,6 +195,7 @@ class Project:
             "steps": {k: asdict(v) for k, v in self.steps.items()},
             "has_source": self.source_path.exists(),
             "has_recap": self.recap_path.exists(),
+            "has_captioned": self.captioned_path.exists(),
             "has_thumbnail": self.thumbnail_path.exists(),
         }
 
@@ -189,6 +207,7 @@ class Project:
         data.pop("has_recap", None)
         data.pop("has_thumbnail", None)
         data.pop("has_final", None)
+        data.pop("has_captioned", None)
         tmp = self.json_path().with_suffix(".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(self.json_path())
@@ -243,6 +262,7 @@ class Project:
             voice_reference=data.get("voice_reference", ""),
             voice_reference_text=data.get("voice_reference_text", ""),
             voice_lang=data.get("voice_lang", "my"),
+            voice_langs=data.get("voice_langs") or [],
             voice_name=data.get("voice_name", "Kore"),
             voice_style=data.get("voice_style", ""),
             voice_reason=data.get("voice_reason", ""),

@@ -320,14 +320,17 @@ def run_video(project: Project, on_progress=None, cancel=None) -> None:
     write_subtitles(project)
 
     # burned-in captions, for the feeds that autoplay muted
+    # Captions are burned into their OWN file. Overwriting the clean cut would
+    # mean the only way back to an uncaptioned video is to rebuild it, and the
+    # captioned one is a preference rather than a correction.
+    captioned = project.captioned_path
+    captioned.unlink(missing_ok=True)
     if project.burn_captions:
         srt = project.dir / f"recap_script_{project.caption_lang or project.voice_lang}.srt"
         if srt.exists():
             try:
-                burned = project.dir / f"recap_{project.mode}_captioned.mp4"
-                burn_subtitles(project.recap_path, srt, burned,
+                burn_subtitles(project.recap_path, srt, captioned,
                                style=project.caption_style, cancel=cancel)
-                burned.replace(project.recap_path)
             except MediaError as exc:
                 raise StepError(f"captions could not be burned in: {exc}") from exc
 
@@ -359,6 +362,28 @@ def run_voice(
     on_progress=None,
     cancel=None,
 ) -> None:
+    """Narrate every language the project asks for."""
+    wanted = project.voice_langs or [project.voice_lang or "my"]
+    for index, language in enumerate(wanted):
+        _narrate_one(
+            project, api_key, model, language,
+            on_progress=on_progress, cancel=cancel,
+            prefix=(f"{language} " if len(wanted) > 1 else ""),
+        )
+    # the language shown in the UI follows the last one rendered
+    project.voice_lang = wanted[-1]
+    project.save()
+
+
+def _narrate_one(
+    project: Project,
+    api_key: str,
+    model: str = "",
+    language: str = "my",
+    on_progress=None,
+    cancel=None,
+    prefix: str = "",
+) -> None:
     """
     Speak the recap and lay it over the cut.
 
@@ -371,7 +396,9 @@ def run_voice(
     if not have_ffmpeg():
         raise StepError("ffmpeg was not found on PATH")
 
-    lang = project.voice_lang if project.voice_lang in ("en", "my") else "my"
+    lang = language if language in ("en", "my") else "my"
+    # final_path is keyed on the language, so each one lands in its own file
+    project.voice_lang = lang
     if not any((row.get(lang) or "").strip() for row in project.timeline):
         raise StepError(f"the recap script has no {lang} lines to speak")
 
@@ -427,9 +454,12 @@ def run_voice(
         raise StepError("no narration audio was produced")
 
     clips = [{"path": project.voice_dir / m["file"], "at": m["at"]} for m in made]
+    # narrate over the captioned cut when there is one, so the finished video
+    # carries both rather than forcing a choice between them
+    base = project.captioned_path if project.captioned_path.exists() else project.recap_path
     try:
         mux_narration(
-            project.recap_path,
+            base,
             clips,
             project.final_path,
             original_volume=project.original_volume,

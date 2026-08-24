@@ -270,6 +270,7 @@ class EditRequest(BaseModel):
     thumbnail_text: dict | None = None
     transcript: list[dict] | None = None
     voice_lang: str | None = None
+    voice_langs: list | None = None
     voice_engine: str | None = None
     local_model: str | None = None
     voice_reference_text: str | None = None
@@ -817,6 +818,101 @@ def transcript_srt(pid: str, lang: str = "") -> PlainTextResponse:
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
         media_type="application/x-subrip",
     )
+
+
+@router.get("/projects/{pid}/files")
+def project_files(pid: str) -> dict:
+    """
+    Everything the project has produced, with a plain-English label.
+
+    Each step leaves its raw output on disk -- the untouched download, the cut
+    before captions, the narration as separate clips, the frames before any
+    text went over them. The UI only ever surfaced a handful of those, so the
+    rest may as well not have existed. This lists all of it.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+
+    mode = project.mode
+    langs = {"en": "English", "my": "Burmese"}
+
+    def label(rel: str) -> tuple[str, str]:
+        """(group, description) for a file, or ('', '') to leave it out."""
+        name = rel.split("/")[-1]
+        if name == "source.mp4":
+            return "Source", "The original video, exactly as downloaded"
+        if name == f"recap_{mode}.mp4":
+            return "Video", "Recap cut -- no captions, no narration"
+        if name == f"recap_{mode}_captioned.mp4":
+            return "Video", "Recap cut with captions burned in"
+        if name.startswith("recap_") and name.endswith(".mp4"):
+            return "Video", "Recap cut (%s)" % name.split("_")[1].split(".")[0]
+        if name.startswith("final_"):
+            code = name.rsplit("_", 1)[-1].replace(".mp4", "")
+            return "Video", "Final video -- %s narration" % langs.get(code, code)
+        if name == "transcript.srt":
+            return "Transcript", "Original transcript, as captured"
+        if name == "transcript.txt":
+            return "Transcript", "Original transcript, plain text"
+        if name.startswith("transcript_") and name.endswith(".srt"):
+            code = name.replace("transcript_", "").replace(".srt", "")
+            return "Transcript", "Transcript translated to %s" % langs.get(code, code)
+        if name.startswith("recap_script_") and name.endswith("_original_timing.srt"):
+            code = name.split("_")[2]
+            return "Script", "Recap script (%s) timed to the ORIGINAL video" % langs.get(code, code)
+        if name.startswith("recap_script_") and name.endswith(".srt"):
+            code = name.split("_")[2].replace(".srt", "")
+            return "Script", "Recap script (%s) timed to the recap" % langs.get(code, code)
+        if name.startswith("recap_script_") and name.endswith(".txt"):
+            code = name.split("_")[2].replace(".txt", "")
+            return "Script", "Recap script (%s), plain text" % langs.get(code, code)
+        if name.startswith("post_"):
+            code = name.replace("post_", "").replace(".txt", "")
+            return "Copy", "Title, description and hashtags (%s)" % langs.get(code, code)
+        if name == "hashtags.txt":
+            return "Copy", "Hashtags on their own"
+        if name == "thumbnail.png":
+            return "Thumbnail", "Thumbnail with your text on it"
+        if rel.startswith("frames/"):
+            return "Thumbnail", "Candidate frame, no text over it"
+        if rel.startswith("voice/") and name.endswith("_custom.wav"):
+            return "Narration", "Your own recording for one line"
+        if name == "voice/reference.wav" or name == "reference.wav":
+            return "Narration", "The voice sample being cloned"
+        if rel.startswith("voice/") and name.endswith(".wav"):
+            return "Narration", "Spoken line, on its own"
+        if name == "page.png":
+            return "Source", "Screenshot of the page it came from"
+        if name == "page_context.json":
+            return "Source", "What was read off the page"
+        if name == "project.json":
+            return "Source", "Everything about this project, as data"
+        return "", ""
+
+    groups: dict[str, list] = {}
+    for path in sorted(project.dir.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(project.dir).as_posix()
+        if rel.endswith(".tmp") or "/_parts/" in rel or rel.startswith("vision/"):
+            continue
+        group, description = label(rel)
+        if not group:
+            continue
+        groups.setdefault(group, []).append({
+            "name": rel,
+            "label": description,
+            "bytes": path.stat().st_size,
+        })
+
+    order = ["Video", "Narration", "Script", "Transcript", "Copy", "Thumbnail", "Source"]
+    return {
+        "groups": [
+            {"name": g, "files": groups[g]} for g in order if g in groups
+        ],
+        "folder": str(project.dir),
+    }
 
 
 @router.get("/projects/{pid}/srt")

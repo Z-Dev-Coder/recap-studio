@@ -283,6 +283,7 @@
             <button data-tab="voice">Voice</button>
             <button data-tab="thumb">Thumbnail</button>
             <button data-tab="source">Transcript</button>
+            <button data-tab="files">Files</button>
           </div>
 
           <section data-panel="cut">
@@ -419,7 +420,8 @@
               <video id="finalVideo" controls preload="metadata"></video>
               <div class="row" style="margin-top:12px">
                 <button class="primary sm" id="makeVoice">Generate narration</button>
-                <button class="sm" id="dlFinal">Download final</button>
+                <span id="finalDownloads" style="display:inline-flex;gap:8px"></span>
+                <span id="finalSwitch" style="display:inline-flex;gap:6px"></span>
                 <div class="grow"></div>
                 <span class="tiny">Free tier speaks ~3 lines a minute, so a dozen lines takes a few minutes.</span>
               </div>
@@ -451,6 +453,7 @@
                     <select id="voiceLang">
                       <option value="my">&#4119;&#4156;&#4116;&#4121;&#4140; Burmese</option>
                       <option value="en">English</option>
+                      <option value="my,en">Both &mdash; two videos</option>
                     </select>
                   </div>
                   <div class="field">
@@ -541,6 +544,21 @@
                   moments come first. The badge is that moment's score.
                 </div>
               </div>
+            </div>
+          </section>
+
+          <section data-panel="files" class="hide">
+            <div class="card">
+              <div class="row" style="margin-bottom:6px">
+                <h3 class="grow" style="margin:0">Everything this project made</h3>
+                <button class="sm" id="openFolder2">Open folder</button>
+              </div>
+              <div class="tiny" style="margin-bottom:14px">
+                Every step keeps its raw output: the untouched download, the cut
+                before captions or narration, each spoken line on its own, and
+                the frames before any text went over them.
+              </div>
+              <div id="fileGroups"></div>
             </div>
           </section>
 
@@ -821,6 +839,7 @@ $('tabs').onclick = e => {
   document.querySelectorAll('[data-panel]').forEach(s =>
     s.classList.toggle('hide', s.dataset.panel !== state.tab));
   if (state.tab === 'voice' && current()) loadVoiceLines(current());
+  if (state.tab === 'files' && current()) loadFiles(current());
 };
 
 function renderProject() {
@@ -925,13 +944,38 @@ function renderVoice(p) {
     ? `/api/recap/projects/${p.id}/file?name=final_${p.mode}_${p.voice_lang}.mp4&t=${Math.round(p.steps.voice.updated || 0)}`
     : '';
   if (v.dataset.src !== src) { v.dataset.src = src; v.src = src; }
-  $('finalNote').textContent = p.has_final
-    ? `${(p.narration || []).length} spoken lines over the ${p.mode === 'reels' ? 'reel' : 'cut'}`
+  const finals = p.finals || {};
+  const names = { en: 'English', my: 'Burmese' };
+  const made = Object.keys(finals);
+  $('finalNote').textContent = made.length
+    ? made.map(c => names[c] || c).join(' + ') + ' ready'
     : 'not generated yet';
+
+  // one download button per language actually rendered
+  $('finalDownloads').innerHTML = made.map(c =>
+    `<button class="sm" data-final="${c}">Download ${escapeHtml(names[c] || c)}</button>`).join('');
+  [...$('finalDownloads').children].forEach(b => {
+    b.onclick = () => dl(
+      `/api/recap/projects/${p.id}/file?name=${encodeURIComponent(finals[b.dataset.final])}`,
+      finals[b.dataset.final]);
+  });
+  // and let the player switch between them
+  $('finalSwitch').innerHTML = made.length > 1
+    ? made.map(c => `<button class="sm ${c === p.voice_lang ? 'primary' : ''}" data-show="${c}">${escapeHtml(names[c])}</button>`).join('')
+    : '';
+  [...$('finalSwitch').children].forEach(b => {
+    b.onclick = () => {
+      const v = $('finalVideo');
+      v.src = `/api/recap/projects/${p.id}/file?name=${encodeURIComponent(finals[b.dataset.show])}`;
+      [...$('finalSwitch').children].forEach(x => x.classList.toggle('primary', x === b));
+    };
+  });
   $('makeVoice').textContent = p.has_final ? 'Regenerate narration' : 'Generate narration';
 
   if (document.activeElement !== $('voiceStyle')) $('voiceStyle').value = p.voice_style || '';
-  $('voiceLang').value = p.voice_lang || 'my';
+  // "both" is stored as the list; the single choice mirrors voice_lang
+  const langs = (p.voice_langs && p.voice_langs.length) ? p.voice_langs.join(',') : (p.voice_lang || 'my');
+  $('voiceLang').value = [...$('voiceLang').options].some(o => o.value === langs) ? langs : (p.voice_lang || 'my');
   $('voiceEngine').value = p.voice_engine || 'gemini';
   const local = p.voice_engine === 'voxcpm';
   // the named voices are a cloud concept; locally the voice comes from a
@@ -1047,6 +1091,40 @@ async function loadVoiceLines(p) {
 }
 
 
+async function loadFiles(p) {
+  const box = $('fileGroups');
+  try {
+    const d = await request(`/api/recap/projects/${p.id}/files`);
+    const size = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB'
+                    : b > 1024 ? Math.round(b / 1024) + ' KB' : b + ' B';
+    box.innerHTML = (d.groups || []).map(g => `
+      <div style="margin-bottom:18px">
+        <div class="sec-label" style="padding:0 0 6px">${escapeHtml(g.name)}</div>
+        ${g.files.map(f => `
+          <div class="row" style="padding:6px 0;border-top:1px solid var(--line)">
+            <span class="grow">
+              <span style="font-size:13px">${escapeHtml(f.label)}</span>
+              <span class="tiny"> &middot; ${escapeHtml(f.name)} &middot; ${size(f.bytes)}</span>
+            </span>
+            <button class="sm" data-get="${escapeHtml(f.name)}">Download</button>
+          </div>`).join('')}
+      </div>`).join('') || '<div class="tiny">Nothing produced yet.</div>';
+
+    [...box.querySelectorAll('[data-get]')].forEach(b => {
+      b.onclick = () => {
+        const name = b.dataset.get;
+        dl(`/api/recap/projects/${p.id}/file?name=${encodeURIComponent(name)}`,
+           name.split('/').pop());
+      };
+    });
+  } catch (e) { box.innerHTML = `<div class="banner err">${escapeHtml(e.message)}</div>`; }
+}
+
+$('openFolder2').onclick = () => {
+  const p = current(); if (!p) return;
+  post('/api/reveal', { folder: p.dir }).catch(() => {});
+};
+
 /* -------------------------------------------------------------- actions */
 async function runStep(step, body) {
   const p = current(); if (!p) return;
@@ -1137,8 +1215,12 @@ $('voiceEngine').onchange = async () => {
 
 $('voiceLang').onchange = async () => {
   const p = current(); if (!p) return;
+  const picked = $('voiceLang').value.split(',').filter(Boolean);
   try {
-    upsert(await patch(`/api/recap/projects/${p.id}`, { voice_lang: $('voiceLang').value }));
+    upsert(await patch(`/api/recap/projects/${p.id}`, {
+      voice_langs: picked,
+      voice_lang: picked[0]
+    }));
     loadVoiceLines(current());
   } catch (e) { showError($('stepErr'), e.message); }
 };
@@ -1155,12 +1237,6 @@ $('suggestVoice').onclick = async () => {
 };
 
 $('makeVoice').onclick = () => runStep('voice');
-$('dlFinal').onclick = () => {
-  const p = current(); if (!p || !p.has_final) return;
-  dl(`/api/recap/projects/${p.id}/file?name=final_${p.mode}_${p.voice_lang}.mp4`,
-     `final_${p.mode}_${p.voice_lang}.mp4`);
-};
-
 $('modeSwitch').onclick = async e => {
   const b = e.target.closest('button'); if (!b) return;
   const p = current(); if (!p || p.mode === b.dataset.m) return;
