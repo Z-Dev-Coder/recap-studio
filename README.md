@@ -14,7 +14,8 @@ change.
 
 - [What it does](#what-it-does)
 - [Requirements](#requirements)
-- [Installation](#installation)
+- [Install the built app](#install-the-built-app)
+- [Install from source](#install-from-source)
 - [Optional extras](#optional-extras)
 - [Getting a Gemini API key](#getting-a-gemini-api-key)
 - [Running it](#running-it)
@@ -73,7 +74,90 @@ running can be stopped.
 
 ---
 
-## Installation
+## Install the built app
+
+Use this if you just want to run it. To develop it, or to build the installer
+yourself, see [Install from source](#install-from-source).
+
+### Step 1 — Run the installer
+
+Double-click **`Toolbox Setup 1.0.0.exe`**.
+
+Windows SmartScreen will warn, because the build is unsigned:
+**More info → Run anyway**.
+
+### Step 2 — Choose where it goes
+
+This step matters more than it looks.
+
+| Location | Works? |
+| --- | --- |
+| `D:\Toolbox` | ✅ recommended |
+| `C:\Users\<you>\AppData\Local\Programs\Toolbox` | ✅ the default |
+| `C:\Program Files\Toolbox` | ⚠️ avoid |
+
+**Do not install into Program Files.** Local narration is a `pip install` into
+the app's own bundled environment, and Program Files cannot be written to
+without administrator rights — so an app installed there can never gain that
+feature. Anywhere in your own user folder, or a data drive like `D:\`, stays
+writable.
+
+Type a full path such as `D:\Toolbox`, or use **Browse**. The **Install**
+button stays greyed out until the path is a valid absolute one — clearing the
+field disables it.
+
+It needs about **711 MB** installed (the installer itself is ~190 MB
+compressed).
+
+### Step 3 — Install ffmpeg
+
+The recap cut, the thumbnails and the screen recorder's conversion all need
+it. In PowerShell:
+
+```powershell
+winget install Gyan.FFmpeg
+```
+
+Restart Toolbox afterwards so it picks up the new `PATH`.
+
+### Step 4 — Add a Gemini API key
+
+See [Getting a Gemini API key](#getting-a-gemini-api-key). Free tier is enough.
+
+### Step 5 — Optional: enable local narration
+
+The installer deliberately leaves out the local-narration stack — it is 4.3 GB
+of PyTorch for a feature that downloads its own model as well. To turn it on,
+point these at wherever you installed:
+
+```powershell
+cd "D:\Toolbox\resources\app\services\video-downloader"
+.\venv\Scripts\python.exe -m pip install voxcpm
+.\venv\Scripts\python.exe -m pip install --force-reinstall torch torchaudio --index-url https://download.pytorch.org/whl/cu126
+```
+
+About 4.5 GB and ten minutes. **No administrator rights are needed** as long as
+you did not install into Program Files. Model weights are cached in your user
+profile, so they are shared with any other copy and never downloaded twice.
+
+Check it took:
+
+```powershell
+.\venv\Scripts\python.exe -c "import torch; print(torch.cuda.is_available())"
+```
+
+`True` means narration runs on your GPU at roughly a third of realtime.
+`False` means the CPU build got installed, which is ~100x slower and not
+usable — see the note about matching the CUDA channel in
+[Optional extras](#optional-extras).
+
+> Upgrading? Install the new version over the old one, then uninstall any
+> earlier copy in a different folder so you do not run the stale one by
+> mistake.
+
+---
+
+## Install from source
 
 ### Step 1 — Install the prerequisites
 
@@ -144,9 +228,15 @@ See [Getting a Gemini API key](#getting-a-gemini-api-key).
 
 ## Optional extras
 
-Each of these goes into the service's venv. Run them from
-`services\video-downloader`. None is required for the app to start — every
-feature detects its own absence and prints the command you need.
+Each of these goes into the service's venv. None is required for the app to
+start — every feature detects its own absence and prints the command you need.
+
+Run them from wherever the service lives:
+
+| How you installed | Folder |
+| --- | --- |
+| Built app | `<install folder>\resources\app\services\video-downloader` |
+| From source | `services\video-downloader` |
 
 ### Transcribing videos that have no captions
 
