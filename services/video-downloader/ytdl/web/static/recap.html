@@ -2438,21 +2438,40 @@ function listen() {
     renderProject();
     listen();
   } catch (e) {
-    // Boot loads the settings, the projects and the content types in one go.
-    // If any of it fails -- most often because the local service is still
-    // starting, or restarted underneath an open page -- everything downstream
-    // is skipped and the app just looks empty, which reads as a broken UI
-    // rather than a page that could not reach its backend. Say what happened
-    // and offer the one action that fixes it.
+    // Boot loads the settings, the projects and the content types in one go,
+    // so if any of it fails everything downstream is skipped and the page just
+    // looks empty -- which reads as a broken UI rather than one that could not
+    // reach its backend. The usual cause is the local service still starting,
+    // or restarting underneath an already-open page, and in both cases it
+    // comes back on its own within seconds. So wait for it rather than making
+    // the user notice and reload.
     $('envWarn').innerHTML =
       `<div class="banner err">
-         <strong>Could not reach the local service.</strong>
-         ${escapeHtml(e.message)}<br>
-         The page may have loaded while the service was restarting.
-         <button class="sm" id="bootRetry" style="margin-top:8px">Try again</button>
+         <strong>Waiting for the local service...</strong>
+         <span id="bootWhy" class="tiny"></span>
+         <button class="sm" id="bootRetry" style="margin-left:8px">Reload now</button>
        </div>`;
     const retry = $('bootRetry');
     if (retry) retry.onclick = () => location.reload();
+
+    let waited = 0;
+    const tick = async () => {
+      waited += 2;
+      try {
+        await request('/api/recap/env');
+        location.reload();                 // it is back; start cleanly
+        return;
+      } catch (err) {
+        const why = $('bootWhy');
+        if (why) {
+          why.textContent = waited < 60
+            ? `still starting (${waited}s)`
+            : `not responding after ${waited}s - ${e.message}`;
+        }
+        setTimeout(tick, 2000);
+      }
+    };
+    setTimeout(tick, 2000);
   }
 })();
 </script>
