@@ -473,3 +473,30 @@ def test_without_force_an_existing_clip_is_kept(monkeypatch, tmp_path):
     tts.narrate(api_key="k", timeline=timeline, out_dir=tmp_path, lang="my",
                 engine="gemini", min_interval=0)
     assert existing.read_bytes().startswith(b"OLD")
+
+
+# ------------------------------------------------------------ caption fonts
+
+def test_burmese_captions_name_a_font_that_has_the_glyphs():
+    """
+    The caption styles ask for Segoe UI, which contains no Myanmar glyphs. What
+    happens then is fontconfig's choice rather than ours -- acceptable on a
+    machine with Myanmar Text installed, tofu on one without.
+    """
+    from ytdl.recap import media
+
+    style = media.CAPTION_STYLES["clean"]
+    assert "Segoe UI" in style                     # unchanged for English
+
+    import re
+    burmese = re.sub(r"FontName=[^,]+", "FontName=" + media.MY_FONTS[0], style)
+    assert "Myanmar Text" in burmese
+    assert "Segoe UI" not in burmese
+    # everything else about the style survives the swap
+    assert "FontSize=" in burmese and "MarginV=" in burmese
+
+
+def test_the_font_list_is_ordered_and_real():
+    from ytdl.recap import media
+    assert media.MY_FONTS[0] == "Myanmar Text"     # ships with Windows
+    assert len(media.MY_FONTS) >= 3                # something to fall back to

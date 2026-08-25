@@ -1254,6 +1254,26 @@ def regenerate_line(pid: str, index: int, lang: str = "") -> dict:
             "seconds": fresh.get("seconds"), "file": fresh["file"]}
 
 
+@router.post("/projects/{pid}/final/preview")
+def preview_final(pid: str, seconds: float = 25.0) -> dict:
+    """
+    Render the opening of the final video, at the current mix.
+
+    Rendering the whole thing to discover the narration is too quiet costs
+    minutes for an answer available in fifteen seconds.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    try:
+        dest = pipeline.run_preview(project, seconds=seconds, cancel=cancel_event(pid))
+    except pipeline.StepError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Cancelled:
+        raise HTTPException(400, "stopped") from None
+    return {"ok": True, "file": dest.name, "seconds": seconds}
+
+
 @router.post("/projects/{pid}/source/trim")
 def trim_source(pid: str, req: TrimRequest) -> dict:
     """

@@ -668,6 +668,8 @@
               </div>
               <video id="finalVideo" controls preload="metadata"></video>
               <div class="row" style="margin-top:12px">
+                <button class="sm" id="previewFinal"
+                        title="Render the opening at this mix, to check it">Preview 25s</button>
                 <button class="primary sm" id="renderFinal">Render final video</button>
                 <span id="finalDownloads" style="display:inline-flex;gap:8px"></span>
                 <span id="finalSwitch" style="display:inline-flex;gap:6px"></span>
@@ -2384,6 +2386,24 @@ $('writeCopy').onclick = async () => {
     const r = await post(`/api/recap/projects/${p.id}/script/copy`, {});
     upsert(await request(`/api/recap/projects/${p.id}`));
     $('copyNote').textContent = `written with ${r.model} - ${r.hashtags} hashtags`;
+  } catch (e) { showError($('stepErr'), e.message); }
+  finally { btn.disabled = false; btn.textContent = was; }
+};
+
+/* Hearing the mix before committing to the whole render. The opening is the
+   piece worth checking: it is where the captions, the voice and the original
+   audio first meet. */
+$('previewFinal').onclick = async () => {
+  const p = current(); if (!p) return;
+  const btn = $('previewFinal');
+  const was = btn.textContent;
+  btn.disabled = true; btn.textContent = 'rendering...';
+  try {
+    const r = await post(`/api/recap/projects/${p.id}/final/preview?seconds=25`, {});
+    const v = $('finalVideo');
+    v.src = `/api/recap/projects/${p.id}/file?name=${encodeURIComponent(r.file)}&t=${Date.now()}`;
+    v.play().catch(() => {});
+    $('finalNote').textContent = 'preview of the first 25s - not the finished file';
   } catch (e) { showError($('stepErr'), e.message); }
   finally { btn.disabled = false; btn.textContent = was; }
 };

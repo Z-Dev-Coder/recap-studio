@@ -408,7 +408,8 @@ def _reburn_captions(project: Project, cancel=None) -> None:
         return
     try:
         burn_subtitles(project.recap_path, srt, captioned,
-                       style=project.caption_style, cancel=cancel)
+                       style=project.caption_style, cancel=cancel,
+                       lang=project.caption_lang or project.voice_lang)
     except MediaError as exc:
         raise StepError(f"captions could not be burned in: {exc}") from exc
 
@@ -625,6 +626,65 @@ def run_final(project: Project, on_progress=None, cancel=None) -> None:
 
     project.voice_lang = langs[-1]
     project.save()
+
+
+def run_preview(project: Project, seconds: float = 25.0, cancel=None) -> Path:
+    """
+    Render a short piece of the final video, to hear the mix before committing.
+
+    Rendering the whole thing to find out the narration is too quiet is
+    minutes for an answer available in fifteen seconds. This takes the opening
+    of the cut with whatever narration falls inside it, at the current mix and
+    speed, and produces a file the page can play.
+
+    Deliberately the opening rather than a chosen moment: it is where the
+    captions, the voice and the original audio first meet.
+    """
+    if not project.recap_path.exists():
+        raise StepError("build the recap cut first")
+    if not project.narration:
+        raise StepError("generate the narration first")
+    if not have_ffmpeg():
+        raise StepError("ffmpeg was not found on PATH")
+
+    base = project.captioned_path if project.captioned_path.exists() else project.recap_path
+    window = max(5.0, min(float(seconds or 25), 90.0))
+
+    part = project.dir / "_preview_base.mp4"
+    try:
+        cut(base, part, 0.0, window, vertical=False, framing="blur", cancel=cancel)
+    except MediaError as exc:
+        raise StepError(str(exc)) from exc
+
+    lang = project.voice_lang or "my"
+    by_index = {int(r.get("index", -1)): r for r in project.timeline}
+    clips = []
+    for m in project.narration:
+        if not str(m.get("file", "")).endswith(f"_{lang}.wav"):
+            continue
+        row = by_index.get(int(m.get("index", -1)))
+        at = float(row["recap_start"]) + VOICE_LEAD if row else float(m.get("at") or 0)
+        if at >= window:
+            continue                      # starts after the preview ends
+        path = project.voice_dir / m["file"]
+        if path.exists():
+            clips.append({"path": path, "at": max(0.0, at)})
+
+    dest = project.dir / "preview.mp4"
+    try:
+        if clips:
+            mux_narration(part, clips, dest,
+                          original_volume=project.original_volume,
+                          narration_volume=project.narration_volume,
+                          speed=project.narration_speed or 1.0,
+                          cancel=cancel)
+        else:
+            part.replace(dest)            # no narration this early; still useful
+    except MediaError as exc:
+        raise StepError(str(exc)) from exc
+    finally:
+        part.unlink(missing_ok=True)
+    return dest
 
 
 # ------------------------------------------------------------------- outputs

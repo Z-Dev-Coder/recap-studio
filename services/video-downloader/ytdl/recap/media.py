@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import re
 import subprocess
 import tempfile
 import time
@@ -268,8 +269,15 @@ SHAPES = {
 }
 
 
+# Fonts that actually contain Myanmar glyphs, best first. Naming one matters:
+# the caption styles ask for Segoe UI, which has none, and what happens then is
+# fontconfig's choice rather than ours -- fine on a machine with Myanmar Text
+# installed, tofu on one without.
+MY_FONTS = ("Myanmar Text", "Pyidaungsu", "Padauk Book", "Noto Sans Myanmar")
+
+
 def burn_subtitles(src: Path, srt: Path, dest: Path, style: str = "clean",
-                   cancel=None) -> Path:
+                   cancel=None, lang: str = "") -> Path:
     """
     Burn an SRT into the picture, for feeds that autoplay muted.
 
@@ -280,6 +288,9 @@ def burn_subtitles(src: Path, srt: Path, dest: Path, style: str = "clean",
     # ffmpeg's filter parser needs the drive colon and backslashes escaped
     escaped = srt.as_posix().replace(":", r"\:")
     style = CAPTION_STYLES.get(style, CAPTION_STYLES["clean"])
+    if lang == "my":
+        # Say which font rather than leaving it to substitution
+        style = re.sub(r"FontName=[^,]+", "FontName=" + MY_FONTS[0], style)
     _run([
         _tool("ffmpeg"), "-y", "-i", str(src),
         "-vf", f"subtitles='{escaped}':force_style='{style}'",
