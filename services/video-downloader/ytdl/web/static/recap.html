@@ -805,6 +805,40 @@
 
           <section data-panel="source" class="hide">
             <div class="card">
+              <div class="row" style="margin-bottom:6px">
+                <h3 class="grow" style="margin:0">Trim the download</h3>
+                <span class="note" id="trimNote"></span>
+              </div>
+              <div class="tiny" style="margin-bottom:12px">
+                Cut the channel logo off the front and the end card off the back,
+                before anything is transcribed. The untouched download is kept, so
+                this can be undone.
+              </div>
+              <div class="row">
+                <div class="field" style="max-width:150px">
+                  <label class="f">Drop from the start</label>
+                  <input type="number" id="trimStart" min="0" step="0.5" value="0">
+                </div>
+                <div class="field" style="max-width:150px">
+                  <label class="f">Drop from the end</label>
+                  <input type="number" id="trimEnd" min="0" step="0.5" value="0">
+                </div>
+                <div class="field" style="max-width:70px">
+                  <label class="f">&nbsp;</label>
+                  <div class="tiny" style="padding-top:9px">seconds</div>
+                </div>
+                <div class="grow"></div>
+                <button class="primary sm" id="applyTrim">Trim</button>
+                <button class="sm ghost hide" id="undoTrim">Put it back</button>
+              </div>
+              <div class="tiny" style="margin-top:8px;color:var(--err)">
+                The transcript, script and narration are all measured from the start
+                of the video, so trimming clears them and they need running again.
+              </div>
+              <div id="trimErr"></div>
+            </div>
+
+            <div class="card">
               <div class="row" style="margin-bottom:12px">
                 <h3 class="grow" style="margin:0">Original transcript</h3>
                 <span class="note" id="transcriptNote"></span>
@@ -1449,6 +1483,12 @@ function renderProject() {
   if (document.activeElement !== $('shapeSel')) $('shapeSel').value = p.shape || '';
   if (document.activeElement !== $('framingSel')) $('framingSel').value = p.framing || 'blur';
   $('fitVoice').checked = p.fit_to_voice !== false;
+  const trimmed = (p.trim_start || 0) > 0 || (p.trim_end || 0) > 0;
+  $('undoTrim').classList.toggle('hide', !trimmed);
+  if (trimmed && !$('trimNote').textContent) {
+    $('trimNote').textContent =
+      `trimmed: ${p.trim_start || 0}s off the front, ${p.trim_end || 0}s off the end`;
+  }
   if ($('wsContentType').value !== (p.content_type || 'recap')) {
     $('wsContentType').value = p.content_type || 'recap';
   }
@@ -1722,6 +1762,10 @@ async function loadVoiceLines(p) {
       </span>
       ${l.custom ? '<span class="pill hi">yours</span>' : (l.file ? '<span class="pill">voiced</span>' : '')}
       ${l.file ? `<button class="sm ghost" data-hear="${l.index}">&#9654;</button>` : ''}
+      ${l.file && !l.custom ? `<button class="sm ghost" data-redo="${l.index}"
+             title="Speak this line again, leaving the rest alone">&#8635;</button>` : ''}
+      ${l.file ? `<button class="sm ghost" data-save="${l.index}"
+             title="Download this clip">&#8681;</button>` : ''}
       <button class="sm ghost" data-up="${l.index}" title="Upload your own recording">&#8593;</button>
       ${l.custom ? `<button class="sm ghost danger" data-rm="${l.index}" title="Back to the generated voice">&times;</button>` : ''}
     </div>`).join('') || '<div class="tiny">Build the cut and the script first.</div>';
@@ -1729,7 +1773,28 @@ async function loadVoiceLines(p) {
   [...$('voiceLines').querySelectorAll('button')].forEach(b => {
     b.onclick = async () => {
       const proj = current();
-      if (b.dataset.up !== undefined) {
+      if (b.dataset.redo !== undefined) {
+        // one line, not thirteen: locally that is minutes of GPU time saved
+        const was = b.innerHTML;
+        b.disabled = true; b.textContent = '...';
+        try {
+          const r = await post(
+            `/api/recap/projects/${proj.id}/voice/line/${b.dataset.redo}` +
+            `/regenerate?lang=${proj.voice_lang || 'my'}`, {});
+          showError($('stepErr'), '');
+          $('lengthNote').textContent =
+            `line ${Number(b.dataset.redo) + 1} spoken again` +
+            (r.seconds ? ` - ${Number(r.seconds).toFixed(1)}s` : '');
+          loadVoiceLines(proj);
+        } catch (e) { showError($('stepErr'), e.message); }
+        finally { b.disabled = false; b.innerHTML = was; }
+      } else if (b.dataset.save !== undefined) {
+        const row = state.lines.find(x => x.index === Number(b.dataset.save));
+        if (row && row.file) {
+          dl(`/api/recap/projects/${proj.id}/file?name=` +
+             encodeURIComponent('voice/' + row.file), row.file);
+        }
+      } else if (b.dataset.up !== undefined) {
         state.uploadFor = Number(b.dataset.up);
         $('lineFile').value = '';
         $('lineFile').click();
@@ -2204,6 +2269,42 @@ async function loadLength(p) {
     }
   } catch (e) { $('lengthNote').textContent = ''; }
 }
+
+/* Trimming the download. Applied to the file rather than carried as an
+   offset, because every timing after this point is measured from the start of
+   the source -- moving that start once beats remembering an offset in six
+   places. */
+$('applyTrim').onclick = async () => {
+  const p = current(); if (!p) return;
+  const start = Number($('trimStart').value) || 0;
+  const end = Number($('trimEnd').value) || 0;
+  showError($('trimErr'), '');
+  if (start <= 0 && end <= 0) {
+    return showError($('trimErr'), 'Give a number of seconds to drop.');
+  }
+  if (!confirm(`Trim ${start}s from the start and ${end}s from the end?\n\n` +
+               'The transcript, script and narration are cleared.')) return;
+
+  const btn = $('applyTrim');
+  btn.disabled = true; btn.textContent = 'trimming...';
+  try {
+    const r = await post(`/api/recap/projects/${p.id}/source/trim`, { start, end });
+    $('trimNote').textContent =
+      `${r.was.toFixed(0)}s -> ${r.now.toFixed(0)}s (${r.removed.toFixed(0)}s removed)`;
+    upsert(await request(`/api/recap/projects/${p.id}`));
+  } catch (e) { showError($('trimErr'), e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Trim'; }
+};
+
+$('undoTrim').onclick = async () => {
+  const p = current(); if (!p) return;
+  if (!confirm('Put the whole download back? The transcript and script are cleared.')) return;
+  try {
+    const r = await post(`/api/recap/projects/${p.id}/source/untrim`, {});
+    $('trimNote').textContent = `back to the full ${r.now.toFixed(0)}s`;
+    upsert(await request(`/api/recap/projects/${p.id}`));
+  } catch (e) { showError($('trimErr'), e.message); }
+};
 
 $('refreshLength').onclick = () => { const p = current(); if (p) loadLength(p); };
 

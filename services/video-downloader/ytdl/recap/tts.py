@@ -286,6 +286,8 @@ def narrate(
     reference_audio=None,
     reference_text: str = "",
     local_model: str = "",
+    only: set | None = None,
+    force: bool = False,
 ) -> list[dict]:
     """
     Speak every line of the recap, one clip per beat.
@@ -305,10 +307,19 @@ def narrate(
     made: list[dict] = []
     rows = [r for r in timeline if (r.get(lang) or "").strip()]
 
+    # `only` names the positions to speak, leaving the rest alone. Redoing one
+    # line should not cost the other twelve -- locally that is minutes of GPU
+    # time, and on a cloud engine it is quota. `force` says to speak it again
+    # even though a clip already exists, which is what "regenerate" means.
+    wanted = None if only is None else {int(i) for i in only}
+
     last_call = 0.0
     for i, row in enumerate(rows):
         if cancel is not None and cancel.is_set():
             raise Cancelled()
+
+        if wanted is not None and i not in wanted:
+            continue
 
         mine = custom_path(out_dir, i, lang)
         if mine.exists() and mine.stat().st_size > 1000:
@@ -321,6 +332,8 @@ def narrate(
             continue
 
         dest = out_dir / f"line_{i:03d}_{lang}.wav"
+        if force and dest.exists():
+            dest.unlink(missing_ok=True)      # regenerating means starting over
         if dest.exists() and dest.stat().st_size > 1000:
             # a retry after a rate limit resumes instead of paying for it twice
             made.append({"file": dest.name, "at": float(row.get("recap_start") or 0),

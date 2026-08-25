@@ -411,3 +411,65 @@ def test_the_sees_marker_is_not_part_of_the_model_name():
     """The picker labels vision models; the label must not reach the API."""
     assert llm.split_spec("ollama:gemma3:4b (sees)") == ("ollama", "gemma3:4b")
     assert llm.split_spec("ollama:qwen2.5:7b") == ("ollama", "qwen2.5:7b")
+
+
+# --------------------------------------------------------- one line at a time
+
+def test_narrate_can_speak_a_single_line(monkeypatch, tmp_path):
+    """
+    Redoing one line must not redo the others. Locally that is minutes of GPU
+    time; on a cloud engine it is quota.
+    """
+    from ytdl.recap import tts
+
+    spoken = []
+    monkeypatch.setattr(tts, "speak",
+                        lambda *a, **k: (spoken.append(a[1]), b"RIFF0000WAVE")[1])
+
+    timeline = [{"index": i, "recap_start": i * 10.0, "my": f"line {i}"}
+                for i in range(4)]
+    made = tts.narrate(api_key="k", timeline=timeline, out_dir=tmp_path,
+                       lang="my", engine="gemini", only={2}, force=True,
+                       min_interval=0)
+    assert len(made) == 1
+    assert made[0]["index"] == 2
+    assert len(spoken) == 1, "it spoke lines it was not asked for"
+
+
+def test_without_only_every_line_is_spoken(monkeypatch, tmp_path):
+    from ytdl.recap import tts
+
+    spoken = []
+    monkeypatch.setattr(tts, "speak",
+                        lambda *a, **k: (spoken.append(a[1]), b"RIFF0000WAVE")[1])
+    timeline = [{"index": i, "recap_start": i * 10.0, "my": f"line {i}"}
+                for i in range(3)]
+    tts.narrate(api_key="k", timeline=timeline, out_dir=tmp_path, lang="my",
+                engine="gemini", min_interval=0)
+    assert len(spoken) == 3
+
+
+def test_force_replaces_a_clip_that_already_exists(monkeypatch, tmp_path):
+    from ytdl.recap import tts
+
+    existing = tmp_path / "line_001_my.wav"
+    existing.write_bytes(b"x" * 5000)          # a clip is already there
+
+    monkeypatch.setattr(tts, "speak", lambda *a, **k: b"RIFF" + b"0" * 4000)
+    timeline = [{"index": i, "recap_start": 0.0, "my": f"line {i}"} for i in range(3)]
+    tts.narrate(api_key="k", timeline=timeline, out_dir=tmp_path, lang="my",
+                engine="gemini", only={1}, force=True, min_interval=0)
+    assert existing.read_bytes().startswith(b"RIFF")
+
+
+def test_without_force_an_existing_clip_is_kept(monkeypatch, tmp_path):
+    """Resuming after a failure must not pay for what was already spoken."""
+    from ytdl.recap import tts
+
+    existing = tmp_path / "line_000_my.wav"
+    existing.write_bytes(b"OLD" + b"x" * 5000)
+    monkeypatch.setattr(tts, "speak", lambda *a, **k: b"NEW" + b"0" * 4000)
+    timeline = [{"index": 0, "recap_start": 0.0, "my": "line"}]
+    tts.narrate(api_key="k", timeline=timeline, out_dir=tmp_path, lang="my",
+                engine="gemini", min_interval=0)
+    assert existing.read_bytes().startswith(b"OLD")

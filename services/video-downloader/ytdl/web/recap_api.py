@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import json
 import queue
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -346,6 +347,11 @@ class SettingsRequest(BaseModel):
     whisper_model: str | None = None
     use_scrape: bool | None = None
     use_vision: bool | None = None
+
+
+class TrimRequest(BaseModel):
+    start: float = 0.0        # seconds to drop from the front
+    end: float = 0.0          # seconds to drop from the end
 
 
 class ManualScriptRequest(BaseModel):
@@ -1129,6 +1135,156 @@ SAMPLE_LINE = {
           "ရီကပ်ကို "
           "ပြောပြပါမယ်။",
 }
+
+
+@router.post("/projects/{pid}/voice/line/{index}/regenerate")
+def regenerate_line(pid: str, index: int, lang: str = "") -> dict:
+    """
+    Speak one line again, leaving the rest alone.
+
+    A single line coming out wrong used to mean redoing the whole narration --
+    minutes of GPU time locally, or quota on a cloud engine, to fix one
+    sentence. Everything else about the voice stays as it was, so the
+    replacement matches its neighbours.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    if not project.timeline:
+        raise HTTPException(400, "there is no narration to redo yet")
+
+    lang = lang if lang in ("en", "my") else (project.voice_lang or "my")
+    settings = load_settings()
+    reference = None
+    if project.voice_reference:
+        candidate = project.voice_dir / project.voice_reference
+        if candidate.exists():
+            reference = candidate
+
+    try:
+        made = tts_mod.narrate(
+            api_key=settings.get("gemini_key", ""),
+            timeline=project.timeline,
+            out_dir=project.voice_dir,
+            lang=lang,
+            voice=project.voice_name or "Kore",
+            style=project.voice_style,
+            model=settings.get("tts_model", "") or tts_mod.DEFAULT_MODEL,
+            cancel=cancel_event(pid),
+            engine=project.voice_engine or "voxcpm",
+            local_model=project.local_model or "",
+            reference_audio=reference,
+            reference_text=project.voice_reference_text,
+            only={index},
+            force=True,
+        )
+    except Cancelled:
+        raise HTTPException(400, "stopped") from None
+    except Exception as exc:      # noqa: BLE001 - whatever the engine said
+        raise HTTPException(400, str(exc) or exc.__class__.__name__) from exc
+
+    if not made:
+        raise HTTPException(400, "that line has no text to speak")
+
+    # slot the new clip into the narration, leaving the others untouched
+    fresh = made[0]
+    rows = [m for m in (project.narration or [])
+            if not (str(m.get("file", "")) == fresh["file"])]
+    rows.append(fresh)
+    rows.sort(key=lambda m: int(m.get("index", 0)))
+    project.narration = rows
+    # the cut was fitted to the old length of this line
+    project.mark("video", "idle", message="a line changed - rebuild the cut")
+    project.mark("final", "idle", message="a line changed - render again")
+    project.save()
+    push(project)
+    return {"ok": True, "index": index, "lang": lang,
+            "seconds": fresh.get("seconds"), "file": fresh["file"]}
+
+
+@router.post("/projects/{pid}/source/trim")
+def trim_source(pid: str, req: TrimRequest) -> dict:
+    """
+    Drop the logo at the front and the end card at the back.
+
+    The trim is applied to the downloaded file itself rather than carried as
+    an offset, because every timing after this point -- the transcript, the
+    beats, the cut -- is measured from the start of the source. Moving that
+    start once is simpler than remembering an offset in six places.
+
+    The untouched download is kept, so trimming is not a decision you have to
+    get right first time.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    if not project.source_path.exists():
+        raise HTTPException(400, "download the video first")
+    if not have_ffmpeg():
+        raise HTTPException(400, "ffmpeg was not found on PATH")
+
+    original = project.dir / "source_untrimmed.mp4"
+    if not original.exists():
+        shutil.copy2(project.source_path, original)
+
+    full = media_mod.probe(original).duration or project.duration or 0.0
+    start = max(0.0, float(req.start or 0))
+    end = max(0.0, float(req.end or 0))
+    keep_from, keep_to = start, max(0.0, full - end)
+    if keep_to - keep_from < 5.0:
+        raise HTTPException(
+            400, "that would leave under five seconds of video "
+                 f"(the original runs {full:.0f}s)")
+
+    trimmed = project.dir / "source_trimmed.mp4"
+    try:
+        media_mod.cut(original, trimmed, keep_from, keep_to,
+                      vertical=False, framing="blur", cancel=cancel_event(pid))
+    except MediaError as exc:
+        raise HTTPException(400, f"could not trim: {exc}") from exc
+
+    trimmed.replace(project.source_path)
+    project.duration = round(media_mod.probe(project.source_path).duration or
+                             (keep_to - keep_from), 2)
+    project.trim_start, project.trim_end = start, end
+
+    # everything measured from the old start is now wrong
+    project.transcript = []
+    project.beats = []
+    project.timeline = []
+    project.narration = []
+    project.story = {}
+    for step in ("transcript", "script", "voice", "video", "thumbnail", "final"):
+        project.mark(step, "idle", message="the source was trimmed - run again")
+    project.save()
+    push(project)
+    return {"ok": True, "was": round(full, 2), "now": project.duration,
+            "removed": round(full - project.duration, 2)}
+
+
+@router.post("/projects/{pid}/source/untrim")
+def untrim_source(pid: str) -> dict:
+    """Put the whole download back."""
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    original = project.dir / "source_untrimmed.mp4"
+    if not original.exists():
+        raise HTTPException(400, "this video has not been trimmed")
+
+    shutil.copy2(original, project.source_path)
+    project.duration = round(media_mod.probe(project.source_path).duration or 0.0, 2)
+    project.trim_start = project.trim_end = 0.0
+    project.transcript = []
+    project.beats = []
+    project.timeline = []
+    project.narration = []
+    project.story = {}
+    for step in ("transcript", "script", "voice", "video", "thumbnail", "final"):
+        project.mark(step, "idle", message="the full video is back - run again")
+    project.save()
+    push(project)
+    return {"ok": True, "now": project.duration}
 
 
 @router.post("/projects/{pid}/voice/candidates")
