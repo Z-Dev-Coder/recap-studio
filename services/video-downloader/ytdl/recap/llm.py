@@ -79,15 +79,19 @@ PRESETS = (
     {
         "id": "daily",
         "label": "Daily use, long videos",
-        "note": "One Gemini call per script -- about 20 a day. Reading and "
-                "choosing go to Groq, checking runs on this machine.",
+        "note": "The two big prompts run on this machine, where tokens are "
+                "free. One Gemini call per script -- about 20 a day.",
         "recommended": True,
-        "needs": ("groq", "ollama"),
+        "needs": ("ollama",),
         "stages": {
-            "read": "groq:openai/gpt-oss-120b",
-            "pick": "groq:openai/gpt-oss-120b",
+            # Measured: reading costs ~2,500 tokens and choosing ~4,800. Put
+            # both on Groq and they are 7,271 of a usable 7,360 a minute --
+            # the whole budget, with nothing left for the rest of the script.
+            # Locally they cost nothing but time.
+            "read": "ollama:qwen2.5:7b-instruct-q4_K_M",
+            "pick": "ollama:qwen2.5:7b-instruct-q4_K_M",
             "write": "",                       # follows the quality budget
-            "review": "ollama:qwen2.5:7b-instruct-q4_K_M",
+            "review": "groq:openai/gpt-oss-20b",   # ~1,500 tokens, fits easily
         },
     },
     {
@@ -135,14 +139,15 @@ PRESETS = (
 # reasoning is the useful part: without it the picker is four dropdowns of
 # model names, and there is no way to tell which choice matters.
 STAGE_ADVICE = {
-    "read": "A big prompt -- the whole transcript. Groq limits by the minute "
-            "rather than the day, so it absorbs this better than Gemini.",
-    "pick": "Also a big prompt, and the output is timestamps rather than "
-            "prose, which open models handle well.",
+    "read": "The biggest prompt after the beat picker -- about 2,500 tokens. "
+            "Groq allows only 8,000 a minute, so this belongs on the machine, "
+            "where tokens are free.",
+    "pick": "The largest call, about 4,800 tokens. On Groq it and the reading "
+            "together use the entire minute; locally they cost only time.",
     "write": "Leave this on Gemini. It is the only stage you actually hear, "
              "and the one weaker models get visibly wrong.",
-    "review": "Only revises lines already flagged, so a local model is enough "
-              "-- and keeping it off Groq leaves that budget for the big two.",
+    "review": "Small -- about 1,500 tokens -- and it only revises lines already "
+              "flagged as wrong, so Groq handles it comfortably.",
 }
 
 
