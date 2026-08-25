@@ -29,6 +29,7 @@ from __future__ import annotations
 import base64
 import json
 import re
+import time
 
 import requests
 
@@ -39,6 +40,12 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 PROVIDERS = ("gemini", "ollama", "groq")
 
+# Groq is generous but not unlimited, and its limits are per minute as well as
+# per day. A per-minute one is worth waiting out -- it is usually seconds --
+# where a daily one is not, exactly as with Gemini.
+RATE_RETRIES = 2
+MAX_RATE_WAIT = 75.0
+
 # The stages, in the order they run, with what each one is for. Named here so
 # the settings page and the pipeline cannot disagree about what exists.
 STAGES = (
@@ -47,6 +54,80 @@ STAGES = (
     ("write", "Write the Burmese", "The narration itself. This is the one you hear."),
     ("review", "Check the Burmese", "Revises only the lines flagged as wrong."),
 )
+
+
+# Ready-made ways to spread the four stages across the three providers.
+#
+# Every provider here is free and every one is limited, but they are limited
+# differently -- Gemini by a small daily count, Groq by tokens per minute, a
+# local model only by how fast the machine is. Spreading the stages across
+# them is what turns "five scripts a day" into "as many as you have patience
+# for", and the only stage that really wants the best model is the one writing
+# the Burmese.
+#
+# `needs` names what has to be set up for a preset to work, so the settings
+# page can say which are actually available rather than offering all of them.
+PRESETS = (
+    {
+        "id": "daily",
+        "label": "Daily use, long videos",
+        "note": "One Gemini call per script -- about 20 a day. Reading and "
+                "choosing go to Groq, checking runs on this machine.",
+        "recommended": True,
+        "needs": ("groq", "ollama"),
+        "stages": {
+            "read": "groq:openai/gpt-oss-120b",
+            "pick": "groq:openai/gpt-oss-120b",
+            "write": "",                       # follows the quality budget
+            "review": "ollama:qwen2.5:7b-instruct-q4_K_M",
+        },
+    },
+    {
+        "id": "groq",
+        "label": "Mostly Groq",
+        "note": "For when Ollama is not running. Everything but the Burmese "
+                "goes to Groq; watch its per-minute token limit on long "
+                "transcripts.",
+        "recommended": False,
+        "needs": ("groq",),
+        "stages": {
+            "read": "groq:openai/gpt-oss-120b",
+            "pick": "groq:openai/gpt-oss-120b",
+            "write": "",
+            "review": "groq:openai/gpt-oss-20b",
+        },
+    },
+    {
+        "id": "offline",
+        "label": "No quota at all",
+        "note": "Everything on this machine. Nothing to run out of, and the "
+                "Burmese will read noticeably plainer.",
+        "recommended": False,
+        "needs": ("ollama",),
+        "stages": {
+            "read": "ollama:qwen2.5:7b-instruct-q4_K_M",
+            "pick": "ollama:qwen2.5:7b-instruct-q4_K_M",
+            "write": "ollama:qwen2.5:7b-instruct-q4_K_M",
+            "review": "ollama:qwen2.5:7b-instruct-q4_K_M",
+        },
+    },
+    {
+        "id": "quality",
+        "label": "Best quality",
+        "note": "Gemini throughout. The best results this app can produce, "
+                "and the fewest runs before the daily limit.",
+        "recommended": False,
+        "needs": (),
+        "stages": {"read": "", "pick": "", "write": "", "review": ""},
+    },
+)
+
+
+def preset(pid: str) -> dict | None:
+    for row in PRESETS:
+        if row["id"] == pid:
+            return row
+    return None
 
 
 class LLMError(RuntimeError):
@@ -177,6 +258,43 @@ class OllamaBackend:
             raise LLMError(f"Ollama returned something unreadable: {exc}") from exc
 
 
+def _groq_wait(resp) -> float:
+    """How long Groq says to wait, from the header or the message."""
+    try:
+        header = float(resp.headers.get("retry-after") or 0)
+        if header > 0:
+            return header
+    except (TypeError, ValueError):
+        pass
+    # otherwise it is in the prose: "Please try again in 7.5s"
+    found = re.search(r"try again in ([\d.]+)\s*(m|s)", resp.text or "", re.I)
+    if found:
+        value = float(found.group(1))
+        return value * 60 if found.group(2).lower() == "m" else value
+    return 0.0
+
+
+def _groq_daily(resp) -> bool:
+    """Whether the allowance that ran out was the daily one."""
+    text = (resp.text or "").lower()
+    return "per day" in text or "requests per day" in text or "rpd" in text
+
+
+def _groq_limit_message(resp, model: str) -> str:
+    if _groq_daily(resp):
+        return (
+            "Groq's daily allowance for {} is used up. It resets on a rolling "
+            "24-hour window. Point this stage at another provider in Settings, "
+            "or pick a different Groq model -- the limits are per model."
+        ).format(model)
+    wait = _groq_wait(resp)
+    when = " Try again in about {:.0f}s.".format(wait) if wait > 0 else ""
+    return (
+        "Groq is rate limiting this key for {}.{} The per-minute limit counts "
+        "tokens as well as requests, and a long transcript is a lot of tokens."
+    ).format(model, when)
+
+
 class GroqBackend:
     """Free, fast, and generous enough that the daily limit stops mattering."""
 
@@ -206,11 +324,23 @@ class GroqBackend:
         for enforce_json in (True, False):
             if not enforce_json:
                 body.pop("response_format", None)
-            try:
-                resp = requests.post(GROQ_URL, json=body, timeout=self.timeout,
-                                     headers=headers)
-            except requests.RequestException as exc:
-                raise LLMError(f"Could not reach Groq: {exc}") from exc
+
+            # A per-minute limit is worth waiting out; a daily one is not.
+            for attempt in range(RATE_RETRIES + 1):
+                try:
+                    resp = requests.post(GROQ_URL, json=body, timeout=self.timeout,
+                                         headers=headers)
+                except requests.RequestException as exc:
+                    raise LLMError(f"Could not reach Groq: {exc}") from exc
+                if resp.status_code != 429 or _groq_daily(resp):
+                    break
+                wait = _groq_wait(resp)
+                if attempt >= RATE_RETRIES or not 0 < wait <= MAX_RATE_WAIT:
+                    break
+                if cancel is not None and cancel.is_set():
+                    break
+                time.sleep(wait + 0.5)
+
             if not (resp.status_code == 400 and enforce_json
                     and "json" in resp.text.lower()):
                 break
@@ -218,7 +348,7 @@ class GroqBackend:
         if resp.status_code == 401:
             raise LLMError("Groq rejected the API key. Check it in Settings.")
         if resp.status_code == 429:
-            raise LLMError("Groq rate limit reached. Wait a moment and try again.")
+            raise LLMError(_groq_limit_message(resp, self.model))
         if resp.status_code >= 400:
             raise LLMError(f"Groq refused the request ({resp.status_code}): {resp.text[:200]}")
 

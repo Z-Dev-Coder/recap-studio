@@ -733,7 +733,27 @@ def llm_models() -> dict:
              "models": groq_models(settings.get("groq_key", ""))},
         ],
         "assigned": settings.get("stage_models") or {},
+        "presets": [
+            dict(p, ready=all(
+                (settings.get("groq_key") if need == "groq" else local)
+                for need in p["needs"]
+            ))
+            for p in llm.PRESETS
+        ],
     }
+
+
+@router.post("/llm/preset/{pid}")
+def apply_preset(pid: str) -> dict:
+    """Set every stage at once from a ready-made spread."""
+    from ..recap import llm
+
+    row = llm.preset(pid)
+    if not row:
+        raise HTTPException(400, "no such preset: " + pid)
+    stages = {k: v for k, v in row["stages"].items() if v}
+    save_settings({"stage_models": stages})
+    return {"ok": True, "id": pid, "stages": stages}
 
 
 @router.post("/projects/{pid}/script/stage/{stage}")

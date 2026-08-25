@@ -99,3 +99,54 @@ def test_every_stage_is_named_once():
     assert ids == ["read", "pick", "write", "review"]
     assert len(set(ids)) == len(ids)
     assert all(label and what for _i, label, what in llm.STAGES)
+
+
+# ------------------------------------------------------------------ presets
+
+def test_every_preset_covers_every_stage():
+    stage_ids = {s[0] for s in llm.STAGES}
+    for row in llm.PRESETS:
+        assert set(row["stages"]) == stage_ids, row["id"]
+
+
+def test_exactly_one_preset_is_recommended():
+    assert sum(1 for p in llm.PRESETS if p["recommended"]) == 1
+
+
+def test_the_recommended_preset_keeps_the_burmese_on_gemini():
+    """
+    The writing is the one stage whose quality is audible, so the preset meant
+    for everyday use must not hand it to a weaker model.
+    """
+    daily = llm.preset("daily")
+    assert daily["recommended"]
+    assert daily["stages"]["write"] == ""        # follows the budget, ie Gemini
+    assert all(daily["stages"][s] for s in ("read", "pick", "review"))
+
+
+def test_the_offline_preset_asks_nothing_of_the_network():
+    for spec in llm.preset("offline")["stages"].values():
+        assert llm.split_spec(spec)[0] == "ollama"
+
+
+def test_the_quality_preset_leaves_every_stage_on_the_budget():
+    assert set(llm.preset("quality")["stages"].values()) == {""}
+
+
+def test_presets_declare_what_they_need():
+    assert "groq" in llm.preset("groq")["needs"]
+    assert "ollama" in llm.preset("offline")["needs"]
+    assert llm.preset("quality")["needs"] == ()
+
+
+def test_an_unknown_preset_is_not_invented():
+    assert llm.preset("nonsense") is None
+
+
+def test_preset_models_are_real_specs():
+    for row in llm.PRESETS:
+        for spec in row["stages"].values():
+            if spec:
+                provider, model = llm.split_spec(spec)
+                assert provider in llm.PROVIDERS
+                assert model

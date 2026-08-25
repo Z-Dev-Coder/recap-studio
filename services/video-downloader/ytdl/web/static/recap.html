@@ -900,6 +900,7 @@
           models handle the structured stages well and the Burmese writing
           noticeably less well, so that is usually the one to leave on Gemini.
         </div>
+        <div id="presets" style="margin-bottom:14px"></div>
         <div id="stageModels"></div>
         <div class="row" style="margin-top:12px">
           <div class="field grow">
@@ -1102,6 +1103,34 @@ async function loadStageModels() {
     }
     return html;
   };
+
+  // The ready-made spreads. Each says what it costs in scripts a day, since
+  // that is the thing actually being chosen between.
+  $('presets').innerHTML = (state.llm.presets || []).map(p => `
+    <div class="row" style="padding:7px 0;border-top:1px solid var(--line);align-items:flex-start">
+      <div class="grow">
+        <div style="font-size:13px">
+          ${escapeHtml(p.label)}
+          ${p.recommended ? '<span class="pill hi">recommended</span>' : ''}
+          ${p.ready ? '' : '<span class="tiny"> - needs ' + escapeHtml(p.needs.join(' and ')) + '</span>'}
+        </div>
+        <div class="tiny">${escapeHtml(p.note)}</div>
+      </div>
+      <button class="sm" data-preset="${p.id}" ${p.ready ? '' : 'disabled'}>Use</button>
+    </div>`).join('');
+
+  $('presets').querySelectorAll('[data-preset]').forEach(b => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await post(`/api/recap/llm/preset/${b.dataset.preset}`, {});
+        await loadStageModels();
+        $('stageModelsNote').textContent = 'applied';
+        setTimeout(() => { $('stageModelsNote').textContent = ''; }, 1800);
+      } catch (e) { $('stageModelsNote').textContent = e.message; }
+      finally { b.disabled = false; }
+    };
+  });
 
   $('stageModels').innerHTML = state.llm.stages.map(s => `
     <div class="row" style="padding:6px 0;border-top:1px solid var(--line)">
