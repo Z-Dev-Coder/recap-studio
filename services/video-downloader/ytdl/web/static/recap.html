@@ -419,6 +419,7 @@
                 <h3 class="grow" style="margin:0">Recap script</h3>
                 <span class="saved" id="beatsSaved">Saved</span>
                 <span class="note" id="scriptNote"></span>
+                <button class="sm hide" id="scriptOtherLang"></button>
                 <button class="sm" id="regenScript">Regenerate</button>
               </div>
               <div id="hookBox" class="hide"
@@ -1394,6 +1395,25 @@ function renderProject() {
   }
   const lang = state.wsLang;
 
+  // The script is shown one language at a time, so a script written only in
+  // Burmese looks like forty-five empty boxes when the header says English.
+  // Say which language actually has text, and offer the switch.
+  const other = lang === 'my' ? 'en' : 'my';
+  const here = (p.beats || []).filter(b => (b[lang] || '').trim()).length;
+  const there = (p.beats || []).filter(b => (b[other] || '').trim()).length;
+  const swap = $('scriptOtherLang');
+  swap.classList.toggle('hide', !(here === 0 && there > 0));
+  if (here === 0 && there > 0) {
+    swap.textContent = other === 'my'
+      ? `Show the ${there} Burmese lines` : `Show the ${there} English lines`;
+    swap.onclick = () => {
+      state.wsLang = other;
+      [...$('wsLangSeg').children].forEach(
+        x => x.classList.toggle('on', x.dataset.lang === other));
+      renderProject();
+    };
+  }
+
   $('projTitle').textContent = p.title || p.url;
   $('projMeta').textContent =
     `${fmt(p.duration)} · ${p.mode === 'reels' ? 'Short / Reel' : 'Long form'}` +
@@ -2061,6 +2081,13 @@ $('ownApply').onclick = async () => {
     $('ownText').value = '';
     $('ownBox').classList.add('hide');
     $('ownToggle').textContent = 'Write some';
+    // show the language it was actually written in, not whatever was selected
+    const wrote = $('ownLang').value;
+    if (state.wsLang !== wrote) {
+      state.wsLang = wrote;
+      [...$('wsLangSeg').children].forEach(
+        x => x.classList.toggle('on', x.dataset.lang === wrote));
+    }
     $('scriptNote').textContent = mode === 'add'
       ? r.added + ' lines added - ' + r.lines + ' in the script'
       : 'your own script - ' + r.lines + ' lines';
