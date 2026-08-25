@@ -174,8 +174,10 @@ def split_spec(spec: str) -> tuple[str, str]:
         return "gemini", ""
     head, sep, rest = spec.partition(":")
     if sep and head.lower() in PROVIDERS:
-        return head.lower(), rest.strip()
-    return "gemini", spec
+        # the picker labels vision-capable local models "name (sees)"; that is
+        # a note for the reader, not part of the model's name
+        return head.lower(), rest.strip().removesuffix(" (sees)").strip()
+    return "gemini", spec.removesuffix(" (sees)").strip()
 
 
 def _json_from(text: str) -> dict:
@@ -238,13 +240,42 @@ class GeminiBackend:
             raise LLMError(str(exc)) from exc
 
 
+_VISION_CACHE: dict[str, bool] = {}
+
+
+def ollama_sees(model: str, url: str = "") -> bool:
+    """
+    Whether this local model can look at pictures.
+
+    Assuming it could and letting it ignore them was wrong: Ollama refuses the
+    whole request rather than dropping the images --
+
+        400 Multimodal data provided, but model does not support
+            multimodal requests
+
+    -- so the frames from the video took the whole script step down. It says
+    so plainly when asked, and the answer does not change while the process
+    runs, so ask once.
+    """
+    key = f"{url or OLLAMA_URL}|{model}"
+    if key in _VISION_CACHE:
+        return _VISION_CACHE[key]
+    try:
+        resp = requests.post(f"{(url or OLLAMA_URL).rstrip('/')}/api/show",
+                             json={"model": model}, timeout=6)
+        can = resp.status_code == 200 and "vision" in (resp.json().get("capabilities") or [])
+    except (requests.RequestException, ValueError):
+        can = False           # if we cannot tell, do not risk the request
+    _VISION_CACHE[key] = can
+    return can
+
+
 class OllamaBackend:
     """
     A model running on this machine. No quota and no key.
 
-    Images are passed through when given: whether they mean anything depends
-    on the model, and a text-only model ignoring them is better than refusing
-    to run at all.
+    Images are sent only to models that say they can see; everything else gets
+    the text alone, which is a weaker reading of the video but a working one.
     """
 
     name = "ollama"
@@ -264,7 +295,7 @@ class OllamaBackend:
             "options": {"temperature": temperature,
                         "num_predict": max_tokens or MAX_COMPLETION_TOKENS},
         }
-        if images:
+        if images and ollama_sees(self.model, self.url):
             body["images"] = [base64.b64encode(blob).decode("ascii")
                               for _mime, blob in images]
         try:
@@ -280,6 +311,17 @@ class OllamaBackend:
                 "Ollama has no model called {!r}. Pull it first: ollama pull {}"
                 .format(self.model, self.model)
             )
+        if resp.status_code == 400 and "multimodal" in resp.text.lower():
+            # belt and braces: a model that reports vision but refuses it
+            # anyway should still produce a script from the transcript
+            body.pop("images", None)
+            _VISION_CACHE[f"{self.url}|{self.model}"] = False
+            try:
+                resp = requests.post(f"{self.url}/api/generate", json=body,
+                                     timeout=self.timeout)
+            except requests.RequestException as exc:
+                raise LLMError(f"Could not reach Ollama at {self.url}: {exc}") from exc
+
         if resp.status_code >= 400:
             raise LLMError(f"Ollama refused the request ({resp.status_code}): {resp.text[:200]}")
 

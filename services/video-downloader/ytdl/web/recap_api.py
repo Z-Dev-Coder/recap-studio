@@ -731,8 +731,11 @@ def llm_models() -> dict:
              "note": "20 requests a day on the good model, 500 on the lite one",
              "models": list(DEFAULT_MODELS)},
             {"id": "ollama", "label": "Ollama (this machine)", "ready": bool(local),
-             "note": "no quota, no key -- but weaker at Burmese prose",
-             "models": local},
+             "note": "no quota, no key -- but weaker at Burmese prose. Only a "
+                     "model marked (sees) can read the video frames; the others "
+                     "work from the transcript alone.",
+             "models": [m + (" (sees)" if llm.ollama_sees(m, settings.get("ollama_url", ""))
+                             else "") for m in local]},
             {"id": "groq", "label": "Groq", "ready": bool(settings.get("groq_key")),
              "note": "free, and generous enough to stop counting",
              "models": groq_models(settings.get("groq_key", ""))},

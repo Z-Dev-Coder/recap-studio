@@ -299,3 +299,115 @@ def test_the_default_answer_size_is_not_a_whole_minute():
     one call, which is why it had to be sized to the task instead.
     """
     assert llm.MAX_COMPLETION_TOKENS <= 8000
+
+
+# ------------------------------------------------------- local models and frames
+
+def test_frames_go_only_to_a_model_that_can_see(monkeypatch):
+    """
+    Ollama refuses the whole request when given images a model cannot use:
+
+        400 Multimodal data provided, but model does not support
+            multimodal requests
+
+    which took the script step down entirely. Assuming the model would simply
+    ignore them was the mistake.
+    """
+    llm._VISION_CACHE.clear()
+    sent = {}
+
+    def show(url, json=None, **k):
+        if url.endswith("/api/show"):
+            class R:
+                status_code = 200
+                @staticmethod
+                def json():
+                    return {"capabilities": ["completion", "tools"]}   # no vision
+            return R()
+        sent.clear(); sent.update(json or {})
+
+        class Gen:
+            status_code = 200
+            text = ""
+            @staticmethod
+            def json():
+                return {"response": '{"a": 1}'}
+        return Gen()
+
+    monkeypatch.setattr(llm.requests, "post", show)
+    llm.OllamaBackend("text-only").generate_json(
+        "p", {}, images=[("image/jpeg", b"x")])
+    assert "images" not in sent, "frames were sent to a model that cannot read them"
+
+
+def test_frames_are_sent_to_a_model_that_can_see(monkeypatch):
+    llm._VISION_CACHE.clear()
+    sent = {}
+
+    def post(url, json=None, **k):
+        if url.endswith("/api/show"):
+            class R:
+                status_code = 200
+                @staticmethod
+                def json():
+                    return {"capabilities": ["completion", "vision"]}
+            return R()
+        sent.clear(); sent.update(json or {})
+
+        class Gen:
+            status_code = 200
+            text = ""
+            @staticmethod
+            def json():
+                return {"response": '{"a": 1}'}
+        return Gen()
+
+    monkeypatch.setattr(llm.requests, "post", post)
+    llm.OllamaBackend("seeing-model").generate_json(
+        "p", {}, images=[("image/jpeg", b"x")])
+    assert len(sent.get("images") or []) == 1
+
+
+def test_a_model_that_refuses_anyway_still_produces_a_script(monkeypatch):
+    """Belt and braces: drop the frames and ask again rather than failing."""
+    llm._VISION_CACHE.clear()
+    calls = []
+
+    def post(url, json=None, **k):
+        if url.endswith("/api/show"):
+            class R:
+                status_code = 200
+                @staticmethod
+                def json():
+                    return {"capabilities": ["completion", "vision"]}  # claims it can
+            return R()
+        calls.append(dict(json or {}))       # a copy: the body is mutated between tries
+
+        class Gen:
+            status_code = 400 if len(calls) == 1 else 200
+            text = ('{"error":"Multimodal data provided, but model does not '
+                    'support multimodal requests."}')
+            @staticmethod
+            def json():
+                return {"response": '{"a": 1}'}
+        return Gen()
+
+    monkeypatch.setattr(llm.requests, "post", post)
+    out = llm.OllamaBackend("liar").generate_json("p", {}, images=[("image/jpeg", b"x")])
+    assert out == {"a": 1}
+    assert "images" in calls[0] and "images" not in calls[1]
+
+
+def test_an_unreachable_ollama_is_assumed_blind(monkeypatch):
+    """If we cannot ask, do not risk the request."""
+    llm._VISION_CACHE.clear()
+    import requests as rq
+    monkeypatch.setattr(llm.requests, "post",
+                        lambda *a, **k: (_ for _ in ()).throw(rq.RequestException("no")))
+    assert llm.ollama_sees("anything") is False
+
+
+def test_the_sees_marker_is_not_part_of_the_model_name():
+    """The picker labels vision models; the label must not reach the API."""
+    assert llm.split_spec("ollama:gemma3:4b (sees)") == ("ollama", "gemma3:4b")
+    assert llm.split_spec("ollama:qwen2.5:7b") == ("ollama", "qwen2.5:7b")
