@@ -492,7 +492,10 @@
               <div class="card">
                 <div class="row" style="margin-bottom:12px">
                   <h3 class="grow" style="margin:0">Title &amp; description</h3>
+                  <span class="note" id="copyNote"></span>
                   <span class="saved" id="copySaved">Saved</span>
+                  <button class="sm" id="writeCopy"
+                          title="Write these from the script, one call">Write from the script</button>
                 </div>
                 <label class="f">Title</label>
                 <input type="text" id="titleField">
@@ -693,7 +696,17 @@
                 </div>
                 <canvas id="thumbCanvas" width="1280" height="720"></canvas>
                 <div class="tiny" id="thumbHint" style="margin-top:6px">
-                  Drag the text on the picture to place it.
+                  Drag the picture to choose what stays in frame; drag the text
+                  to place it.
+                </div>
+                <div class="row" style="margin-top:8px">
+                  <div class="field grow">
+                    <label class="f">Zoom <span class="tiny" id="thumbZoomVal"></span></label>
+                    <input type="range" id="thumbZoom" min="100" max="300" value="100">
+                  </div>
+                  <div style="align-self:flex-end">
+                    <button class="sm ghost" id="thumbRecentre">Centre the picture</button>
+                  </div>
                 </div>
                 <label class="f" style="margin-top:12px">Overlay text</label>
                 <input type="text" id="thumbText" placeholder="2-5 words">
@@ -2357,6 +2370,24 @@ $('reWriteBurmese').onclick = () =>
 $('reReviewBurmese').onclick = () =>
   runScriptStage('review', $('reReviewBurmese'), 'checked');
 
+/* The title, description and hashtags normally arrive with the beats. A
+   script written by hand never makes that call, so the narration was there
+   and the post around it was empty. This writes them from the script that
+   exists -- one call, and it works for a generated script too. */
+$('writeCopy').onclick = async () => {
+  const p = current(); if (!p) return;
+  const btn = $('writeCopy');
+  const was = btn.textContent;
+  btn.disabled = true; btn.textContent = 'writing...';
+  $('copyNote').textContent = '';
+  try {
+    const r = await post(`/api/recap/projects/${p.id}/script/copy`, {});
+    upsert(await request(`/api/recap/projects/${p.id}`));
+    $('copyNote').textContent = `written with ${r.model} - ${r.hashtags} hashtags`;
+  } catch (e) { showError($('stepErr'), e.message); }
+  finally { btn.disabled = false; btn.textContent = was; }
+};
+
 $('renderFinal').onclick = () => runStep('final');
 
 $('regenScript').onclick = () => runStep('script');
@@ -2598,6 +2629,15 @@ function thumbShape(p) {
    both, and pixel coordinates would put the text off the edge. */
 const THUMB_DEFAULT = { x: 0.5, y: 0.86 };
 let thumbLayout = { ...THUMB_DEFAULT };
+
+/* Which part of the source picture is kept.
+
+   A 16:9 frame cropped to 9:16 loses most of its width, and the middle is
+   rarely where the subject is -- so the crop is the user's to choose. Held as
+   a focal point in the picture's own coordinates plus a zoom, which survives
+   switching the thumbnail between shapes. */
+const FRAME_DEFAULT = { x: 0.5, y: 0.5, zoom: 1 };
+let thumbFrame = { ...FRAME_DEFAULT };
 let thumbBox = null;          // where the text landed last paint, for hit-testing
 
 function thumbAnchor(c) {
@@ -2618,10 +2658,17 @@ function paintThumb() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, c.width, c.height);
   if (thumbImage) {
-    const scale = Math.max(c.width / thumbImage.width, c.height / thumbImage.height);
+    // cover the frame, then zoom, then slide so the chosen point of the
+    // picture sits in the middle of the frame
+    const cover = Math.max(c.width / thumbImage.width, c.height / thumbImage.height);
+    const scale = cover * (thumbFrame.zoom || 1);
     const iw = thumbImage.width * scale, ih = thumbImage.height * scale;
-    ctx.drawImage(thumbImage, (c.width - iw) / 2, (c.height - ih) / 2, iw, ih);
+    // keep the picture covering the frame however far it is dragged
+    const x = clamp(c.width / 2 - thumbFrame.x * iw, c.width - iw, 0);
+    const y = clamp(c.height / 2 - thumbFrame.y * ih, c.height - ih, 0);
+    ctx.drawImage(thumbImage, x, y, iw, ih);
   }
+  $('thumbZoomVal').textContent = Math.round((thumbFrame.zoom || 1) * 100) + '%';
 
   $('thumbSizeVal').textContent = $('thumbSize').value + '%';
   $('thumbOpacityVal').textContent = $('thumbOpacity').value + '%';
@@ -2686,6 +2733,12 @@ function paintThumb() {
   thumbBox = { x: cx - widest / 2, y: y - block / 2, w: widest, h: block };
 }
 
+function clamp(v, lo, hi) {
+  // lo can exceed hi when the picture is smaller than the frame in one axis;
+  // centring is the only sensible answer then
+  return lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
+}
+
 function roundRect(ctx, x, y, w, h, r) {
   r = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
@@ -2708,31 +2761,52 @@ function roundRect(ctx, x, y, w, h, r) {
     return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
   };
 
+  let panning = false;
+  let from = null;
+
   c.addEventListener('pointerdown', e => {
-    if (!$('thumbText').value.trim()) return;
     const p = at(e);
-    if (thumbBox) {
+    const onText = $('thumbText').value.trim() && thumbBox && (() => {
       const px = p.x * c.width, py = p.y * c.height;
       const pad = c.height * 0.04;      // a forgiving target
-      const inside = px >= thumbBox.x - pad && px <= thumbBox.x + thumbBox.w + pad &&
-                     py >= thumbBox.y - pad && py <= thumbBox.y + thumbBox.h + pad;
-      if (!inside) return;
-    }
-    dragging = true;
+      return px >= thumbBox.x - pad && px <= thumbBox.x + thumbBox.w + pad &&
+             py >= thumbBox.y - pad && py <= thumbBox.y + thumbBox.h + pad;
+    })();
+
     c.setPointerCapture(e.pointerId);
-    $('thumbPos').value = 'free';       // dragging IS choosing free placement
-    thumbLayout = at(e);
+    if (onText) {
+      dragging = true;
+      $('thumbPos').value = 'free';     // dragging IS choosing free placement
+      thumbLayout = p;
+    } else if (thumbImage) {
+      // anywhere else moves the picture behind it
+      panning = true;
+      from = { p, frame: { ...thumbFrame } };
+    }
     paintThumb();
     e.preventDefault();
   });
 
   c.addEventListener('pointermove', e => {
-    if (!dragging) return;
-    thumbLayout = at(e);
+    if (dragging) {
+      thumbLayout = at(e);
+      paintThumb();
+      return;
+    }
+    if (!panning || !from || !thumbImage) return;
+    const p = at(e);
+    const cover = Math.max(c.width / thumbImage.width, c.height / thumbImage.height);
+    const scale = cover * (from.frame.zoom || 1);
+    // a pointer moved across the canvas moves the picture by the same distance
+    thumbFrame = {
+      ...from.frame,
+      x: clamp(from.frame.x - (p.x - from.p.x) * c.width / (thumbImage.width * scale), 0, 1),
+      y: clamp(from.frame.y - (p.y - from.p.y) * c.height / (thumbImage.height * scale), 0, 1),
+    };
     paintThumb();
   });
 
-  const stop = () => { dragging = false; };
+  const stop = () => { dragging = false; panning = false; from = null; };
   c.addEventListener('pointerup', stop);
   c.addEventListener('pointercancel', stop);
 })();
@@ -2751,6 +2825,16 @@ function wrapText(ctx, text, maxWidth) {
 }
 $('thumbText').oninput = paintThumb;
 // every control redraws; the sliders and colours need 'input' to feel live
+$('thumbZoom').oninput = () => {
+  thumbFrame = { ...thumbFrame, zoom: Number($('thumbZoom').value) / 100 };
+  paintThumb();
+};
+$('thumbRecentre').onclick = () => {
+  thumbFrame = { ...FRAME_DEFAULT };
+  $('thumbZoom').value = 100;
+  paintThumb();
+};
+
 ['thumbPos', 'thumbAlign', 'thumbBack', 'thumbColor', 'thumbBackColor',
  'thumbSize', 'thumbOpacity'].forEach(id => {
   $(id).oninput = paintThumb;
@@ -2758,6 +2842,8 @@ $('thumbText').oninput = paintThumb;
 });
 $('thumbReset').onclick = () => {
   thumbLayout = { ...THUMB_DEFAULT };
+  thumbFrame = { ...FRAME_DEFAULT };
+  $('thumbZoom').value = 100;
   $('thumbPos').value = 'bottom';
   $('thumbAlign').value = 'center';
   $('thumbBack').value = 'fade';

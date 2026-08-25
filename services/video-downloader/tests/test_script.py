@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from ytdl.recap import script as script_mod
+from ytdl.recap.script import Beat
 
 
 # ------------------------------------------------------------- chaptering
@@ -517,3 +518,53 @@ def test_plain_lines_are_still_spread_across_the_video():
     assert beats[0].start == 0
     assert beats[-1].end <= 300.0
     assert len({b.start for b in beats}) == 3
+
+
+# ----------------------------------------------- the post, written on its own
+
+def test_the_post_is_written_from_the_script(fake_gemini):
+    """
+    Title, description and hashtags normally arrive with the beats. A script
+    written by hand never makes that call, so they came out empty.
+    """
+    beats = [Beat(index=i, start=i * 10.0, end=i * 10.0 + 6, my=f"မြန်မာ line {i}")
+             for i in range(3)]
+    client = fake_gemini([{
+        "title_en": "A Title", "title_my": "ခေါင်းစဉ်",
+        "description_en": "what happens", "description_my": "ဖြစ်ရပ်",
+        "hashtags": ["one", "#two"], "hook_en": "listen", "hook_my": "နားထောင်",
+        "thumbnail_text_en": "Look", "thumbnail_text_my": "ကြည့်",
+    }])
+    out = script_mod.write_copy(client, beats, title="t")
+    assert out["title"]["my"] == "ခေါင်းစဉ်"
+    assert out["hashtags"] == ["one", "two"]        # the '#' is stripped
+    assert out["thumbnail_text"]["en"] == "Look"
+
+
+def test_the_post_is_given_the_script_not_the_transcript(fake_gemini):
+    beats = [Beat(index=0, start=0, end=6, my="မြန်မာ တစ်ကြောင်း")]
+    client = fake_gemini([{}])
+    script_mod.write_copy(client, beats)
+    prompt = client.prompts[0]
+    assert "မြန်မာ တစ်ကြောင်း" in prompt
+    assert "THE NARRATION" in prompt
+
+
+def test_no_script_means_no_call(fake_gemini):
+    client = fake_gemini([])
+    assert script_mod.write_copy(client, []) == {}
+    assert client.calls == 0
+
+
+def test_a_failed_call_leaves_the_post_alone(fake_gemini, gemini_error):
+    beats = [Beat(index=0, start=0, end=6, my="x")]
+    client = fake_gemini([gemini_error("down")])
+    assert script_mod.write_copy(client, beats) == {}
+
+
+def test_the_post_asks_for_a_modest_answer(fake_gemini):
+    """It is four short fields; it does not need the budget the script does."""
+    beats = [Beat(index=0, start=0, end=6, my="x")]
+    client = fake_gemini([{}])
+    script_mod.write_copy(client, beats)
+    assert client.caps[0] and client.caps[0] <= 2048

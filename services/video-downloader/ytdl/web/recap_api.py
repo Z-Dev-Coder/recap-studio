@@ -863,6 +863,58 @@ def run_script_stage(pid: str, stage: str, req: StepRequest) -> dict:
     return {"ok": True, "stage": stage, "model": spec, "lang": lang} | report
 
 
+@router.post("/projects/{pid}/script/copy")
+def write_post_copy(pid: str, req: StepRequest) -> dict:
+    """
+    Write the title, description and hashtags from the script that exists.
+
+    They normally arrive with the beats. A script written by hand never makes
+    that call, so the narration was there and the post around it was empty.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    if not project.beats:
+        raise HTTPException(400, "write or paste a script first")
+
+    from ..recap import llm
+    from ..recap import story as story_mod
+
+    settings = load_settings()
+    key = req.api_key or settings.get("gemini_key", "")
+    keys = {"gemini": key, "groq": settings.get("groq_key", "")}
+    assigned = settings.get("stage_models") or {}
+    # the post follows the script, so it uses whatever writes the script
+    spec = assigned.get("write") or settings.get("gemini_model", "") or _auto_model(key)
+    client = llm.build(spec, keys=keys, ollama_url=settings.get("ollama_url", ""))
+
+    beats = [script_mod.Beat(**{k: v for k, v in b.items()
+                                if k in ("index", "start", "end", "en", "my",
+                                         "score", "why")})
+             for b in project.beats]
+    story = story_mod.from_dict(project.story or {}, project.duration or 0.0)
+
+    try:
+        out = script_mod.write_copy(
+            client, beats, title=project.title,
+            treatment=project.content_type or "recap", story=story or None,
+        )
+    except llm.LLMError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not out:
+        raise HTTPException(400, "nothing came back -- try another model for this stage")
+
+    project.titles = out["title"]
+    project.description = out["description"]
+    project.hashtags = out["hashtags"]
+    project.hook = out["hook"]
+    project.thumbnail_text = out["thumbnail_text"]
+    pipeline.write_text_assets(project)
+    project.save()
+    push(project)
+    return {"ok": True, "model": spec, "hashtags": len(out["hashtags"])}
+
+
 @router.post("/projects/{pid}/script/extend")
 def extend_script(pid: str, req: ExtendRequest) -> dict:
     """Ask for a fuller script, so the recap can run as long as it needs to."""

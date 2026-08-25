@@ -893,3 +893,94 @@ def respread(rows: list[dict], duration: float) -> list[Beat]:
             why=(row.get("why") or "").strip(),
         ))
     return beats
+
+
+# ------------------------------------------------------- the post, on its own
+
+_COPY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title_en": {"type": "string"},
+        "title_my": {"type": "string"},
+        "description_en": {"type": "string"},
+        "description_my": {"type": "string"},
+        "hashtags": {"type": "array", "items": {"type": "string"}},
+        "hook_en": {"type": "string"},
+        "hook_my": {"type": "string"},
+        "thumbnail_text_en": {"type": "string"},
+        "thumbnail_text_my": {"type": "string"},
+    },
+    "required": ["title_en", "title_my", "description_en", "description_my",
+                 "hashtags", "hook_en", "hook_my",
+                 "thumbnail_text_en", "thumbnail_text_my"],
+}
+
+
+def write_copy(
+    client,
+    beats: list[Beat],
+    *,
+    title: str = "",
+    treatment: str = "recap",
+    story=None,
+    temperature: float = 0.7,
+) -> dict:
+    """
+    Write the title, description, hashtags and hook from a script that exists.
+
+    Normally these come back with the beats, in the call that picks them. A
+    script written by hand never makes that call, so the post came out empty --
+    the narration was there and everything around it was blank.
+
+    Kept small on purpose: it is given the script, not the transcript, because
+    the script is what the post is describing.
+    """
+    lines = [b for b in beats if (b.my or b.en).strip()]
+    if not lines:
+        return {}
+
+    style = profile_for(treatment)
+    body = "\n".join("{}. {}".format(i + 1, (b.my or b.en).strip())
+                     for i, b in enumerate(lines))
+    if len(body) > 6000:
+        body = body[:6000] + "\n..."
+
+    prompt = "\n\n".join(x for x in [
+        "Below is the finished narration for {}".format(style.brief)
+        + (' of a video titled "{}"'.format(title) if title else "") + ".",
+        story.overview_block() if story else "",
+        "THE NARRATION\n" + body,
+        """WRITE THE POST THAT GOES WITH IT
+- "title_en" / "title_my": a scroll-stopping title, under 80 characters.
+- "description_en" / "description_my": 2-4 short paragraphs. Open with a hook,
+  say what the viewer gets, close with a call to action. No hashtags in here.
+  The Burmese must be as full as the English -- written as Burmese, not
+  translated from it.
+- "hashtags": 12-18 tags WITHOUT the "#", most specific first, mixing broad
+  reach tags with niche ones. Latin script only.
+- "hook_en" / "hook_my": one spoken sentence to open with, about THIS video's
+  actual content -- never a generic "you won't believe this".
+- "thumbnail_text_en" / "thumbnail_text_my": 2-5 words for a thumbnail
+  overlay, short enough to read at a glance.
+
+Describe what the narration above actually covers. Do not invent anything that
+is not in it.""",
+    ] if x and x.strip())
+
+    try:
+        data = client.generate_json(prompt, _COPY_SCHEMA, temperature, max_tokens=2048)
+    except Exception:      # noqa: BLE001 - any provider's failure
+        return {}
+
+    return {
+        "title": {"en": (data.get("title_en") or "").strip(),
+                  "my": (data.get("title_my") or "").strip()},
+        "description": {"en": (data.get("description_en") or "").strip(),
+                        "my": (data.get("description_my") or "").strip()},
+        "hashtags": [h.lstrip("#").strip()
+                     for h in (data.get("hashtags") or []) if str(h).strip()],
+        "hook": {"en": (data.get("hook_en") or "").strip(),
+                 "my": (data.get("hook_my") or "").strip()},
+        "thumbnail_text": {"en": (data.get("thumbnail_text_en") or "").strip(),
+                           "my": (data.get("thumbnail_text_my") or "").strip()},
+    }
