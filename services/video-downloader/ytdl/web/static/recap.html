@@ -405,6 +405,17 @@
                   </select>
                 </div>
               </div>
+              <div class="row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+                <div class="grow">
+                  <div style="font-size:13px">Where the caption text comes from</div>
+                  <div class="tiny" id="capSourceNote">built from the script, retimed onto the cut</div>
+                </div>
+                <button class="sm" id="pickCapFile">Use my own SRT</button>
+                <button class="sm ghost danger hide" id="clearCapFile">Back to the script</button>
+              </div>
+              <input type="file" id="capFile" accept=".srt,.vtt,text/plain" class="hide">
+              <div id="capErr"></div>
+
               <div class="tiny" style="margin-top:8px">
                 Any change here needs the cut rebuilding. Burmese burns in
                 correctly &mdash; the subtitle renderer shapes Myanmar script
@@ -1508,6 +1519,10 @@ function renderProject() {
     $('wsContentType').value = p.content_type || 'recap';
   }
   $('burnCaps').checked = !!p.burn_captions;
+  $('clearCapFile').classList.toggle('hide', !p.caption_file);
+  if (p.caption_file && !$('capSourceNote').textContent.includes('entries')) {
+    $('capSourceNote').textContent = 'your own file: ' + escapeHtml(p.caption_file);
+  }
   $('capStyle').value = p.caption_style || 'clean';
   $('capLang').value = p.caption_lang || '';
   $('capOpts').classList.toggle('hide', !p.burn_captions);
@@ -2393,6 +2408,38 @@ $('writeCopy').onclick = async () => {
 /* Hearing the mix before committing to the whole render. The opening is the
    piece worth checking: it is where the captions, the voice and the original
    audio first meet. */
+/* A subtitle file of your own, burned in as it stands. The generated one is
+   built from the script and retimed onto the cut; supplying a file is how you
+   take over when the wording or the timing needs to be yours. */
+$('pickCapFile').onclick = () => { $('capFile').value = ''; $('capFile').click(); };
+
+$('capFile').onchange = () => {
+  const p = current(); const file = $('capFile').files[0];
+  if (!p || !file) return;
+  showError($('capErr'), '');
+  const reader = new FileReader();
+  reader.onerror = () => showError($('capErr'), 'could not read that file');
+  reader.onload = async () => {
+    try {
+      const r = await post(`/api/recap/projects/${p.id}/captions/file`,
+                           { text: String(reader.result || ''), filename: file.name });
+      $('capSourceNote').textContent =
+        `${escapeHtml(file.name)} - ${r.entries} entries, burned in as written`;
+      upsert(await request(`/api/recap/projects/${p.id}`));
+    } catch (e) { showError($('capErr'), e.message); }
+  };
+  reader.readAsText(file, 'utf-8');
+};
+
+$('clearCapFile').onclick = async () => {
+  const p = current(); if (!p) return;
+  try {
+    await request(`/api/recap/projects/${p.id}/captions/file`, { method: 'DELETE' });
+    $('capSourceNote').textContent = 'built from the script, retimed onto the cut';
+    upsert(await request(`/api/recap/projects/${p.id}`));
+  } catch (e) { showError($('capErr'), e.message); }
+};
+
 $('previewFinal').onclick = async () => {
   const p = current(); if (!p) return;
   const btn = $('previewFinal');

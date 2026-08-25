@@ -340,9 +340,15 @@ def run_video(project: Project, on_progress=None, cancel=None) -> None:
             secs = float(m.get("seconds") or 0)
             if secs > spoken.get(i, 0):
                 spoken[i] = secs        # the longest language wins the space
+        # Played faster, a line finishes sooner and needs less footage. Fitting
+        # to the spoken length regardless left the picture running on after the
+        # voice had stopped -- a pause before every line, growing with the
+        # speed. The speed is part of how long the line actually takes.
+        speed = max(0.5, min(2.0, float(project.narration_speed or 1.0)))
         if spoken:
             wants = [
-                (spoken.get(int(b.get("index", i)), 0) or 0) + VOICE_LEAD + VOICE_TAIL
+                (spoken.get(int(b.get("index", i)), 0) or 0) / speed
+                + VOICE_LEAD + VOICE_TAIL
                 if spoken.get(int(b.get("index", i))) else 0.0
                 for i, b in enumerate(project.beats)
             ]
@@ -404,7 +410,14 @@ def _reburn_captions(project: Project, cancel=None) -> None:
     captioned.unlink(missing_ok=True)
     if not project.burn_captions:
         return
+    # A file the user brought wins over the one generated from the script:
+    # they supplied it precisely because the generated one was not what they
+    # wanted burned in.
     srt = project.dir / f"recap_script_{project.caption_lang or project.voice_lang}.srt"
+    if project.caption_file:
+        supplied = project.dir / project.caption_file
+        if supplied.exists():
+            srt = supplied
     if not srt.exists():
         return
     try:

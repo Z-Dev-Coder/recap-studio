@@ -100,6 +100,9 @@ class Project:
     narration_speed: float = 1.0
     # seconds dropped from the front and back of the download -- the logo and
     # the end card. Kept for display; the trim itself is applied to the file.
+    # a subtitle file the user supplied, used for the burned-in captions
+    # instead of the one generated from the script
+    caption_file: str = ""
     trim_start: float = 0.0
     trim_end: float = 0.0
     # What the video turned out to be about: characters, events, causes.
@@ -209,6 +212,7 @@ class Project:
             "fit_to_voice": self.fit_to_voice,
             "content_type": self.content_type,
             "narration_speed": self.narration_speed,
+            "caption_file": self.caption_file,
             "trim_start": self.trim_start,
             "trim_end": self.trim_end,
             "voice_reference": self.voice_reference,
@@ -298,6 +302,7 @@ class Project:
             # "treatment" was the name this shipped under for a few hours
             content_type=data.get("content_type") or data.get("treatment") or "recap",
             narration_speed=float(data.get("narration_speed", 1.0) or 1.0),
+            caption_file=data.get("caption_file", "") or "",
             trim_start=float(data.get("trim_start", 0) or 0),
             trim_end=float(data.get("trim_end", 0) or 0),
             story=data.get("story") or {},

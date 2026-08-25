@@ -349,6 +349,11 @@ class SettingsRequest(BaseModel):
     use_vision: bool | None = None
 
 
+class CaptionFileRequest(BaseModel):
+    text: str
+    filename: str = "captions.srt"
+
+
 class TrimRequest(BaseModel):
     start: float = 0.0        # seconds to drop from the front
     end: float = 0.0          # seconds to drop from the end
@@ -579,8 +584,18 @@ def edit(pid: str, req: EditRequest) -> dict:
     beats_changed = "beats" in patch
     mode_changed = "mode" in patch and patch["mode"] != project.mode
 
+    speed_changed = ("narration_speed" in patch
+                     and abs(float(patch["narration_speed"] or 1)
+                             - float(project.narration_speed or 1)) > 0.01)
+
     for field, value in patch.items():
         setattr(project, field, value)
+
+    # The cut is fitted to how long the narration takes, and speed changes
+    # that, so the footage no longer matches the audio it was cut for.
+    if speed_changed and project.timeline:
+        project.mark("video", "idle", message="speed changed - rebuild the cut")
+        project.mark("final", "idle", message="speed changed - render again")
 
     if beats_changed or mode_changed:
         project.timeline = []
@@ -1252,6 +1267,52 @@ def regenerate_line(pid: str, index: int, lang: str = "") -> dict:
     push(project)
     return {"ok": True, "index": index, "lang": lang,
             "seconds": fresh.get("seconds"), "file": fresh["file"]}
+
+
+@router.post("/projects/{pid}/captions/file")
+def upload_captions(pid: str, req: CaptionFileRequest) -> dict:
+    """
+    Use a subtitle file of your own for the burned-in captions.
+
+    The captions are normally built from the script, retimed onto the cut. A
+    file supplied here is burned in as it stands, which is what you want when
+    the wording or the timing needs to be yours.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+
+    text = (req.text or "").strip()
+    if not text:
+        raise HTTPException(400, "that file is empty")
+    if "-->" not in text:
+        raise HTTPException(
+            400, "that does not look like a subtitle file -- it has no timings. "
+                 "Paste plain lines into the script instead.")
+
+    name = "captions_supplied.srt"
+    (project.dir / name).write_text(text, encoding="utf-8")
+    project.caption_file = name
+    project.burn_captions = True
+    project.mark("video", "idle", message="captions changed - rebuild the cut")
+    project.mark("final", "idle", message="captions changed - render again")
+    project.save()
+    push(project)
+    return {"ok": True, "file": name, "entries": text.count("-->")}
+
+
+@router.delete("/projects/{pid}/captions/file")
+def clear_captions(pid: str) -> dict:
+    """Go back to captions built from the script."""
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    (project.dir / "captions_supplied.srt").unlink(missing_ok=True)
+    project.caption_file = ""
+    project.mark("video", "idle", message="captions changed - rebuild the cut")
+    project.save()
+    push(project)
+    return {"ok": True}
 
 
 @router.post("/projects/{pid}/final/preview")

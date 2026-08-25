@@ -113,3 +113,52 @@ def test_no_narration_is_reported_not_crashed(tmp_path, stub_media):
     with pytest.raises(pipeline.StepError) as err:
         pipeline.run_preview(p)
     assert "narration" in str(err.value)
+
+
+# ------------------------------------------------------------ playback speed
+
+def test_a_faster_voice_needs_less_footage():
+    """
+    Played at 1.5x a line finishes sooner. Fitting the cut to the spoken length
+    regardless left the picture running on after the voice stopped -- a pause
+    before every line, growing with the speed.
+    """
+    from ytdl.recap.pipeline import VOICE_LEAD, VOICE_TAIL
+
+    spoken = 9.0
+    for speed, expected in ((1.0, 9.0), (1.5, 6.0), (2.0, 4.5)):
+        want = spoken / speed + VOICE_LEAD + VOICE_TAIL
+        assert abs(want - (expected + VOICE_LEAD + VOICE_TAIL)) < 0.01
+
+
+def test_the_clip_always_covers_the_line_however_long():
+    """
+    A line longer than the gap to its neighbours used to be truncated, so the
+    voice overran its clip and drifted into the next one.
+    """
+    from ytdl.recap.video import plan_fitted
+
+    beats = [{"start": 0.0, "end": 5.0}, {"start": 10.0, "end": 15.0},
+             {"start": 20.0, "end": 25.0}]
+    wants = [4.0, 30.0, 4.0]          # the middle line is far too long for its gap
+    plan = plan_fitted(beats, wants, 120.0)
+    for (a, b), want in zip(plan, wants):
+        assert b - a + 0.05 >= want, f"clip {b - a:.1f}s is short of {want}s"
+
+
+def test_a_fitted_clip_stays_inside_the_video():
+    from ytdl.recap.video import plan_fitted
+
+    beats = [{"start": 0.0, "end": 2.0}, {"start": 55.0, "end": 58.0}]
+    plan = plan_fitted(beats, [40.0, 40.0], 60.0)
+    for a, b in plan:
+        assert a >= 0 and b <= 60.0 + 0.01
+
+
+def test_clips_stay_in_order():
+    from ytdl.recap.video import plan_fitted
+
+    beats = [{"start": i * 20.0, "end": i * 20.0 + 4} for i in range(4)]
+    plan = plan_fitted(beats, [25.0] * 4, 200.0)
+    starts = [a for a, _b in plan]
+    assert starts == sorted(starts)

@@ -68,11 +68,24 @@ def plan_fitted(beats: list[dict], wants: list[float],
     for beat, want, (lo, hi) in zip(beats, wants, limits):
         start, end = float(beat["start"]), float(beat["end"])
         want = max(MIN_CLIP, float(want or 0))
-        room = hi - lo
-        if want >= room:
+        middle = (start + end) / 2
+
+        if want >= hi - lo:
+            # The line is longer than the gap between this beat's neighbours.
+            # Truncating here is what let the voice overrun its clip and drift
+            # into the next one -- a second and a half on one line, eleven
+            # seconds across a whole recap. The clips are concatenated, so
+            # taking footage a neighbour also takes costs a moment of repeated
+            # picture; the voice staying on its own clip is worth more than
+            # that. Only the video's own ends are hard limits.
+            lo = max(0.0, middle - want / 2)
+            hi = lo + want
+            if duration > 0 and hi > duration:
+                hi = duration
+                lo = max(0.0, duration - want)
             out.append((lo, hi))
             continue
-        middle = (start + end) / 2
+
         a = middle - want / 2
         b = a + want
         if a < lo:
