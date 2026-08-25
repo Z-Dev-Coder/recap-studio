@@ -22,6 +22,7 @@ from .media import (
     Cancelled,
     MediaError,
     burn_subtitles,
+    cut,
     frame_at,
     have_ffmpeg,
     mux_narration,

@@ -1271,6 +1271,12 @@ def preview_final(pid: str, seconds: float = 25.0) -> dict:
         raise HTTPException(400, str(exc)) from exc
     except Cancelled:
         raise HTTPException(400, "stopped") from None
+    except Exception as exc:      # noqa: BLE001
+        # a 500 tells the user nothing they can act on, and hides the reason in
+        # a log they never see
+        raise HTTPException(
+            400, "the preview could not be rendered: {}: {}".format(
+                exc.__class__.__name__, exc)) from exc
     return {"ok": True, "file": dest.name, "seconds": seconds}
 
 
