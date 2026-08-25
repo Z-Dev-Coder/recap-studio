@@ -150,3 +150,79 @@ def test_preset_models_are_real_specs():
                 provider, model = llm.split_spec(spec)
                 assert provider in llm.PROVIDERS
                 assert model
+
+
+# --------------------------------------------------- reasoning-model answers
+
+class GroqReply:
+    """A Groq response, shaped the way the real one is."""
+
+    status_code = 200
+    headers: dict = {}
+
+    def __init__(self, content="", reasoning="", finish="stop"):
+        self._body = {"choices": [{"finish_reason": finish, "message": {
+            "role": "assistant", "content": content, "reasoning": reasoning}}]}
+        self.text = ""
+
+    def json(self):
+        return self._body
+
+
+def test_a_normal_answer_is_used(monkeypatch):
+    monkeypatch.setattr(llm.requests, "post",
+                        lambda *a, **k: GroqReply(content='{"a": 1}'))
+    assert llm.GroqBackend("m", api_key="k").generate_json("p", {}) == {"a": 1}
+
+
+def test_json_is_salvaged_from_the_thinking_when_the_answer_is_empty(monkeypatch):
+    """
+    gpt-oss splits its output between reasoning and answering. When the answer
+    comes back empty the JSON is sometimes in the reasoning anyway, and using
+    it is better than failing the step.
+    """
+    monkeypatch.setattr(llm.requests, "post", lambda *a, **k: GroqReply(
+        content="", reasoning='I should answer with {"a": 2}'))
+    assert llm.GroqBackend("m", api_key="k").generate_json("p", {}) == {"a": 2}
+
+
+def test_running_out_of_room_says_so(monkeypatch):
+    monkeypatch.setattr(llm.requests, "post", lambda *a, **k: GroqReply(
+        content="", reasoning="thinking...", finish="length"))
+    with pytest.raises(llm.LLMError) as err:
+        llm.GroqBackend("openai/gpt-oss-120b", api_key="k").generate_json("p", {})
+    assert "ran out of room" in str(err.value)
+
+
+def test_an_empty_answer_suggests_what_to_do(monkeypatch):
+    monkeypatch.setattr(llm.requests, "post",
+                        lambda *a, **k: GroqReply(content="", reasoning=""))
+    with pytest.raises(llm.LLMError) as err:
+        llm.GroqBackend("m", api_key="k").generate_json("p", {})
+    assert "another model on this stage" in str(err.value)
+
+
+def test_the_answer_is_given_room(monkeypatch):
+    sent = {}
+
+    def post(url, json=None, **k):
+        sent.update(json or {})
+        return GroqReply(content='{"a": 1}')
+
+    monkeypatch.setattr(llm.requests, "post", post)
+    llm.GroqBackend("openai/gpt-oss-120b", api_key="k").generate_json("p", {})
+    assert sent["max_completion_tokens"] == llm.MAX_COMPLETION_TOKENS
+    assert sent["reasoning_effort"] == "low"      # spend it answering
+
+
+def test_a_model_without_that_knob_is_not_sent_it(monkeypatch):
+    sent = {}
+
+    def post(url, json=None, **k):
+        sent.clear()
+        sent.update(json or {})
+        return GroqReply(content='{"a": 1}')
+
+    monkeypatch.setattr(llm.requests, "post", post)
+    llm.GroqBackend("qwen/qwen3.6-27b", api_key="k").generate_json("p", {})
+    assert "reasoning_effort" not in sent

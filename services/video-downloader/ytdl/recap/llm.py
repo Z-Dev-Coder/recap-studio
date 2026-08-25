@@ -46,6 +46,11 @@ PROVIDERS = ("gemini", "ollama", "groq")
 RATE_RETRIES = 2
 MAX_RATE_WAIT = 75.0
 
+# A full recap package -- thirteen beats in two languages, plus the title,
+# description and tags -- runs to a few thousand tokens. Generous, because
+# running out mid-answer produces nothing usable at all.
+MAX_COMPLETION_TOKENS = 16384
+
 # The stages, in the order they run, with what each one is for. Named here so
 # the settings page and the pipeline cannot disagree about what exists.
 STAGES = (
@@ -328,7 +333,15 @@ class GroqBackend:
             "messages": [{"role": "user", "content": prompt + _schema_note(schema)}],
             "temperature": temperature,
             "response_format": {"type": "json_object"},
+            # Reasoning models split their output between thinking and
+            # answering, out of one budget. Left to the default, a long recap
+            # package can exhaust it while still thinking and come back with an
+            # empty answer -- which is what "the model returned nothing" was.
+            "max_completion_tokens": MAX_COMPLETION_TOKENS,
         }
+        if "gpt-oss" in self.model:
+            # spend that budget on the answer rather than on the thinking
+            body["reasoning_effort"] = "low"
         headers = {"Authorization": f"Bearer {self.api_key}",
                    "Content-Type": "application/json"}
 
@@ -356,6 +369,9 @@ class GroqBackend:
                     break
                 time.sleep(wait + 0.5)
 
+            if resp.status_code == 400 and "reasoning_effort" in resp.text:
+                body.pop("reasoning_effort", None)
+                continue                      # same model, without that knob
             if not (resp.status_code == 400 and enforce_json
                     and "json" in resp.text.lower()):
                 break
@@ -368,10 +384,35 @@ class GroqBackend:
             raise LLMError(f"Groq refused the request ({resp.status_code}): {resp.text[:200]}")
 
         try:
-            choice = resp.json()["choices"][0]["message"]["content"]
+            data = resp.json()
+            choice = data["choices"][0]
+            message = choice.get("message") or {}
         except (KeyError, IndexError, ValueError) as exc:
             raise LLMError(f"Groq returned something unexpected: {exc}") from exc
-        return _json_from(choice)
+
+        text = (message.get("content") or "").strip()
+        if not text:
+            # The answer is empty, which for a reasoning model usually means the
+            # budget went on thinking. Sometimes the JSON is in there anyway, so
+            # look before giving up.
+            thinking = (message.get("reasoning") or "").strip()
+            if thinking:
+                try:
+                    return _json_from(thinking)
+                except LLMError:
+                    pass
+            if choice.get("finish_reason") == "length":
+                raise LLMError(
+                    "{} ran out of room before it finished answering. Try a "
+                    "shorter video, or put this stage on another model."
+                    .format(self.model)
+                )
+            raise LLMError(
+                "{} returned an empty answer. If it is a reasoning model it "
+                "may have spent its budget thinking; another model on this "
+                "stage will usually work.".format(self.model)
+            )
+        return _json_from(text)
 
 
 def build(spec: str, keys: dict | None = None, ollama_url: str = "") -> object:
