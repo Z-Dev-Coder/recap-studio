@@ -209,10 +209,16 @@ def _windows_block(
 
         inside = cues_in(cues, ws, we)
         body = " ".join(c.text for c in inside).strip()
-        if len(body) > 1400:
-            body = body[:1400] + " ..."
+        # The events above were read FROM this speech, so repeating it in full
+        # sends the transcript twice for one script -- and on a metered
+        # tokens-per-minute budget that is half a call wasted. Where the
+        # reading worked, an excerpt is enough to quote from; where it did
+        # not, the transcript is all there is.
+        cap = 400 if detail else 1400
+        if len(body) > cap:
+            body = body[:cap] + " ..."
         if body:
-            parts.append("What is said:\n" + body)
+            parts.append(("Some of what is said:\n" if detail else "What is said:\n") + body)
         elif not detail:
             parts.append("(no speech in this stretch)")
 
@@ -730,7 +736,9 @@ def generate(
         context=context, frame_note=frame_note, story=story or None,
         treatment=treatment,
     )
-    data = picker.generate_json(prompt, _SCHEMA, temperature, images=resend)
+    # the biggest answer: every beat plus the whole social package
+    data = picker.generate_json(prompt, _SCHEMA, temperature, images=resend,
+                                max_tokens=6144)
     beats = repair_beats(data.get("beats") or [], windows, clip_len, duration)
 
     # the clip a line is spoken over is the only length that matters

@@ -39,11 +39,14 @@ class FakeGemini:
         self.prompts: list[str] = []
         self.images: list[int] = []
         self.schemas: list[dict] = []
+        self.caps: list[int] = []
 
-    def generate_json(self, prompt, schema, temperature=0.7, images=None):
+    def generate_json(self, prompt, schema, temperature=0.7, images=None,
+                      cancel=None, max_tokens=0):
         self.prompts.append(prompt)
         self.images.append(len(images or []))
         self.schemas.append(schema)
+        self.caps.append(max_tokens)
         if not self.replies:
             return {}
         reply = self.replies.pop(0)

@@ -226,3 +226,76 @@ def test_a_model_without_that_knob_is_not_sent_it(monkeypatch):
     monkeypatch.setattr(llm.requests, "post", post)
     llm.GroqBackend("qwen/qwen3.6-27b", api_key="k").generate_json("p", {})
     assert "reasoning_effort" not in sent
+
+
+# ------------------------------------------------- the budget, through Groq
+
+def test_groq_waits_rather_than_earning_a_429(monkeypatch):
+    """
+    The whole point: a request that will not fit must not be sent. Before this,
+    the pipeline learned the limit by breaking it.
+    """
+    from ytdl.recap import budget as bmod
+
+    slept = []
+    monkeypatch.setattr(llm.time, "sleep", lambda s: slept.append(s))
+    monkeypatch.setattr(llm, "BUDGET", bmod.TokenBudget())
+    llm.BUDGET.declare("groq:m", 8000)
+    llm.BUDGET.spend("groq:m", 7075)
+
+    monkeypatch.setattr(llm.requests, "post",
+                        lambda *a, **k: GroqReply(content='{"a": 1}'))
+    llm.GroqBackend("m", api_key="k").generate_json("p" * 400, {}, max_tokens=1024)
+    assert slept, "it sent a request that could not fit"
+
+
+def test_a_wait_too_long_to_be_worth_it_says_so(monkeypatch):
+    from ytdl.recap import budget as bmod
+
+    monkeypatch.setattr(llm.time, "sleep", lambda s: None)
+    monkeypatch.setattr(llm, "BUDGET", bmod.TokenBudget())
+    monkeypatch.setattr(llm.requests, "post",
+                        lambda *a, **k: GroqReply(content='{"a": 1}'))
+    llm.BUDGET.declare("groq:m", 8000)
+
+    with pytest.raises(llm.LLMError) as err:
+        # more than a whole minute's allowance: no amount of waiting helps
+        llm.GroqBackend("m", api_key="k").generate_json("p" * 200, {}, max_tokens=8192)
+    assert "another provider" in str(err.value)
+
+
+def test_what_it_really_cost_is_recorded(monkeypatch):
+    from ytdl.recap import budget as bmod
+
+    class Priced(GroqReply):
+        def json(self):
+            body = super().json()
+            body["usage"] = {"total_tokens": 3210}
+            return body
+
+    monkeypatch.setattr(llm, "BUDGET", bmod.TokenBudget())
+    llm.BUDGET.declare("groq:m", 8000)
+    monkeypatch.setattr(llm.requests, "post",
+                        lambda *a, **k: Priced(content='{"a": 1}'))
+    llm.GroqBackend("m", api_key="k").generate_json("p", {})
+    assert llm.BUDGET.snapshot("groq:m")["used_60s"] == 3210
+
+
+def test_the_answer_size_is_the_caller_s_to_choose(monkeypatch):
+    sent = {}
+
+    def post(url, json=None, **k):
+        sent.clear(); sent.update(json or {})
+        return GroqReply(content='{"a": 1}')
+
+    monkeypatch.setattr(llm.requests, "post", post)
+    llm.GroqBackend("m", api_key="k").generate_json("p", {}, max_tokens=1024)
+    assert sent["max_completion_tokens"] == 1024
+
+
+def test_the_default_answer_size_is_not_a_whole_minute():
+    """
+    A flat sixteen thousand reserved twice the minute's entire allowance for
+    one call, which is why it had to be sized to the task instead.
+    """
+    assert llm.MAX_COMPLETION_TOKENS <= 8000

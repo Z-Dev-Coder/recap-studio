@@ -312,7 +312,9 @@ def analyse(
     )
 
     try:
-        data = client.generate_json(prompt, _SCHEMA, temperature, images=frames)
+        # structured notes, not prose: a few hundred events at most
+        data = client.generate_json(prompt, _SCHEMA, temperature, images=frames,
+                                    max_tokens=3072)
     except GeminiError:
         return Story()
 

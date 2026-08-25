@@ -202,7 +202,9 @@ def write(
     prompt = "\n\n".join(b for b in blocks if b and b.strip())
 
     try:
-        data = client.generate_json(prompt, _WRITE_SCHEMA, temperature)
+        # one Burmese line per beat, and Burmese costs more tokens per character
+        data = client.generate_json(prompt, _WRITE_SCHEMA, temperature,
+                                    max_tokens=4096)
     except GeminiError:
         return 0
 
@@ -312,7 +314,9 @@ wrong, and when you do, change as little as possible. List what was wrong in
     ] if x and x.strip())
 
     try:
-        data = client.generate_json(prompt, _REVIEW_SCHEMA, temperature)
+        # only the lines that were wrong come back rewritten
+        data = client.generate_json(prompt, _REVIEW_SCHEMA, temperature,
+                                    max_tokens=3072)
     except GeminiError:
         return {"checked": 0, "revised": 0, "issues": []}
 

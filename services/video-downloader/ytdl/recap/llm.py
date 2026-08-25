@@ -33,6 +33,7 @@ import time
 
 import requests
 
+from .budget import BUDGET, estimate_tokens
 from .gemini import Gemini, GeminiError
 
 OLLAMA_URL = "http://127.0.0.1:11434"
@@ -46,10 +47,12 @@ PROVIDERS = ("gemini", "ollama", "groq")
 RATE_RETRIES = 2
 MAX_RATE_WAIT = 75.0
 
-# A full recap package -- thirteen beats in two languages, plus the title,
-# description and tags -- runs to a few thousand tokens. Generous, because
-# running out mid-answer produces nothing usable at all.
-MAX_COMPLETION_TOKENS = 16384
+# What an answer is allowed to cost. Output counts against the same
+# tokens-per-minute budget as input, so a flat sixteen thousand was reserving
+# twice the whole minute's allowance for one call. Sized to the task instead:
+# a recap package is a few thousand tokens, a review is a handful of lines.
+MAX_COMPLETION_TOKENS = 4096
+BIG_ANSWER_TOKENS = 8192
 
 # The stages, in the order they run, with what each one is for. Named here so
 # the settings page and the pipeline cannot disagree about what exists.
@@ -221,7 +224,8 @@ class GeminiBackend:
         self.model = model
         self.client = Gemini(api_key, model, timeout=timeout)
 
-    def generate_json(self, prompt, schema, temperature=0.7, images=None, cancel=None):
+    def generate_json(self, prompt, schema, temperature=0.7, images=None,
+                      cancel=None, max_tokens=0):
         try:
             return self.client.generate_json(prompt, schema, temperature,
                                              images=images, cancel=cancel)
@@ -245,13 +249,15 @@ class OllamaBackend:
         self.url = (url or OLLAMA_URL).rstrip("/")
         self.timeout = timeout
 
-    def generate_json(self, prompt, schema, temperature=0.7, images=None, cancel=None):
+    def generate_json(self, prompt, schema, temperature=0.7, images=None,
+                      cancel=None, max_tokens=0):
         body = {
             "model": self.model,
             "prompt": prompt + _schema_note(schema),
             "stream": False,
             "format": "json",
-            "options": {"temperature": temperature},
+            "options": {"temperature": temperature,
+                        "num_predict": max_tokens or MAX_COMPLETION_TOKENS},
         }
         if images:
             body["images"] = [base64.b64encode(blob).decode("ascii")
@@ -325,9 +331,28 @@ class GroqBackend:
         self.api_key = (api_key or "").strip()
         self.timeout = timeout
 
-    def generate_json(self, prompt, schema, temperature=0.7, images=None, cancel=None):
+    def generate_json(self, prompt, schema, temperature=0.7, images=None,
+                      cancel=None, max_tokens=0):
         if not self.api_key:
             raise LLMError("Groq needs an API key. Add one in Settings.")
+
+        # Wait for room before asking, rather than finding out from a 429. The
+        # cost counted is input plus whatever the answer is allowed to be,
+        # because the provider charges both against the same minute.
+        budget_key = f"groq:{self.model}"
+        want = estimate_tokens(prompt) + (max_tokens or MAX_COMPLETION_TOKENS)
+        wait = BUDGET.check(budget_key, want)
+        if wait > 0:
+            if wait == float("inf") or wait > MAX_RATE_WAIT:
+                raise LLMError(
+                    "This request needs about {:,} tokens, which does not fit "
+                    "{}'s budget of {:,} a minute. Put this stage on another "
+                    "provider, or use a shorter video."
+                    .format(want, self.model,
+                            BUDGET.snapshot(budget_key)["limit"] or 0)
+                )
+            if cancel is None or not cancel.is_set():
+                time.sleep(wait)
         body = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt + _schema_note(schema)}],
@@ -337,7 +362,7 @@ class GroqBackend:
             # answering, out of one budget. Left to the default, a long recap
             # package can exhaust it while still thinking and come back with an
             # empty answer -- which is what "the model returned nothing" was.
-            "max_completion_tokens": MAX_COMPLETION_TOKENS,
+            "max_completion_tokens": max_tokens or MAX_COMPLETION_TOKENS,
         }
         if "gpt-oss" in self.model:
             # spend that budget on the answer rather than on the thinking
@@ -389,6 +414,11 @@ class GroqBackend:
             message = choice.get("message") or {}
         except (KeyError, IndexError, ValueError) as exc:
             raise LLMError(f"Groq returned something unexpected: {exc}") from exc
+
+        # what it actually cost, which beats our estimate for the next call
+        usage = (data or {}).get("usage") or {}
+        BUDGET.observe(budget_key, resp.headers)
+        BUDGET.spend(budget_key, int(usage.get("total_tokens") or want))
 
         text = (message.get("content") or "").strip()
         if not text:
