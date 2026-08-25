@@ -141,3 +141,38 @@ def test_a_per_minute_limit_is_still_waited_out(monkeypatch, no_sleep):
     monkeypatch.setattr(gm.requests, "post", lambda *a, **k: replies.pop(0))
     assert gm.Gemini("key", "m").generate_json("p", {}) == {"answer": 1}
     assert no_sleep
+
+
+def test_every_backend_accepts_the_same_call(monkeypatch):
+    """
+    The stages call whichever client they were given, so all of them must take
+    the same arguments. A keyword added to the wrapper but not to the client
+    underneath took the whole script step down with a TypeError.
+    """
+    import inspect
+    from ytdl.recap import llm
+
+    expected = {"prompt", "schema", "temperature", "images", "cancel", "max_tokens"}
+    for client in (gm.Gemini, llm.GeminiBackend, llm.OllamaBackend, llm.GroqBackend):
+        names = set(inspect.signature(client.generate_json).parameters) - {"self"}
+        assert expected <= names, f"{client.__name__} is missing {expected - names}"
+
+
+def test_the_answer_budget_reaches_the_request(monkeypatch):
+    sent = {}
+
+    def post(url, params=None, json=None, **k):
+        sent.update(json or {})
+        return ok()
+
+    monkeypatch.setattr(gm.requests, "post", post)
+    gm.Gemini("key", "model").generate_json("p", {}, max_tokens=2048)
+    assert sent["generationConfig"]["maxOutputTokens"] == 2048
+
+
+def test_without_a_budget_the_default_still_applies(monkeypatch):
+    sent = {}
+    monkeypatch.setattr(gm.requests, "post",
+                        lambda url, params=None, json=None, **k: (sent.update(json or {}), ok())[1])
+    gm.Gemini("key", "model").generate_json("p", {})
+    assert sent["generationConfig"]["maxOutputTokens"] == gm.MAX_OUTPUT_TOKENS

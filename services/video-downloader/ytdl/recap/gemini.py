@@ -154,6 +154,7 @@ class Gemini:
         temperature: float = 0.7,
         images: list[tuple[str, bytes]] | None = None,
         cancel=None,
+        max_tokens: int = 0,
     ) -> dict:
         """
         Ask for JSON and get a dict back, or raise something readable.
@@ -179,7 +180,10 @@ class Gemini:
                 "temperature": temperature,
                 "responseMimeType": "application/json",
                 "responseSchema": schema,
-                "maxOutputTokens": MAX_OUTPUT_TOKENS,
+                # Sized by the caller where it knows what the answer needs.
+                # Output is metered like input, so reserving the maximum for
+                # every stage wastes budget the small stages never use.
+                "maxOutputTokens": max_tokens or MAX_OUTPUT_TOKENS,
             },
         }
         url = f"{API_ROOT}/models/{self.model}:generateContent"
