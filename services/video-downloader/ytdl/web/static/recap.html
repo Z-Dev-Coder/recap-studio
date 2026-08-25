@@ -449,8 +449,15 @@
                   again so the added lines get footage of their own. Paste an SRT
                   instead and its timings are used as they are.
                 </div>
+                <div class="row" style="margin-bottom:8px">
+                  <button class="sm" id="pickScriptFile">Open a file...</button>
+                  <span class="tiny" id="scriptFileNote">
+                    .srt, .txt or .vtt &mdash; or just type below
+                  </span>
+                </div>
                 <textarea id="ownText" rows="10"
                           placeholder="ပထမကြောင်း...&#10;&#10;ဒုတိယကြောင်း..."></textarea>
+                <input type="file" id="scriptFile" accept=".srt,.txt,.vtt,text/plain" class="hide">
                 <div class="row" style="margin-top:10px">
                   <div class="field" style="max-width:150px">
                     <label class="f">These lines are</label>
@@ -1993,6 +2000,34 @@ function paintOwnWhere(p) {
     }).join('');
 }
 
+/* Loading a script from a file. It goes into the box rather than straight
+   to the server, so a file can be read, corrected and its placement chosen
+   before it replaces anything -- and an SRT written elsewhere keeps its own
+   timings, which is the reason to use one. */
+$('pickScriptFile').onclick = () => { $('scriptFile').value = ''; $('scriptFile').click(); };
+
+$('scriptFile').onchange = () => {
+  const file = $('scriptFile').files[0];
+  if (!file) return;
+  const note = $('scriptFileNote');
+  const reader = new FileReader();
+  reader.onerror = () => { note.textContent = 'could not read that file'; };
+  reader.onload = () => {
+    const text = String(reader.result || '').trim();
+    if (!text) { note.textContent = 'that file is empty'; return; }
+    $('ownText').value = text;
+    const timed = /\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}\s*-->/.test(text);
+    const lines = timed
+      ? (text.match(/-->/g) || []).length
+      : text.split(/\n\s*\n/).filter(b => b.trim()).length;
+    note.textContent = `${escapeHtml(file.name)} - ${lines} lines` +
+      (timed ? ', its own timings will be kept' : ', laid across the video in order');
+    // a file that carries timings is almost always the whole script
+    if (timed) { $('ownMode').value = 'replace'; paintOwnMode(); }
+  };
+  reader.readAsText(file, 'utf-8');
+};
+
 $('ownMode').onchange = paintOwnMode;
 
 $('ownToggle').onclick = () => {
@@ -2000,7 +2035,11 @@ $('ownToggle').onclick = () => {
   const hidden = box.classList.contains('hide');
   box.classList.toggle('hide', !hidden);
   $('ownToggle').textContent = hidden ? 'Cancel' : 'Write some';
-  if (hidden) { paintOwnWhere(current()); paintOwnMode(); }
+  if (hidden) {
+    paintOwnWhere(current());
+    paintOwnMode();
+    $('scriptFileNote').textContent = '.srt, .txt or .vtt - or just type below';
+  }
 };
 
 $('ownApply').onclick = async () => {

@@ -476,3 +476,44 @@ def test_most_uses_no_quota_of_the_good_model(monkeypatch, fake_gemini, story_re
 def test_an_unknown_budget_falls_back_to_the_default(monkeypatch, fake_gemini, story_reply):
     seen = _models_used(monkeypatch, fake_gemini, story_reply, quality="nonsense")
     assert seen.count("GOOD") == 1          # same as balanced
+
+
+# ------------------------------------------------------- scripts from a file
+
+def test_an_uploaded_srt_keeps_the_times_it_was_written_with():
+    """
+    The reason to bring an SRT rather than plain lines is that you have already
+    decided when each line should land. Those timings must survive.
+    """
+    srt = (
+        "1\n00:00:12,500 --> 00:00:19,000\nပထမကြောင်း\n\n"
+        "2\n00:02:03,250 --> 00:02:11,750\nဒုတိယကြောင်း\n\n"
+        "3\n00:05:40,000 --> 00:05:47,500\nတတိယကြောင်း\n"
+    )
+    beats = script_mod.parse_manual(srt, 600.0, "my")
+    assert [round(b.start, 2) for b in beats] == [12.5, 123.25, 340.0]
+    assert [round(b.end, 2) for b in beats] == [19.0, 131.75, 347.5]
+    assert beats[0].my == "ပထမကြောင်း"
+
+
+def test_a_vtt_style_stamp_is_read_too():
+    """WebVTT uses a dot where SRT uses a comma; both are files people have."""
+    vtt = "WEBVTT\n\n00:00:05.000 --> 00:00:08.000\nတစ်ကြောင်း\n"
+    beats = script_mod.parse_manual(vtt, 60.0, "my")
+    assert len(beats) == 1
+    assert beats[0].start == 5.0
+
+
+def test_an_srt_with_blank_entries_drops_them():
+    srt = ("1\n00:00:01,000 --> 00:00:03,000\nreal line\n\n"
+           "2\n00:00:04,000 --> 00:00:06,000\n\n")
+    beats = script_mod.parse_manual(srt, 60.0, "en")
+    assert len(beats) == 1
+
+
+def test_plain_lines_are_still_spread_across_the_video():
+    """A file without timings is treated as prose, not as a broken SRT."""
+    beats = script_mod.parse_manual("one\n\ntwo\n\nthree", 300.0, "my")
+    assert beats[0].start == 0
+    assert beats[-1].end <= 300.0
+    assert len({b.start for b in beats}) == 3
