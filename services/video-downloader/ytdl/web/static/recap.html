@@ -1089,15 +1089,21 @@ async function loadStageModels() {
     state.llm = await request('/api/recap/llm/models');
   } catch (e) { return; }
 
-  const options = spec => {
-    let html = '<option value="">follow the setting above</option>';
+  // The advised choice is marked in the list itself. Four dropdowns of model
+  // names is a lot to reason about, and the recommendation is only useful at
+  // the moment of choosing.
+  const options = (spec, advised) => {
+    const star = advised === '' ? ' - recommended' : '';
+    let html = `<option value=""${spec ? '' : ' selected'}>` +
+               `follow the setting above${star}</option>`;
     for (const p of state.llm.providers) {
       if (!p.models.length) continue;
       html += `<optgroup label="${escapeHtml(p.label)}${p.ready ? '' : ' - not set up'}">`;
       for (const m of p.models) {
         const value = `${p.id}:${m}`;
+        const mark = value === advised ? ' - recommended' : '';
         html += `<option value="${escapeHtml(value)}"${value === spec ? ' selected' : ''}>` +
-                `${escapeHtml(m)}</option>`;
+                `${escapeHtml(m)}${mark}</option>`;
       }
       html += '</optgroup>';
     }
@@ -1132,16 +1138,25 @@ async function loadStageModels() {
     };
   });
 
-  $('stageModels').innerHTML = state.llm.stages.map(s => `
-    <div class="row" style="padding:6px 0;border-top:1px solid var(--line)">
+  $('stageModels').innerHTML = state.llm.stages.map(s => {
+    const now = (state.llm.assigned || {})[s.id] || '';
+    const onAdvice = now === (s.recommended || '');
+    return `
+    <div class="row" style="padding:8px 0;border-top:1px solid var(--line);align-items:flex-start">
       <div class="grow">
-        <div style="font-size:13px">${escapeHtml(s.label)}</div>
+        <div style="font-size:13px">
+          ${escapeHtml(s.label)}
+          ${onAdvice ? '<span class="pill hi">recommended</span>' : ''}
+        </div>
         <div class="tiny">${escapeHtml(s.what)}</div>
+        ${s.why ? `<div class="tiny" style="margin-top:3px;color:var(--faint)">
+                     ${escapeHtml(s.why)}</div>` : ''}
       </div>
-      <select data-stage="${s.id}" style="max-width:250px">
-        ${options((state.llm.assigned || {})[s.id] || '')}
+      <select data-stage="${s.id}" style="max-width:260px">
+        ${options(now, s.recommended || '')}
       </select>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   $('stageModels').querySelectorAll('[data-stage]').forEach(sel => {
     sel.onchange = async () => {

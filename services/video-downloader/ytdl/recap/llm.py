@@ -123,6 +123,21 @@ PRESETS = (
 )
 
 
+# One line per stage on WHY the recommended model is the one advised. The
+# reasoning is the useful part: without it the picker is four dropdowns of
+# model names, and there is no way to tell which choice matters.
+STAGE_ADVICE = {
+    "read": "A big prompt -- the whole transcript. Groq limits by the minute "
+            "rather than the day, so it absorbs this better than Gemini.",
+    "pick": "Also a big prompt, and the output is timestamps rather than "
+            "prose, which open models handle well.",
+    "write": "Leave this on Gemini. It is the only stage you actually hear, "
+             "and the one weaker models get visibly wrong.",
+    "review": "Only revises lines already flagged, so a local model is enough "
+              "-- and keeping it off Groq leaves that budget for the big two.",
+}
+
+
 def preset(pid: str) -> dict | None:
     for row in PRESETS:
         if row["id"] == pid:

@@ -720,7 +720,12 @@ def llm_models() -> dict:
     settings = load_settings()
     local = llm.ollama_models(settings.get("ollama_url", ""))
     return {
-        "stages": [{"id": i, "label": la, "what": w} for i, la, w in llm.STAGES],
+        "stages": [
+            {"id": i, "label": la, "what": w,
+             "recommended": (llm.preset("daily") or {}).get("stages", {}).get(i, ""),
+             "why": llm.STAGE_ADVICE.get(i, "")}
+            for i, la, w in llm.STAGES
+        ],
         "providers": [
             {"id": "gemini", "label": "Gemini", "ready": bool(settings.get("gemini_key")),
              "note": "20 requests a day on the good model, 500 on the lite one",
