@@ -30,10 +30,27 @@ from .media import (
 )
 from .project import Project
 
-# a beat of silence before the narrator starts and after they finish, so the
-# picture does not change on the same frame as the last syllable
-VOICE_LEAD = 0.4
-VOICE_TAIL = 0.8
+# Silence around each spoken line, so the picture does not change on the same
+# frame as the last syllable.
+#
+# These were 0.4 and 0.8, which is 1.2 seconds of nothing on a seven-second
+# clip -- at every one of forty-two joins. Read as the picture arriving early
+# and the voice arriving late, then the voice finishing while the picture held
+# on. Smaller by default, and adjustable, because how much air a recap wants is
+# a matter of taste rather than a constant.
+VOICE_LEAD = 0.2
+VOICE_TAIL = 0.35
+
+
+def padding_for(project) -> tuple[float, float]:
+    """The lead and tail this project asks for."""
+    gap = getattr(project, "line_gap", None)
+    if gap is None:
+        return VOICE_LEAD, VOICE_TAIL
+    gap = max(0.0, min(2.0, float(gap)))
+    # the lead is the smaller half: a pause before a line is felt sooner than
+    # one after it
+    return round(gap * 0.4, 3), round(gap * 0.6, 3)
 from .transcript import (
     Cue,
     TranscriptError,
@@ -345,10 +362,11 @@ def run_video(project: Project, on_progress=None, cancel=None) -> None:
         # voice had stopped -- a pause before every line, growing with the
         # speed. The speed is part of how long the line actually takes.
         speed = max(0.5, min(2.0, float(project.narration_speed or 1.0)))
+        lead, tail = padding_for(project)
         if spoken:
             wants = [
                 (spoken.get(int(b.get("index", i)), 0) or 0) / speed
-                + VOICE_LEAD + VOICE_TAIL
+                + lead + tail
                 if spoken.get(int(b.get("index", i))) else 0.0
                 for i, b in enumerate(project.beats)
             ]
@@ -609,7 +627,8 @@ def run_final(project: Project, on_progress=None, cancel=None) -> None:
         clips = []
         for m in rows:
             row = by_index.get(int(m.get("index", -1)))
-            at = float(row["recap_start"]) + VOICE_LEAD if row else float(m.get("at") or 0)
+            lead, _tail = padding_for(project)
+            at = float(row["recap_start"]) + lead if row else float(m.get("at") or 0)
             at = max(0.0, at)
             # Write the position back. It was computed for the mux and thrown
             # away, so the saved narration kept the provisional positions the
@@ -677,7 +696,8 @@ def run_preview(project: Project, seconds: float = 25.0, cancel=None) -> Path:
         if not str(m.get("file", "")).endswith(f"_{lang}.wav"):
             continue
         row = by_index.get(int(m.get("index", -1)))
-        at = float(row["recap_start"]) + VOICE_LEAD if row else float(m.get("at") or 0)
+        lead, _tail = padding_for(project)
+        at = float(row["recap_start"]) + lead if row else float(m.get("at") or 0)
         if at >= window:
             continue                      # starts after the preview ends
         path = project.voice_dir / m["file"]

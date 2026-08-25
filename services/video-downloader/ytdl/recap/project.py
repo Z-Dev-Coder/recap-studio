@@ -98,6 +98,8 @@ class Project:
     content_type: str = "recap"
     # how fast the narration is played back; 1.0 is as spoken
     narration_speed: float = 1.0
+    # silence around each spoken line, in seconds, split before and after
+    line_gap: float = 0.55
     # seconds dropped from the front and back of the download -- the logo and
     # the end card. Kept for display; the trim itself is applied to the file.
     # a subtitle file the user supplied, used for the burned-in captions
@@ -212,6 +214,7 @@ class Project:
             "fit_to_voice": self.fit_to_voice,
             "content_type": self.content_type,
             "narration_speed": self.narration_speed,
+            "line_gap": self.line_gap,
             "caption_file": self.caption_file,
             "trim_start": self.trim_start,
             "trim_end": self.trim_end,
@@ -302,6 +305,7 @@ class Project:
             # "treatment" was the name this shipped under for a few hours
             content_type=data.get("content_type") or data.get("treatment") or "recap",
             narration_speed=float(data.get("narration_speed", 1.0) or 1.0),
+            line_gap=float(data.get("line_gap", 0.55) if data.get("line_gap") is not None else 0.55),
             caption_file=data.get("caption_file", "") or "",
             trim_start=float(data.get("trim_start", 0) or 0),
             trim_end=float(data.get("trim_end", 0) or 0),

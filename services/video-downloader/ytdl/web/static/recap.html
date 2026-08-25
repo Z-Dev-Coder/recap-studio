@@ -665,8 +665,23 @@
                   <span class="tiny">slower</span><div class="grow"></div><span class="tiny">faster</span>
                 </div>
 
+                <div class="row" style="margin-top:16px">
+                  <label class="f grow" style="margin:0">Pause around each line</label>
+                  <span class="lenval" id="lineGap">0.55s</span>
+                </div>
+                <input type="range" id="lineGapSlider" min="0" max="150" value="55">
+                <div class="row">
+                  <span class="tiny">none</span><div class="grow"></div><span class="tiny">1.5s</span>
+                </div>
+                <div class="tiny" style="margin-top:6px">
+                  Silence before the voice starts and after it finishes, on every
+                  clip. Too much reads as the picture arriving early and the voice
+                  arriving late. Changing it needs the cut rebuilding, because the
+                  footage is cut to fit.
+                </div>
+
                 <div class="tiny" style="margin-top:8px">
-                  All three apply when the final video is rendered, so changing them
+                  The mix and speed apply when the final video is rendered, so changing them
                   costs one render &mdash; never another round of speech. Speed keeps
                   the pitch as spoken.
                 </div>
@@ -1697,6 +1712,9 @@ function renderVoice(p) {
   if (document.activeElement !== $('origVolSlider')) {
     $('origVolSlider').value = Math.round((p.original_volume == null ? 0.25 : p.original_volume) * 100);
   }
+  if (document.activeElement !== $('lineGapSlider')) {
+    $('lineGapSlider').value = Math.round((p.line_gap == null ? 0.55 : p.line_gap) * 100);
+  }
   if (document.activeElement !== $('narrSpeedSlider')) {
     $('narrSpeedSlider').value = Math.round((p.narration_speed || 1) * 100);
   }
@@ -1721,6 +1739,7 @@ function paintMix() {
   $('origVol').textContent = $('origVolSlider').value + '%';
   $('narrVol').textContent = $('narrVolSlider').value + '%';
   $('narrSpeed').innerHTML = (Number($('narrSpeedSlider').value) / 100).toFixed(2) + '&times;';
+  $('lineGap').textContent = (Number($('lineGapSlider').value) / 100).toFixed(2) + 's';
 }
 
 function renderVoiceList(p) {
@@ -2556,12 +2575,15 @@ $('voiceStyle').oninput = autosaveLater(() => ({ voice_style: $('voiceStyle').va
 const saveMix = autosaveLater(() => ({
   original_volume: Number($('origVolSlider').value) / 100,
   narration_volume: Number($('narrVolSlider').value) / 100,
-  narration_speed: Number($('narrSpeedSlider').value) / 100
+  narration_speed: Number($('narrSpeedSlider').value) / 100,
+  line_gap: Number($('lineGapSlider').value) / 100
 }));
 $('origVolSlider').onchange = saveMix;
 $('narrVolSlider').onchange = saveMix;
 $('narrSpeedSlider').onchange = saveMix;
 $('narrSpeedSlider').oninput = paintMix;
+$('lineGapSlider').onchange = saveMix;
+$('lineGapSlider').oninput = paintMix;
 
 $('tagsField').oninput = autosave(() => ({
   hashtags: $('tagsField').value.split(/[\s,\n]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean)

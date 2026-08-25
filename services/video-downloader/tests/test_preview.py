@@ -162,3 +162,58 @@ def test_clips_stay_in_order():
     plan = plan_fitted(beats, [25.0] * 4, 200.0)
     starts = [a for a, _b in plan]
     assert starts == sorted(starts)
+
+
+# ------------------------------------------------------- silence around a line
+
+def test_the_pause_is_split_before_and_after():
+    """
+    The lead is the smaller half: a pause before a line is felt sooner than one
+    after it.
+    """
+    from ytdl.recap.pipeline import padding_for
+
+    class P:
+        line_gap = 1.0
+
+    lead, tail = padding_for(P())
+    assert lead < tail
+    assert abs((lead + tail) - 1.0) < 0.01
+
+
+def test_no_pause_means_no_pause():
+    from ytdl.recap.pipeline import padding_for
+
+    class P:
+        line_gap = 0.0
+
+    assert padding_for(P()) == (0.0, 0.0)
+
+
+def test_an_absurd_pause_is_clamped():
+    from ytdl.recap.pipeline import padding_for
+
+    class P:
+        line_gap = 99.0
+
+    lead, tail = padding_for(P())
+    assert lead + tail <= 2.0
+
+
+def test_a_project_without_the_setting_uses_the_defaults():
+    """Older projects predate the field and must still render."""
+    from ytdl.recap.pipeline import VOICE_LEAD, VOICE_TAIL, padding_for
+
+    class Old:
+        pass
+
+    assert padding_for(Old()) == (VOICE_LEAD, VOICE_TAIL)
+
+
+def test_the_default_pause_is_smaller_than_it_was():
+    """
+    0.4 + 0.8 was 1.2 seconds of silence on a seven-second clip, at every join.
+    """
+    from ytdl.recap.pipeline import VOICE_LEAD, VOICE_TAIL
+
+    assert VOICE_LEAD + VOICE_TAIL < 1.2

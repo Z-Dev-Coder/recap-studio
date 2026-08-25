@@ -288,6 +288,7 @@ class EditRequest(BaseModel):
     burn_captions: bool | None = None
     fit_to_voice: bool | None = None
     narration_speed: float | None = None
+    line_gap: float | None = None
     content_type: str | None = None
     caption_style: str | None = None
     caption_lang: str | None = None
@@ -584,7 +585,10 @@ def edit(pid: str, req: EditRequest) -> dict:
     beats_changed = "beats" in patch
     mode_changed = "mode" in patch and patch["mode"] != project.mode
 
-    speed_changed = ("narration_speed" in patch
+    speed_changed = ("line_gap" in patch and
+                     abs(float(patch["line_gap"] or 0)
+                         - float(project.line_gap or 0)) > 0.01) or \
+                    ("narration_speed" in patch
                      and abs(float(patch["narration_speed"] or 1)
                              - float(project.narration_speed or 1)) > 0.01)
 
