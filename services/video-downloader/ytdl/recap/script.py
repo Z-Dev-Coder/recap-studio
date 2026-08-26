@@ -736,9 +736,11 @@ def generate(
         context=context, frame_note=frame_note, story=story or None,
         treatment=treatment,
     )
-    # the biggest answer: every beat plus the whole social package
+    # Every beat plus the whole social package. An English line per beat is
+    # far smaller than the Burmese, but twenty-four of them plus a description
+    # still outgrows a constant.
     data = picker.generate_json(prompt, _SCHEMA, temperature, images=resend,
-                                max_tokens=6144)
+                                max_tokens=max(4096, 900 + count * 320))
     beats = repair_beats(data.get("beats") or [], windows, clip_len, duration)
 
     # the clip a line is spoken over is the only length that matters

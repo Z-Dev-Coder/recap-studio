@@ -128,6 +128,25 @@ reason.
 """
 
 
+def answer_room(beats, seconds_for=None, floor: int = 2048, ceiling: int = 65536) -> int:
+    """
+    How many tokens the Burmese for these beats will take to write.
+
+    Burmese runs about 1.5 characters to the token, and each line is written to
+    fill its clip -- so the answer grows with the video, not with the number of
+    lines. A constant cap works for a seven-minute recap and quietly cuts an
+    hour-long one off after the third line.
+
+    The ceiling is a guard against a runaway plan, not a budget: a model that
+    stops early costs a re-run, which is worse than the tokens.
+    """
+    seconds_for = seconds_for or (lambda b: max(1.5, b.end - b.start))
+    chars = sum(chars_for(seconds_for(b)) for b in beats)
+    # 1.5 chars a token, plus the JSON scaffolding around each line
+    need = int(chars / 1.5 * 1.35) + 256 * max(1, len(beats)) // 4
+    return max(floor, min(ceiling, need))
+
+
 def _line_block(beats, story: Story, seconds_for) -> str:
     """Each beat as the writer needs it: the moment, its events, its room."""
     rows = []
@@ -202,9 +221,11 @@ def write(
     prompt = "\n\n".join(b for b in blocks if b and b.strip())
 
     try:
-        # one Burmese line per beat, and Burmese costs more tokens per character
+        # Sized to the script rather than to a constant. A one-hour recap is
+        # twenty-four lines of two thousand characters each -- a flat 4,096
+        # tokens returned an eighth of it and the rest was silently missing.
         data = client.generate_json(prompt, _WRITE_SCHEMA, temperature,
-                                    max_tokens=4096)
+                                    max_tokens=answer_room(beats, seconds_for))
     except GeminiError:
         return 0
 

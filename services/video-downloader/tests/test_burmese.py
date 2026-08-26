@@ -176,3 +176,33 @@ def test_style_forbids_the_literary_register():
     assert "-သည်" in burmese.STYLE
     assert "-ပါတယ်" in burmese.STYLE
     assert "not translating" in flat(burmese.STYLE)
+
+
+# ------------------------------------------------- how much room the answer needs
+
+def test_the_answer_budget_grows_with_the_video():
+    """
+    A one-hour recap is 24 lines of ~2,000 characters. A constant cap works for
+    a seven-minute one and quietly cuts an hour-long one off after the third
+    line, with the rest silently missing.
+    """
+    short = [Beat(index=i, start=i * 30.0, end=i * 30.0 + 6) for i in range(13)]
+    long = [Beat(index=i, start=i * 150.0, end=(i + 1) * 150.0) for i in range(24)]
+    assert burmese.answer_room(long) > burmese.answer_room(short) * 5
+
+
+def test_a_short_script_still_gets_a_usable_floor():
+    one = [Beat(index=0, start=0, end=3)]
+    assert burmese.answer_room(one) >= 2048
+
+
+def test_the_budget_is_capped_against_a_runaway_plan():
+    huge = [Beat(index=i, start=i * 600.0, end=(i + 1) * 600.0) for i in range(60)]
+    assert burmese.answer_room(huge) <= 65536
+
+
+def test_the_budget_covers_what_the_lines_will_actually_be():
+    """It must exceed the characters the writer was told each line may use."""
+    beats = [Beat(index=i, start=i * 100.0, end=(i + 1) * 100.0) for i in range(20)]
+    chars = sum(burmese.chars_for(b.end - b.start) for b in beats)
+    assert burmese.answer_room(beats) >= chars / 1.5      # 1.5 chars a token
