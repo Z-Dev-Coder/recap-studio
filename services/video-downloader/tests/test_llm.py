@@ -490,7 +490,7 @@ def test_burmese_captions_name_a_font_that_has_the_glyphs():
 
     import re
     burmese = re.sub(r"FontName=[^,]+", "FontName=" + media.MY_FONTS[0], style)
-    assert "Myanmar Text" in burmese
+    assert "Pyidaungsu" in burmese
     assert "Segoe UI" not in burmese
     # everything else about the style survives the swap
     assert "FontSize=" in burmese and "MarginV=" in burmese
@@ -498,5 +498,5 @@ def test_burmese_captions_name_a_font_that_has_the_glyphs():
 
 def test_the_font_list_is_ordered_and_real():
     from ytdl.recap import media
-    assert media.MY_FONTS[0] == "Myanmar Text"     # ships with Windows
+    assert media.MY_FONTS[0] == "Pyidaungsu"       # compared at caption size
     assert len(media.MY_FONTS) >= 3                # something to fall back to

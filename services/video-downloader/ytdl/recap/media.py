@@ -271,9 +271,14 @@ SHAPES = {
 
 # Fonts that actually contain Myanmar glyphs, best first. Naming one matters:
 # the caption styles ask for Segoe UI, which has none, and what happens then is
-# fontconfig's choice rather than ours -- fine on a machine with Myanmar Text
-# installed, tofu on one without.
-MY_FONTS = ("Myanmar Text", "Pyidaungsu", "Padauk Book", "Noto Sans Myanmar")
+# fontconfig's choice rather than ours.
+#
+# Ordered by how they actually render, compared at caption size on a real
+# subtitle: Myanmar Text sets its lines tight enough that the stacked marks of
+# one line collide with the line above -- legible but visibly wrong, and the
+# reason captions looked broken. Pyidaungsu leaves room for the stacks and is
+# the cleanest of the three; Padauk Book is close behind with wider tracking.
+MY_FONTS = ("Pyidaungsu", "Padauk Book", "Myanmar Text", "Noto Sans Myanmar")
 
 
 def burn_subtitles(src: Path, srt: Path, dest: Path, style: str = "clean",
