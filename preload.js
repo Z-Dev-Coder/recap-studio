@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 /* ------------------------------------------------------------------
    The shell and every module frame share this bridge. Broadcast IPC
@@ -27,6 +27,17 @@ window.addEventListener('message', e => {
 const on = (channel, cb) => { (subs[channel] = subs[channel] || []).push(cb); };
 
 contextBridge.exposeInMainWorld('api', {
+  /* The real path of a file the user picked.
+
+     Electron used to put it on the File object as `file.path`, and the pages
+     read it from there. That was removed in Electron 32, so the picker began
+     reporting "this browser will not reveal the file path" inside the app
+     itself -- a message about browsers, shown in Electron, for an API that had
+     simply gone. webUtils.getPathForFile is the replacement. */
+  pathForFile: (file) => {
+    try { return webUtils.getPathForFile(file); } catch { return ''; }
+  },
+
   /* shell */
   getModules: () => ipcRenderer.invoke('app:modules'),
   getVersions: () => ipcRenderer.invoke('app:version'),

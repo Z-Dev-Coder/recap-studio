@@ -305,6 +305,56 @@ def burn_subtitles(src: Path, srt: Path, dest: Path, style: str = "clean",
     return dest
 
 
+def burn_caption_images(src: Path, rows: list[dict], dest: Path,
+                        cancel=None) -> Path:
+    """
+    Lay pre-rendered caption images over the picture.
+
+    ffmpeg cannot shape Burmese. libass, drawtext and Pillow all draw the
+    codepoints in storage order, so a vowel that belongs to the left of its
+    consonant stays on the right -- tested against Pillow with shaping
+    disabled, which produced identical output to both of the others. No font
+    fixes that, because the fault is in the shaping, not the glyphs.
+
+    Chromium does shape it correctly, which is why the thumbnail overlay has
+    always looked right. So the captions are drawn there, sent here as
+    transparent PNGs, and composited. ffmpeg never sees the text.
+
+    Each image is shown only between its own timestamps, so one filter chain
+    carries the whole subtitle track.
+    """
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    usable = [r for r in rows if Path(r["path"]).exists()]
+    if not usable:
+        raise MediaError("there are no caption images to lay down")
+
+    args = [_tool("ffmpeg"), "-y", "-i", str(src)]
+    for r in usable:
+        args += ["-i", str(r["path"])]
+
+    chain = []
+    last = "[0:v]"
+    for i, r in enumerate(usable, start=1):
+        out = f"[v{i}]"
+        start, end = float(r["start"]), float(r["end"])
+        # centred horizontally, sitting where the caption box belongs
+        chain.append(
+            f"{last}[{i}:v]overlay=(W-w)/2:(H-h)-{int(r.get('margin', 60))}"
+            f":enable='between(t,{start:.3f},{end:.3f})'{out}"
+        )
+        last = out
+
+    args += [
+        "-filter_complex", ";".join(chain),
+        "-map", last, "-map", "0:a?",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p", "-c:a", "copy",
+        "-movflags", "+faststart", str(dest),
+    ]
+    _run(args, cancel=cancel)
+    return dest
+
+
 def mux_narration(
     video: Path,
     clips: list[dict],

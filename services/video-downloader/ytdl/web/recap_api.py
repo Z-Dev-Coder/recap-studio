@@ -350,6 +350,18 @@ class SettingsRequest(BaseModel):
     use_vision: bool | None = None
 
 
+class CaptionImage(BaseModel):
+    index: int
+    start: float
+    end: float
+    png_base64: str
+
+
+class CaptionImagesRequest(BaseModel):
+    images: list[CaptionImage]
+    margin: int = 60
+
+
 class CaptionFileRequest(BaseModel):
     text: str
     filename: str = "captions.srt"
@@ -1271,6 +1283,56 @@ def regenerate_line(pid: str, index: int, lang: str = "") -> dict:
     push(project)
     return {"ok": True, "index": index, "lang": lang,
             "seconds": fresh.get("seconds"), "file": fresh["file"]}
+
+
+@router.post("/projects/{pid}/captions/images")
+def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
+    """
+    Burn captions the page has already drawn.
+
+    ffmpeg cannot shape Burmese -- libass, drawtext and Pillow all place the
+    glyphs in storage order, which is why no font ever fixed it. Chromium can,
+    so the page draws each line and sends it here as a picture. This only has
+    to composite them.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    if not project.recap_path.exists():
+        raise HTTPException(400, "build the recap cut first")
+    if not req.images:
+        raise HTTPException(400, "no caption images were sent")
+
+    shots = project.dir / "captions"
+    if shots.exists():
+        shutil.rmtree(shots, ignore_errors=True)
+    shots.mkdir(parents=True, exist_ok=True)
+
+    rows = []
+    for img in req.images:
+        raw = img.png_base64.split(",", 1)[-1]
+        try:
+            blob = base64.b64decode(raw, validate=True)
+        except Exception as exc:      # noqa: BLE001
+            raise HTTPException(400, f"caption {img.index} is not valid PNG data: {exc}") from exc
+        path = shots / f"cap_{img.index:04d}.png"
+        path.write_bytes(blob)
+        rows.append({"path": path, "start": img.start, "end": img.end,
+                     "margin": req.margin})
+
+    try:
+        media_mod.burn_caption_images(project.recap_path, rows,
+                                      project.captioned_path,
+                                      cancel=cancel_event(pid))
+    except MediaError as exc:
+        raise HTTPException(400, f"the captions could not be burned in: {exc}") from exc
+    except Cancelled:
+        raise HTTPException(400, "stopped") from None
+
+    project.mark("final", "idle", message="captions redrawn - render again")
+    project.save()
+    push(project)
+    return {"ok": True, "captions": len(rows)}
 
 
 @router.post("/projects/{pid}/captions/file")

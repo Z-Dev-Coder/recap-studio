@@ -410,6 +410,8 @@
                   <div style="font-size:13px">Where the caption text comes from</div>
                   <div class="tiny" id="capSourceNote">built from the script, retimed onto the cut</div>
                 </div>
+                <button class="primary sm" id="drawCaptions"
+                        title="Draw the captions here, where Burmese shapes correctly, and burn them in">Burn captions</button>
                 <button class="sm" id="pickCapFile">Use my own SRT</button>
                 <button class="sm ghost danger hide" id="clearCapFile">Back to the script</button>
               </div>
@@ -1968,13 +1970,16 @@ $('pickFile').onclick = () => { $('videoFile').value = ''; $('videoFile').click(
 $('videoFile').onchange = () => {
   const f = $('videoFile').files[0];
   if (!f) return;
-  // Electron exposes the real path; a plain browser does not, and the server
-  // needs a path it can open rather than the bytes.
-  const path = f.path || '';
+  // The service needs a path it can open, not the bytes. Electron used to put
+  // that on the File object as `f.path`; that was removed in Electron 32, so
+  // ask the preload bridge for it and keep the old way as a fallback for
+  // whatever version is running.
+  const path = (window.api && window.api.pathForFile
+                 ? window.api.pathForFile(f) : '') || f.path || '';
   if (!path) {
     showError($('createErr'),
-      'This browser will not reveal the file path. Open Recap Studio inside ' +
-      'Toolbox to pick a local file, or paste a URL instead.');
+      'The file path could not be read. Open Recap Studio inside Toolbox ' +
+      'rather than in a browser tab, or paste a URL instead.');
     return;
   }
   state.pickedFile = path;
@@ -2430,6 +2435,113 @@ $('writeCopy').onclick = async () => {
 /* A subtitle file of your own, burned in as it stands. The generated one is
    built from the script and retimed onto the cut; supplying a file is how you
    take over when the wording or the timing needs to be yours. */
+/* Drawing the captions here rather than in ffmpeg.
+
+   ffmpeg cannot shape Burmese: libass, drawtext and Pillow-without-raqm all
+   place the glyphs in storage order, so a vowel belonging to the left of its
+   consonant stays on its right. Tested by rendering the same line through all
+   three -- identical output, and identical to the renderer with shaping
+   explicitly off. No font fixes it.
+
+   This canvas is Chromium, which shapes Myanmar correctly -- the same reason
+   the thumbnail overlay has always looked right. So each line is drawn here,
+   sent as a transparent PNG, and composited by ffmpeg, which never sees the
+   text. */
+function drawCaptionImage(text, width, style) {
+  const pad = Math.round(style.size * 0.45);
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d');
+
+  const font = `700 ${style.size}px "Pyidaungsu", "Myanmar Text", "Padauk Book", sans-serif`;
+  ctx.font = font;
+  const lines = wrapText(ctx, text, width - pad * 4);
+  const lineHeight = Math.round(style.size * 1.55);   // Myanmar stacks need room
+
+  c.width = width;
+  c.height = lines.length * lineHeight + pad * 2;
+  const g = c.getContext('2d');
+  g.font = font;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+
+  const widest = Math.max(...lines.map(l => g.measureText(l).width));
+  if (style.box) {
+    g.fillStyle = style.boxColour;
+    roundRect(g, (c.width - widest) / 2 - pad, 0, widest + pad * 2, c.height,
+              Math.round(style.size * 0.25));
+    g.fill();
+  }
+
+  lines.forEach((line, i) => {
+    const y = pad + lineHeight * (i + 0.5);
+    if (style.outline > 0) {
+      g.lineWidth = style.outline;
+      g.strokeStyle = 'rgba(0,0,0,.85)';
+      g.lineJoin = 'round';
+      g.strokeText(line, c.width / 2, y);
+    }
+    g.fillStyle = style.colour;
+    g.fillText(line, c.width / 2, y);
+  });
+  return c.toDataURL('image/png');
+}
+
+const CAPTION_LOOKS = {
+  clean:         { colour: '#fff',    box: false, boxColour: 'rgba(0,0,0,.62)', outlineMul: 0.16 },
+  boxed:         { colour: '#fff',    box: true,  boxColour: 'rgba(0,0,0,.72)', outlineMul: 0 },
+  'bold-yellow': { colour: '#ffe500', box: false, boxColour: 'rgba(0,0,0,.62)', outlineMul: 0.2 },
+  neon:          { colour: '#7cf7ff', box: false, boxColour: 'rgba(0,0,0,.62)', outlineMul: 0.2 },
+};
+
+$('drawCaptions').onclick = async () => {
+  const p = current(); if (!p) return;
+  const btn = $('drawCaptions');
+  const was = btn.textContent;
+  btn.disabled = true; btn.textContent = 'drawing...';
+  showError($('capErr'), '');
+
+  try {
+    const lang = p.caption_lang || p.voice_lang || 'my';
+    const res = await fetch(
+      `/api/recap/projects/${p.id}/srt?lang=${lang}&timing=recap`);
+    if (!res.ok) throw new Error((await res.json()).detail || 'no subtitles yet');
+    const srt = await res.text();
+
+    const [w] = thumbShape(p);                       // the cut's own width
+    const size = Math.round(w / 26);                 // readable at a glance
+    const look = CAPTION_LOOKS[p.caption_style] || CAPTION_LOOKS.clean;
+    const style = { size, ...look, outline: Math.round(size * look.outlineMul) };
+
+    const stamp = /(\d\d):(\d\d):(\d\d),(\d\d\d) --> (\d\d):(\d\d):(\d\d),(\d\d\d)/;
+    const images = [];
+    for (const block of srt.split(/\n\s*\n/)) {
+      const m = stamp.exec(block);
+      if (!m) continue;
+      const secs = (h, mm, s, ms) => +h * 3600 + +mm * 60 + +s + +ms / 1000;
+      const text = block.split(/\r?\n/)
+        .filter(l => l.trim() && !stamp.test(l) && !/^\d+$/.test(l.trim()))
+        .join(' ').trim();
+      if (!text) continue;
+      images.push({
+        index: images.length,
+        start: secs(m[1], m[2], m[3], m[4]),
+        end: secs(m[5], m[6], m[7], m[8]),
+        png_base64: drawCaptionImage(text, w, style).split(',')[1],
+      });
+      btn.textContent = `drawing ${images.length}...`;
+    }
+    if (!images.length) throw new Error('there are no subtitle lines to draw');
+
+    btn.textContent = `burning ${images.length}...`;
+    const r = await post(`/api/recap/projects/${p.id}/captions/images`,
+                         { images, margin: Math.round(size * 2.2) });
+    $('capSourceNote').textContent =
+      `${r.captions} captions drawn here and burned in`;
+    upsert(await request(`/api/recap/projects/${p.id}`));
+  } catch (e) { showError($('capErr'), e.message); }
+  finally { btn.disabled = false; btn.textContent = was; }
+};
+
 $('pickCapFile').onclick = () => { $('capFile').value = ''; $('capFile').click(); };
 
 $('capFile').onchange = () => {
