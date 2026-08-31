@@ -51,6 +51,23 @@ ROOT = Path(default_out_dir()) / "RecapStudio"
 store = Store(ROOT)
 
 SETTINGS_FILE = ROOT / "settings.json"
+
+# The voice is a property of the channel, not of one video: auditioning four
+# candidates before every recap is work nobody wants to repeat. A chosen voice
+# is kept here and every later project starts with it.
+SAVED_VOICE = ROOT / "voice.wav"
+SAVED_VOICE_TEXT = ROOT / "voice.txt"
+
+
+def saved_voice() -> tuple[Path, str] | tuple[None, str]:
+    """The voice chosen for all videos, if there is one."""
+    if not SAVED_VOICE.exists():
+        return None, ""
+    try:
+        said = SAVED_VOICE_TEXT.read_text(encoding="utf-8").strip()
+    except OSError:
+        said = ""
+    return SAVED_VOICE, said
 _settings_lock = threading.Lock()
 
 
@@ -509,6 +526,19 @@ def create(req: CreateRequest) -> dict:
     project.mode = req.mode if req.mode in ("reels", "long") else "reels"
     project.language = req.language if req.language in ("en", "my") else "en"
     project.content_type = content.normalise(req.content_type)
+
+    # Start with the voice already chosen, so a new video does not send the
+    # user back through the audition for an answer they gave last time.
+    clip, said = saved_voice()
+    if clip:
+        project.voice_dir.mkdir(parents=True, exist_ok=True)
+        target = project.voice_dir / "reference.wav"
+        try:
+            target.write_bytes(clip.read_bytes())
+            project.voice_reference = target.name
+            project.voice_reference_text = said
+        except OSError:
+            pass
     project.target_seconds = max(0.0, float(req.target_seconds or 0))
     project.save()
 
@@ -1197,6 +1227,11 @@ def upload_voice_reference(pid: str, req: VoiceReferenceRequest) -> dict:
 
     project.voice_reference = target.name
     project.voice_reference_text = req.text.strip()
+    try:
+        SAVED_VOICE.write_bytes(target.read_bytes())
+        SAVED_VOICE_TEXT.write_text(req.text.strip(), encoding="utf-8")
+    except OSError:
+        pass
     project.mark("voice", "idle", message="voice sample added - regenerate to use it")
     project.save()
     push(project)
@@ -1631,10 +1666,43 @@ def pick_voice_candidate(pid: str, index: int) -> dict:
     project.voice_reference = target.name
     # the sample text is known exactly, which is the sharpest kind of clone
     project.voice_reference_text = said.read_text(encoding="utf-8") if said.exists() else ""
+
+    # Keep it for every video after this one. Auditioning is slow -- the model
+    # loads, then speaks four times -- and the answer does not change between
+    # videos, so asking again for each is work for nothing.
+    try:
+        SAVED_VOICE.write_bytes(src.read_bytes())
+        SAVED_VOICE_TEXT.write_text(project.voice_reference_text, encoding="utf-8")
+    except OSError:
+        pass          # a voice that cannot be saved still works for this video
     project.mark("voice", "idle", message="voice chosen - regenerate to use it")
     project.save()
     push(project)
     return {"ok": True, "file": target.name}
+
+
+@router.get("/voice/saved")
+def saved_voice_info() -> dict:
+    """Whether a voice has been chosen for all videos."""
+    clip, said = saved_voice()
+    if not clip:
+        return {"saved": False}
+    seconds = 0.0
+    try:
+        import wave
+        with wave.open(str(clip)) as w:
+            seconds = w.getnframes() / float(w.getframerate() or 1)
+    except Exception:      # noqa: BLE001
+        pass
+    return {"saved": True, "seconds": round(seconds, 1), "text": said}
+
+
+@router.delete("/voice/saved")
+def forget_saved_voice() -> dict:
+    """Stop using the same voice for new videos."""
+    SAVED_VOICE.unlink(missing_ok=True)
+    SAVED_VOICE_TEXT.unlink(missing_ok=True)
+    return {"ok": True}
 
 
 @router.delete("/projects/{pid}/voice/reference")

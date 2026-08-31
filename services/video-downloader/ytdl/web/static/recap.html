@@ -612,8 +612,11 @@
                   </div>
                   <div class="row">
                     <button class="sm" id="auditionVoices">Audition 4 voices</button>
+                    <button class="sm ghost hide" id="forgetVoice"
+                            title="Stop using this voice for new videos">Forget it</button>
                     <span class="tiny" id="auditionNote"></span>
                   </div>
+                  <div class="tiny" id="savedVoiceNote" style="margin-top:6px"></div>
                   <div id="candidateList" style="margin-top:10px"></div>
                 </div>
               </div>
@@ -1356,7 +1359,9 @@ function showTab(name) {
   [...$('tabs').children].forEach(x => x.classList.toggle('on', x.dataset.tab === name));
   document.querySelectorAll('[data-panel]').forEach(s =>
     s.classList.toggle('hide', s.dataset.panel !== name));
-  if (name === 'voice' && current()) { loadVoiceLines(current()); loadLength(current()); }
+  if (name === 'voice' && current()) {
+    loadVoiceLines(current()); loadLength(current()); loadSavedVoice();
+  }
   if (name === 'files' && current()) { loadFiles(current()); loadCleanup(current()); }
 }
 
@@ -2108,9 +2113,32 @@ async function useCandidate(p, index, quiet) {
     if (!quiet) {
       $('auditionNote').textContent =
         `voice ${index + 1} in use - regenerate the narration to hear it`;
+      loadSavedVoice();
     }
   } catch (e) { showError($('stepErr'), e.message); }
 }
+
+/* The voice belongs to the channel, not to one video. Once chosen it is kept
+   and every later project starts with it, so the audition is something done
+   once rather than before every recap. */
+async function loadSavedVoice() {
+  try {
+    const d = await request('/api/recap/voice/saved');
+    $('forgetVoice').classList.toggle('hide', !d.saved);
+    $('savedVoiceNote').textContent = d.saved
+      ? `Using your chosen voice (${d.seconds}s) for this and every new video. ` +
+        `Audition again only to change it.`
+      : 'No voice chosen yet. Audition once and it is kept for every video after.';
+  } catch (e) { $('savedVoiceNote').textContent = ''; }
+}
+
+$('forgetVoice').onclick = async () => {
+  if (!confirm('Stop using this voice for new videos?')) return;
+  try {
+    await request('/api/recap/voice/saved', { method: 'DELETE' });
+    loadSavedVoice();
+  } catch (e) { showError($('stepErr'), e.message); }
+};
 
 $('auditionVoices').onclick = async () => {
   const p = current(); if (!p) return;
@@ -2133,7 +2161,7 @@ $('auditionVoices').onclick = async () => {
       if (!row) break;
       candidates.push(row);
       // adopt the first straight away, so a voice is always actually chosen
-      if (i === 0) await useCandidate(p, row.index, true);
+      if (i === 0) { await useCandidate(p, row.index, true); loadSavedVoice(); }
       else renderCandidates(p);
     }
     $('auditionNote').textContent = candidates.length
