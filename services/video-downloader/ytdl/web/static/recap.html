@@ -1563,8 +1563,18 @@ function renderProject() {
     ? `${p.timeline.length} clips · ${fmt(p.timeline[p.timeline.length - 1].recap_end)}`
     : 'not built yet';
 
-  /* script */
-  $('beatRows').innerHTML = (p.beats || []).map((b, i) => {
+  /* script
+
+     Rebuilt only when it has actually changed. The service pushes a snapshot
+     on every progress tick -- once per narrated line, and repeatedly while
+     ffmpeg encodes -- and this list is forty-odd textareas. Tearing them down
+     and building them again several times a second is what made the app feel
+     heavy, and it discarded the caret if you were typing in one. */
+  const beatsKey = lang + '|' + (p.beats || [])
+    .map(b => `${b.start}:${(b.my || '').length}:${(b.en || '').length}`).join(',');
+  if (beatsKey !== state.beatsKey) {
+    state.beatsKey = beatsKey;
+    $('beatRows').innerHTML = (p.beats || []).map((b, i) => {
     const sc = Number(b.score || 5);
     return `<div class="beat" data-i="${i}">
       <div class="beat-time">
@@ -1574,8 +1584,9 @@ function renderProject() {
       </div>
       <textarea class="bt" rows="2">${escapeHtml(lang === 'my' ? b.my : b.en)}</textarea>
     </div>`;
-  }).join('');
-  bindBeatSaving();
+    }).join('');
+    bindBeatSaving();
+  }
   $('scriptNote').textContent = (p.beats || []).length ? `${p.beats.length} beats` : 'no script yet';
 
   /* copy -- never clobber a field being typed into */
@@ -1586,12 +1597,21 @@ function renderProject() {
   if (document.activeElement !== $('thumbText')) $('thumbText').value = (p.thumbnail_text || {})[lang] || '';
   paintThumb();
 
-  /* transcript */
-  $('transcriptField').value = (p.transcript || []).map(c => `[${fmt(c.start)}] ${c.text}`).join('\n');
+  /* transcript: one large string, rebuilt for nothing on every tick */
+  if (state.transcriptCount !== (p.transcript || []).length) {
+    state.transcriptCount = (p.transcript || []).length;
+    $('transcriptField').value =
+      (p.transcript || []).map(c => `[${fmt(c.start)}] ${c.text}`).join('\n');
+  }
   $('transcriptNote').textContent = (p.transcript || []).length
     ? `${p.transcript.length} lines${p.transcript_language ? ' · ' + p.transcript_language : ''}` : 'none yet';
 
-  renderFrames(p);
+  const framesKey = (p.thumbnail_candidates || []).map(c => c.file).join(',')
+                    + '|' + (state.frame || '');
+  if (framesKey !== state.framesKey) {
+    state.framesKey = framesKey;
+    renderFrames(p);
+  }
   renderVoice(p);
   renderGuide(p);
   followVoiceProgress(p);
