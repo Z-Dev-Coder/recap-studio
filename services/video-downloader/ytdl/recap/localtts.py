@@ -229,6 +229,9 @@ CHUNK_CHARS = 140
 # only limit that means the same thing in every language.
 FRAMES_PER_SECOND = 12.5
 
+# Measured across real generated narration: 11.8-17.9, median 14.5.
+MY_CHARS_PER_SECOND = 14.5
+
 
 def split_for_speech(text: str, limit: int = CHUNK_CHARS) -> list[str]:
     """
@@ -347,17 +350,37 @@ def speak(
     # Share the budget across the chunks, with headroom so a natural reading
     # is never cut off mid-word -- the cap exists to stop a runaway, not to
     # trim good speech.
-    per_chunk = 0
+    # How long each chunk is allowed to run.
+    #
+    # This used to divide the CLIP length between the chunks, which meant the
+    # allowance had nothing to do with the words. A narrator script -- twenty
+    # beats across eight minutes -- gave each chunk about ten seconds for text
+    # that takes seven to say, and the model filled the difference: invented
+    # Burmese, and drift into Chinese, which VoxCPM has far more of. A recap
+    # script over the same video had forty-two shorter beats, almost no slack,
+    # and did not do it.
+    #
+    # The words decide it now. Burmese runs about 14.5 characters a second, so
+    # a chunk gets what its own text needs plus a margin for the model's
+    # phrasing -- never room to invent a sentence. The clip length still caps
+    # it, so a line cannot outrun the footage it plays over.
+    def room_for(text: str) -> int:
+        natural = len(text) / MY_CHARS_PER_SECOND
+        return max(24, int(natural * 1.35 * FRAMES_PER_SECOND))
+
+    ceiling = 0
     if max_seconds > 0 and chunks:
-        per_chunk = max(24, int((max_seconds / len(chunks)) * 1.25 * FRAMES_PER_SECOND))
+        ceiling = max(24, int((max_seconds / len(chunks)) * 1.25 * FRAMES_PER_SECOND))
 
     for chunk in chunks:
         if cancel is not None and cancel.is_set():
             from .media import Cancelled
             raise Cancelled()
         kwargs["text"] = chunk
-        if per_chunk:
-            kwargs["max_len"] = per_chunk
+        per_chunk = room_for(chunk)
+        if ceiling:
+            per_chunk = min(per_chunk, ceiling)
+        kwargs["max_len"] = per_chunk
         kwargs.pop("prompt_wav_path", None)
         kwargs.pop("prompt_text", None)
         kwargs.pop("reference_wav_path", None)
