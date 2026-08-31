@@ -192,12 +192,20 @@ def from_whisper(audio: Path, model_size: str = "small", language: str = "", can
     # nothing at all -- a 1937 cartoon came back with zero segments while its
     # dialogue was plainly audible. So try it, and if it finds nothing, ask
     # again without it rather than reporting a silent video.
+    from .media import Cancelled
+
     segments, info = model.transcribe(
         str(audio), language=language or None, vad_filter=True
     )
     cues, language_found = _collect(segments, info, language, cancel)
     if cues:
         return cues, language_found
+
+    # The retry is a second transcription of the whole file, so it doubles the
+    # wait. Without a check here a Stop pressed during the first pass sat
+    # through the second one before anything noticed.
+    if cancel is not None and cancel.is_set():
+        raise Cancelled()
 
     segments, info = model.transcribe(
         str(audio), language=language or None, vad_filter=False

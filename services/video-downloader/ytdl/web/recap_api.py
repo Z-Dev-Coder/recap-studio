@@ -1220,6 +1220,46 @@ SAMPLE_LINE = {
 }
 
 
+@router.post("/projects/{pid}/voice/clear")
+def clear_voice(pid: str, lang: str = "", keep_mine: bool = True) -> dict:
+    """
+    Throw away the narration so the next run starts from nothing.
+
+    Speaking a line costs minutes locally, so a run that stopped halfway
+    resumes rather than paying for what it already has -- which is right when
+    the run was interrupted, and wrong when the voice itself was the problem.
+    There was no way to say which, so restarting always resumed.
+
+    Clips the user recorded themselves are kept unless asked otherwise: those
+    were not generated and cannot be regenerated.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+
+    langs = [lang] if lang in ("en", "my") else ["en", "my"]
+    removed = 0
+    for one in langs:
+        for clip in project.voice_dir.glob(f"line_*_{one}.wav"):
+            if keep_mine and clip.name.endswith("_custom.wav"):
+                continue
+            clip.unlink(missing_ok=True)
+            removed += 1
+        # the settings stamp is what decides whether a later run may resume
+        (project.voice_dir / "settings.txt").unlink(missing_ok=True)
+        (project.voice_dir / f"_voice_{one}.wav").unlink(missing_ok=True)
+        (project.voice_dir / f"_voice_{one}.txt").unlink(missing_ok=True)
+
+    project.narration = [m for m in (project.narration or [])
+                         if not any(str(m.get("file", "")).endswith(f"_{o}.wav")
+                                    for o in langs)]
+    project.mark("voice", "idle", message=f"cleared {removed} clips - run again")
+    project.mark("final", "idle", message="the narration was cleared")
+    project.save()
+    push(project)
+    return {"ok": True, "removed": removed}
+
+
 @router.post("/projects/{pid}/voice/line/{index}/regenerate")
 def regenerate_line(pid: str, index: int, lang: str = "") -> dict:
     """

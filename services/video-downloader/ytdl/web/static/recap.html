@@ -536,6 +536,8 @@
               </div>
               <div class="row">
                 <button class="primary sm" id="makeVoice">Generate narration</button>
+                <button class="sm ghost danger" id="clearVoice"
+                        title="Delete the clips so the next run speaks every line again">Start over</button>
                 <button class="sm" id="refreshLength">Check length</button>
                 <div class="grow"></div>
                 <span class="tiny">Free tier speaks ~3 lines a minute.</span>
@@ -2358,6 +2360,29 @@ $('undoTrim').onclick = async () => {
     $('trimNote').textContent = `back to the full ${r.now.toFixed(0)}s`;
     upsert(await request(`/api/recap/projects/${p.id}`));
   } catch (e) { showError($('trimErr'), e.message); }
+};
+
+/* Speaking a line costs minutes locally, so an interrupted run resumes rather
+   than paying again for what it already has. That is right when the run was
+   interrupted and wrong when the voice itself was the problem -- and there was
+   no way to say which, so restarting always resumed. */
+$('clearVoice').onclick = async () => {
+  const p = current(); if (!p) return;
+  const lang = p.voice_lang || 'my';
+  if (!confirm(`Delete the ${lang === 'my' ? 'Burmese' : 'English'} narration?
+
+` +
+               'Every line will be spoken again from scratch next time. Lines you ' +
+               'recorded yourself are kept.')) return;
+  const btn = $('clearVoice');
+  btn.disabled = true;
+  try {
+    const r = await post(`/api/recap/projects/${p.id}/voice/clear?lang=${lang}`, {});
+    $('lengthNote').textContent = `${r.removed} clips deleted - generate again`;
+    upsert(await request(`/api/recap/projects/${p.id}`));
+    loadVoiceLines(current());
+  } catch (e) { showError($('stepErr'), e.message); }
+  finally { btn.disabled = false; }
 };
 
 $('refreshLength').onclick = () => { const p = current(); if (p) loadLength(p); };
