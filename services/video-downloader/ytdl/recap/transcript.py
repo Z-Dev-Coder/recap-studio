@@ -186,14 +186,53 @@ def from_whisper(audio: Path, model_size: str = "small", language: str = "", can
         ) from exc
 
     model = WhisperModel(model_size, device="cpu", compute_type="int8")
+
+    # Voice-activity filtering keeps the transcript clean on ordinary speech,
+    # but it judges old or music-heavy soundtracks to be non-speech and returns
+    # nothing at all -- a 1937 cartoon came back with zero segments while its
+    # dialogue was plainly audible. So try it, and if it finds nothing, ask
+    # again without it rather than reporting a silent video.
     segments, info = model.transcribe(
         str(audio), language=language or None, vad_filter=True
     )
+    cues, language_found = _collect(segments, info, language, cancel)
+    if cues:
+        return cues, language_found
+
+    segments, info = model.transcribe(
+        str(audio), language=language or None, vad_filter=False
+    )
+    cues, language_found = _collect(segments, info, language, cancel)
+    return (cues if not _is_hallucinated(cues) else []), language_found
+
+
+def _is_hallucinated(cues: list[Cue]) -> bool:
+    """
+    Whether a transcript is Whisper talking to itself.
+
+    Without voice-activity filtering, Whisper narrates music and room tone as
+    the same short phrase over and over -- "You" every thirty seconds was what
+    the cartoon produced. Passing that on as a transcript is worse than
+    admitting there is no speech, because everything downstream would treat it
+    as the story.
+    """
+    if len(cues) < 4:
+        return False
+    texts = [c.text.strip().lower() for c in cues if c.text.strip()]
+    if not texts:
+        return True
+    distinct = len(set(texts)) / len(texts)
+    average = sum(len(t) for t in texts) / len(texts)
+    return distinct < 0.35 or average < 12
+
+
+def _collect(segments, info, language, cancel) -> tuple[list[Cue], str]:
+    """Drain the generator, which is what actually does the transcribing."""
     # segments is a generator that transcribes as it is consumed, so checking
     # here is what makes a long transcription stoppable
     from .media import Cancelled
 
-    cues = []
+    cues: list[Cue] = []
     for s in segments:
         if cancel is not None and cancel.is_set():
             raise Cancelled()

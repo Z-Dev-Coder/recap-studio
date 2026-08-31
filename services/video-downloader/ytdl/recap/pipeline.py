@@ -194,8 +194,20 @@ def run_transcript(project: Project, cookies_browser: str = "", whisper_model: s
             )
         cues, language = from_whisper(project.source_path, whisper_model, cancel=cancel)
 
+    # A video with no usable speech is not a failure. Silent films, music
+    # videos and old cartoons are legitimate things to recap -- what happens in
+    # them is shown, not said -- and the story analysis reads frames as well as
+    # words. Refusing here stopped the pipeline on exactly the material it was
+    # built to handle, and on a script the user was going to write themselves.
     if not cues:
-        raise StepError("no speech could be found in this video")
+        project.transcript = []
+        project.transcript_language = language
+        (project.dir / "transcript.srt").write_text("", encoding="utf-8")
+        project.mark("transcript", "done", message=(
+            "no speech found -- the recap will be built from what is on screen, "
+            "or from a script you write yourself"))
+        project.save()
+        return
 
     project.transcript = [c.as_dict() for c in cues]
     project.transcript_language = language
@@ -263,8 +275,12 @@ def run_script(
     ollama_url: str = "",
 ) -> None:
     """Ask Gemini for the recap script, description, hashtags and title."""
-    if not project.transcript:
-        raise StepError("there is no transcript to write a recap from")
+    if not project.transcript and not use_vision:
+        raise StepError(
+            "There is no transcript and frames are switched off, so there is "
+            "nothing to write a recap from. Turn on 'Show Gemini frames from "
+            "the video' in Settings, or write the script yourself."
+        )
     duration = project.duration or (
         probe(project.source_path).duration if project.source_path.exists() else 0
     )
