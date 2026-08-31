@@ -233,6 +233,25 @@ FRAMES_PER_SECOND = 12.5
 MY_CHARS_PER_SECOND = 14.5
 
 
+def _plausible_reference(clip: Path, text: str, slack: float = 2.2) -> bool:
+    """
+    Whether a reference clip really says what it claims to.
+
+    Burmese runs about 14.5 characters a second. A clip far longer than its
+    text says more than the text does; one far shorter says less. Either way
+    pairing them tells the model something untrue.
+    """
+    if not (text or "").strip():
+        return True        # no claim about what it says, so nothing to contradict
+    try:
+        with wave.open(str(clip)) as w:
+            seconds = w.getnframes() / float(w.getframerate() or 1)
+    except Exception:      # noqa: BLE001 - unreadable is not a reason to refuse
+        return True
+    expected = max(0.5, len(text) / MY_CHARS_PER_SECOND)
+    return expected / slack <= seconds <= expected * slack
+
+
 def split_for_speech(text: str, limit: int = CHUNK_CHARS) -> list[str]:
     """
     Break a line into pieces small enough to speak in one pass.
@@ -337,6 +356,15 @@ def speak(
     if reference_audio and Path(reference_audio).exists():
         anchor = Path(reference_audio)
         anchor_text = (reference_text or "").strip()
+        # A reference is handed to the model as "this audio says exactly this".
+        # When it does not -- a clip that rambled past its line and was adopted
+        # anyway -- the model is being told something false about its own
+        # conditioning, and what comes back is neither the voice nor the
+        # language asked for. Nine seconds of audio for a two-second sentence
+        # is not that sentence, so the claim is dropped and the clip is used as
+        # a voice to copy rather than as a transcript to trust.
+        if anchor_text and not _plausible_reference(anchor, anchor_text):
+            anchor_text = ""
         # an anchor written by an earlier line keeps its text in a sidecar, so
         # the closer prompt mode survives across separate calls
         if not anchor_text:

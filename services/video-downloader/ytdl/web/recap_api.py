@@ -1584,10 +1584,20 @@ def voice_candidates(pid: str, count: int = 4, lang: str = "", slot: int = -1) -
         wav = out / f"cand_{i}.wav"
         wav.write_bytes(audio)
         (out / f"cand_{i}.txt").write_text(text, encoding="utf-8")
+
+        # A candidate that runs far past its line is not the line: the model
+        # kept going and filled the difference, and what it fills with is not
+        # Burmese. Adopting one as the voice reference makes every later line
+        # clone it, which is how a whole narration ended up in Chinese. Say
+        # which ones look wrong rather than offering them as equals.
+        from ..recap.localtts import _plausible_reference
+        sound = _plausible_reference(wav, text)
+
         rows.append({
             "index": i,
             "file": f"voice/candidates/{wav.name}",
             "lang": lang,
+            "suspect": not sound,
         })
 
     return {"ok": True, "lang": lang, "text": text, "candidates": rows}
@@ -1604,6 +1614,17 @@ def pick_voice_candidate(pid: str, index: int) -> dict:
     if not src.exists():
         raise HTTPException(404, "that voice is no longer available - audition again")
     said = src.with_suffix(".txt")
+
+    from ..recap.localtts import _plausible_reference
+    spoken = said.read_text(encoding="utf-8") if said.exists() else ""
+    if spoken and not _plausible_reference(src, spoken):
+        raise HTTPException(
+            400,
+            "That clip runs much longer than its line, so it is not saying "
+            "what it should -- the model carried on past the sentence. Using "
+            "it as the voice would copy that into every line. Audition again "
+            "and pick one that matches.",
+        )
 
     target = project.voice_dir / "reference.wav"
     target.write_bytes(src.read_bytes())

@@ -77,3 +77,52 @@ def test_every_chunk_is_given_a_limit(spoken):
 def test_a_tiny_line_still_gets_a_floor(spoken):
     localtts.speak("ကက", max_seconds=0)
     assert spoken.asked[0] >= 24
+
+
+# ------------------------------------------------- does the reference say that?
+
+def make_wav(path, seconds, rate=24000):
+    import wave, struct
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
+        w.writeframes(struct.pack("<h", 0) * int(rate * seconds))
+    return path
+
+
+def test_a_clip_matching_its_line_is_trusted(tmp_path):
+    """30 Burmese characters is about two seconds."""
+    clip = make_wav(tmp_path / "ok.wav", 2.1)
+    assert localtts._plausible_reference(clip, "က" * 30)
+
+
+def test_a_clip_that_rambles_past_its_line_is_not(tmp_path):
+    """
+    The real case: 9.1 seconds of audio labelled as a two-second sentence. The
+    model carried on past the line, and the extra was not Burmese.
+    """
+    clip = make_wav(tmp_path / "long.wav", 9.1)
+    assert not localtts._plausible_reference(clip, "က" * 30)
+
+
+def test_a_clip_far_too_short_is_not_trusted(tmp_path):
+    clip = make_wav(tmp_path / "short.wav", 0.4)
+    assert not localtts._plausible_reference(clip, "က" * 200)
+
+
+def test_a_little_either_way_is_fine(tmp_path):
+    """Speakers vary; the check is for clips that say something else."""
+    for seconds in (1.6, 2.0, 3.5):
+        clip = make_wav(tmp_path / f"n{seconds}.wav", seconds)
+        assert localtts._plausible_reference(clip, "က" * 30), seconds
+
+
+def test_an_unreadable_clip_is_given_the_benefit_of_the_doubt(tmp_path):
+    junk = tmp_path / "junk.wav"
+    junk.write_bytes(b"not a wav file")
+    assert localtts._plausible_reference(junk, "က" * 30)
+
+
+def test_a_reference_with_no_text_is_not_judged(tmp_path):
+    """With no claim about what it says, there is nothing to contradict."""
+    clip = make_wav(tmp_path / "any.wav", 30.0)
+    assert localtts._plausible_reference(clip, "")

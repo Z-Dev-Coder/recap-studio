@@ -2085,6 +2085,7 @@ function renderCandidates(p) {
          ${on ? 'background:var(--accent-soft);border-radius:var(--r-sm)' : ''}">
       <span class="grow" style="font-size:13px;padding-left:${on ? '8px' : '0'}">
         Voice ${c.index + 1}${on ? ' &middot; <strong>in use</strong>' : ''}
+        ${c.suspect ? '<span class="pill" style="color:var(--err)">rambles past the line</span>' : ''}
       </span>
       <audio controls preload="none" style="height:32px"
              src="/api/recap/projects/${p.id}/file?name=${encodeURIComponent(c.file)}"></audio>
