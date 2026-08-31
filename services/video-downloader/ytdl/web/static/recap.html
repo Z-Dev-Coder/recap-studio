@@ -1038,6 +1038,15 @@ const request = async (path, options) => {
   if (!res.ok) {
     let detail = res.statusText;
     try { detail = (await res.json()).detail || detail; } catch (e) {}
+    // A 404 on one of our own endpoints means the service is running code
+    // older than this page -- the app was left open while it was updated, and
+    // Python does not reload a module in a live process. "Not Found" gives no
+    // hint of that; naming it is the difference between a puzzle and a restart.
+    if (res.status === 404 && path.startsWith('/api/recap/')) {
+      throw new Error(
+        'This version of the app has a feature the running service does not. ' +
+        'Close Toolbox and open it again, then try once more.');
+    }
     throw new Error(detail);
   }
   return res.status === 204 ? null : res.json();
