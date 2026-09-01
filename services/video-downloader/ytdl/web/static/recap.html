@@ -880,6 +880,15 @@ details.more .card > h3 { display: none; }
                 <span class="note" id="finalNote"></span>
               </div>
               <video id="finalVideo" controls preload="metadata"></video>
+              <div id="previewBox" class="hide">
+                <video id="previewVideo" controls preload="metadata"></video>
+                <div class="row" style="margin-top:8px">
+                  <span class="tiny">A preview of the opening at this mix &mdash;
+                    not the finished file.</span>
+                  <div class="grow"></div>
+                  <button class="sm ghost" id="closePreview">Close preview</button>
+                </div>
+              </div>
               <div class="row" style="margin-top:12px">
                 <button class="sm" id="previewFinal"
                         title="Render the opening at this mix, to check it">Preview 25s</button>
@@ -3029,14 +3038,23 @@ $('previewFinal').onclick = async () => {
   btn.disabled = true; btn.textContent = 'rendering...';
   try {
     const r = await post(`/api/recap/projects/${p.id}/final/preview?seconds=25`, {});
-    const v = $('finalVideo');
-    const src = `/api/recap/projects/${p.id}/file?name=${encodeURIComponent(r.file)}&t=${Date.now()}`;
-    pointAt(v, src, { force: true });
-    v.dataset.pinned = '1';       // yours until you pick something else
+    /* Its own element, and nothing in the render loop knows it exists, so no
+       snapshot can reload it while it plays. */
+    const v = $('previewVideo');
+    $('finalVideo').pause();
+    $('previewBox').classList.remove('hide');
+    v.src = `/api/recap/projects/${p.id}/file?name=${encodeURIComponent(r.file)}&t=${Date.now()}`;
     v.play().catch(() => {});
-    $('finalNote').textContent = 'preview of the first 25s - not the finished file';
   } catch (e) { showError($('stepErr'), e.message); }
   finally { btn.disabled = false; btn.textContent = was; }
+};
+
+$('closePreview').onclick = () => {
+  const v = $('previewVideo');
+  v.pause();
+  v.removeAttribute('src');
+  v.load();                     // let go of the file rather than buffering it
+  $('previewBox').classList.add('hide');
 };
 
 $('renderFinal').onclick = () => runStep('final');
