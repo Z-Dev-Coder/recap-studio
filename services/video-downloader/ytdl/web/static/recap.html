@@ -209,6 +209,81 @@
     .app { grid-template-columns: 1fr; }
     .side { display: none; }
   }
+
+/* the trimmer: a strip of the video's own frames with a handle at each end */
+.trim-vid { width:100%; max-height:220px; background:#000; border-radius:8px;
+            margin-top:12px; display:block; }
+.trim-bar { position:relative; height:56px; margin-top:10px; border-radius:6px;
+            overflow:hidden; background:#111; cursor:pointer;
+            touch-action:none; user-select:none; }
+.trim-strip { position:absolute; inset:0; background-size:100% 100%;
+              background-repeat:no-repeat; opacity:.85; }
+.trim-veil { position:absolute; top:0; bottom:0; width:0;
+             background:rgba(8,10,14,.78); pointer-events:none; }
+#veilA { left:0; } #veilB { right:0; }
+.trim-head { position:absolute; top:0; bottom:0; width:2px; left:0;
+             background:#fff; box-shadow:0 0 6px rgba(0,0,0,.8);
+             pointer-events:none; }
+.trim-grip { position:absolute; top:0; bottom:0; width:14px; margin-left:-7px;
+             background:#4a9eff; border-radius:4px; cursor:ew-resize;
+             display:flex; align-items:center; justify-content:center;
+             touch-action:none; }
+.trim-grip span { width:2px; height:18px; background:rgba(255,255,255,.85);
+                  border-radius:1px; }
+
+/* An editor, not a form: the stages down the side, the work in the middle. */
+.editor { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 18px;
+          align-items: start; }
+.panels { min-width: 0; }
+.rail { position: sticky; top: 12px; border: 1px solid var(--line);
+        border-radius: 10px; padding: 8px; background: var(--card, transparent); }
+.rail-head { font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+             color: var(--faint); padding: 10px 8px 6px; }
+.rail-head:first-child { padding-top: 4px; }
+.tabs { display: block; border: 0; margin: 0; }
+.tabs button {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  border: 0; background: transparent; border-radius: 7px; padding: 9px 10px;
+  color: var(--muted); font-weight: 550; margin: 0 0 2px;
+}
+.tabs button b { font-weight: 550; flex: 1; }
+.tabs button:hover { background: var(--accent-soft); color: var(--text); }
+.tabs button.on { background: var(--accent-soft); color: var(--accent); }
+/* the run affordance: a target you have to aim at, so opening a stage can
+   never start twenty minutes of work by accident */
+.tabs button i {
+  font-style: normal; font-size: 11px; padding: 2px 8px; border-radius: 5px;
+  border: 1px solid var(--line); color: var(--muted); opacity: 0; flex: 0 0 auto;
+}
+.tabs button:hover i, .tabs button.on i { opacity: 1; }
+.tabs button i:hover { border-color: var(--accent); color: var(--accent); }
+.tabs button .dot { width: 7px; height: 7px; border-radius: 50%;
+                    background: var(--faint); flex: 0 0 7px; }
+.tabs button.st-done .dot { background: var(--ok); }
+.tabs button.st-running .dot { background: var(--accent); animation: pulse 1.1s infinite; }
+.tabs button.st-error .dot { background: var(--err); }
+.tabs button.st-error { color: var(--err); }
+
+/* Everything that is not the main thing on a panel, folded away. */
+details.more { border: 1px solid var(--line); border-radius: 10px;
+               padding: 0 14px; margin-top: var(--sp); }
+details.more > summary { cursor: pointer; padding: 13px 0; font-weight: 600;
+                         list-style: none; color: var(--muted); }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::before { content: '\25B8  '; color: var(--faint); }
+details.more[open] > summary { color: var(--text); }
+details.more[open] > summary::before { content: '\25BE  '; }
+details.more > summary:hover { color: var(--text); }
+details.more > *:last-child { padding-bottom: 14px; }
+details.more .card { border: 0; padding: 0; margin: 0; }
+
+@media (max-width: 900px) {
+  .editor { grid-template-columns: 1fr; }
+  .rail { position: static; }
+  .tabs { display: flex; flex-wrap: wrap; }
+  .tabs button { width: auto; }
+  .rail-head { display: none; }
+}
 </style>
 </head>
 <body>
@@ -287,10 +362,8 @@
         </div>
 
         <div id="workspace" class="hide">
-          <div class="card" style="padding:14px 18px">
-            <div class="steps" id="steps"></div>
-            <div id="stepErr"></div>
-          </div>
+          <div id="stepErr"></div>
+          <div class="steps hide" id="steps"></div>
 
           <div class="card hide" id="guide" style="border-color:var(--accent)">
             <div class="row" style="align-items:flex-start">
@@ -309,16 +382,22 @@
             </div>
           </div>
 
-          <div class="tabs" id="tabs">
-            <button data-tab="cut" class="on">Recap cut</button>
-            <button data-tab="script">Script</button>
-            <button data-tab="copy">Title &amp; tags</button>
-            <button data-tab="voice">Voice</button>
-            <button data-tab="final">Final video</button>
-            <button data-tab="thumb">Thumbnail</button>
-            <button data-tab="source">Transcript</button>
-            <button data-tab="files">Files</button>
-          </div>
+          <div class="editor">
+          <aside class="rail">
+            <div class="rail-head">Stages</div>
+            <div class="tabs" id="tabs">
+              <button data-tab="source" data-step="transcript"><span class="dot"></span><b>Transcript</b><i></i></button>
+              <button data-tab="script" data-step="script"><span class="dot"></span><b>Script</b><i></i></button>
+              <button data-tab="voice" data-step="voice"><span class="dot"></span><b>Voice</b><i></i></button>
+              <button data-tab="cut" data-step="video" class="on"><span class="dot"></span><b>Recap cut</b><i></i></button>
+              <button data-tab="final" data-step="final"><span class="dot"></span><b>Final video</b><i></i></button>
+              <div class="rail-head">Extras</div>
+              <button data-tab="copy"><span class="dot"></span><b>Title &amp; tags</b><i></i></button>
+              <button data-tab="thumb" data-step="thumbnail"><span class="dot"></span><b>Thumbnail</b><i></i></button>
+              <button data-tab="files"><span class="dot"></span><b>Files</b><i></i></button>
+            </div>
+          </aside>
+          <div class="panels">
 
           <section data-panel="cut">
             <div class="card">
@@ -359,31 +438,39 @@
               </div>
 
               <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
-                <div class="note">Skip the ends</div>
+                <div class="note">Trim the ends</div>
                 <div class="tiny" style="margin-top:4px">
                   A copyright card, a channel logo or an end title is not the
                   story, and a beat placed on one narrates a logo -- the voice
-                  then runs a few seconds ahead of the picture for the whole
-                  video. Say how much to leave alone and no moment is taken
-                  from there. The file itself is untouched, so the transcript
-                  and the script survive.
+                  then runs ahead of the picture for the whole video. Drag the
+                  handles past them. The file is never touched, so the
+                  transcript, the script and the narration all survive.
                 </div>
-                <div class="row" style="margin-top:10px;gap:14px;align-items:flex-end">
-                  <label class="tiny">first
-                    <input type="number" id="skipStart" min="0" step="1" value="0"
-                           style="width:80px;display:block;margin-top:4px"> seconds
-                  </label>
-                  <label class="tiny">last
-                    <input type="number" id="skipEnd" min="0" step="1" value="0"
-                           style="width:80px;display:block;margin-top:4px"> seconds
-                  </label>
-                  <button class="ghost" id="applySkip">Apply</button>
+
+                <video id="trimVid" class="trim-vid" preload="metadata" playsinline></video>
+
+                <div class="trim-bar" id="trimBar">
+                  <div class="trim-strip" id="trimStrip"></div>
+                  <div class="trim-veil" id="veilA"></div>
+                  <div class="trim-veil" id="veilB"></div>
+                  <div class="trim-head" id="trimHead"></div>
+                  <div class="trim-grip" id="gripA" data-side="a"><span></span></div>
+                  <div class="trim-grip" id="gripB" data-side="b"><span></span></div>
+                </div>
+
+                <div class="row" style="margin-top:10px;gap:12px;align-items:center;flex-wrap:wrap">
+                  <button class="ghost" id="trimPlay">Play the kept part</button>
+                  <span class="tiny" id="trimRead"></span>
+                  <span style="flex:1"></span>
+                  <button class="ghost" id="trimReset">Use all of it</button>
+                  <button id="applySkip">Save the trim</button>
                 </div>
                 <div class="tiny" id="skipNote" style="margin-top:8px"></div>
               </div>
             </div>
 
-            <div class="card">
+            <details class="more"><summary>Shape, framing and how it is filled</summary>
+<div class="card">
               <h3>Look</h3>
               <div class="row">
                 <div class="field" style="max-width:180px">
@@ -404,8 +491,10 @@
                 </div>
               </div>
             </div>
+</details>
 
-            <div class="card">
+            <details class="more"><summary>Captions burned into the picture</summary>
+<div class="card">
               <h3>Captions</h3>
               <label class="note" style="display:block">
                 <input type="checkbox" id="burnCaps"> Burn captions into the picture
@@ -448,6 +537,7 @@
                 properly, unlike the thumbnail overlay.
               </div>
             </div>
+</details>
           </section>
 
           <section data-panel="script" class="hide">
@@ -475,7 +565,8 @@
               </div>
             </div>
 
-            <div class="card">
+            <details class="more"><summary>Write or paste your own lines</summary>
+<div class="card">
               <div class="row" style="margin-bottom:6px">
                 <h3 class="grow" style="margin:0">Add my own lines</h3>
                 <button class="sm ghost" id="ownToggle">Write some</button>
@@ -522,6 +613,7 @@
                 <div id="ownErr"></div>
               </div>
             </div>
+</details>
           </section>
 
           <section data-panel="copy" class="hide">
@@ -857,7 +949,8 @@
               <div id="fileGroups"></div>
             </div>
 
-            <div class="card">
+            <details class="more"><summary>Free up disk space</summary>
+<div class="card">
               <div class="row" style="margin-bottom:6px">
                 <h3 class="grow" style="margin:0">Free up space</h3>
                 <span class="note" id="spaceNote"></span>
@@ -873,10 +966,12 @@
                 <span class="note" id="cleanupResult"></span>
               </div>
             </div>
+</details>
           </section>
 
           <section data-panel="source" class="hide">
-            <div class="card">
+            <details class="more"><summary>Cut the file itself &mdash; throws away the transcript and script</summary>
+<div class="card">
               <div class="row" style="margin-bottom:6px">
                 <h3 class="grow" style="margin:0">Trim the download</h3>
                 <span class="note" id="trimNote"></span>
@@ -909,6 +1004,7 @@
               </div>
               <div id="trimErr"></div>
             </div>
+</details>
 
             <div class="card">
               <div class="row" style="margin-bottom:12px">
@@ -924,6 +1020,8 @@
               <textarea id="transcriptField" rows="18" readonly></textarea>
             </div>
           </section>
+          </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1377,10 +1475,22 @@ const BUSY_LABELS = { source: 'downloading', transcript: 'transcribing', script:
 const STEP_TAB = { source: 'source', transcript: 'source', script: 'script',
                    voice: 'voice', video: 'cut', thumbnail: 'thumb', final: 'final' };
 
+/* Clicking the little "run" opens nothing and starts the stage; clicking
+   anywhere else on the row opens the stage and starts nothing. */
+$('tabs').addEventListener('click', ev => {
+  const run = ev.target.closest('i');
+  if (!run) return;
+  const btn = run.closest('button');
+  if (!btn || !btn.dataset.step) return;
+  ev.stopImmediatePropagation();     // opening the stage is not also running it
+  if (run.textContent === 'stop') $('stopBtn').click();
+  else runStep(btn.dataset.step);
+});
+
 function showTab(name) {
   if (!name || state.tab === name) return;
   state.tab = name;
-  [...$('tabs').children].forEach(x => x.classList.toggle('on', x.dataset.tab === name));
+  [...$('tabs').querySelectorAll('button')].forEach(x => x.classList.toggle('on', x.dataset.tab === name));
   document.querySelectorAll('[data-panel]').forEach(s =>
     s.classList.toggle('hide', s.dataset.panel !== name));
   if (name === 'voice' && current()) {
@@ -1544,6 +1654,22 @@ function renderProject() {
       ${s.message ? `<span class="tiny">${escapeHtml(s.message)}</span>` : ''}
     </div>`).join('');
   [...$('steps').children].forEach(el => { el.onclick = () => runStep(el.dataset.step); });
+
+  /* The rail carries the same status the chips used to, so there is one list
+     of stages instead of two rows that disagreed about what they were for. */
+  [...$('tabs').querySelectorAll('button')].forEach(btn => {
+    const step = btn.dataset.step;
+    const s = step ? (p.steps || {})[step] : null;
+    btn.classList.toggle('st-done', !!s && s.status === 'done');
+    btn.classList.toggle('st-running', !!s && s.status === 'running');
+    btn.classList.toggle('st-error', !!s && s.status === 'error');
+    const run = btn.querySelector('i');
+    if (!s) { run.textContent = ''; run.title = ''; return; }
+    run.textContent = s.status === 'running' ? 'stop'
+                    : s.status === 'done' ? 'redo' : 'run';
+    run.title = s.status === 'running'
+      ? 'Stop this' : 'Run this stage' + (s.status === 'done' ? ' again' : '');
+  });
   const failed = Object.entries(p.steps || {}).find(([, s]) => s.status === 'error');
   showError($('stepErr'), failed ? `${STEP_LABELS[failed[0]] || failed[0]}: ${failed[1].error}` : '');
 
@@ -1566,8 +1692,7 @@ function renderProject() {
   if (document.activeElement !== $('shapeSel')) $('shapeSel').value = p.shape || '';
   if (document.activeElement !== $('framingSel')) $('framingSel').value = p.framing || 'blur';
   $('fitVoice').checked = p.fit_to_voice !== false;
-  if (document.activeElement !== $('skipStart')) $('skipStart').value = p.skip_start || 0;
-  if (document.activeElement !== $('skipEnd')) $('skipEnd').value = p.skip_end || 0;
+  trimLoad(p);
   const trimmed = (p.trim_start || 0) > 0 || (p.trim_end || 0) > 0;
   $('undoTrim').classList.toggle('hide', !trimmed);
   if (trimmed && !$('trimNote').textContent) {
@@ -2083,7 +2208,7 @@ function renderResultBar(p) {
   [...$('resultDownloads').children].forEach(b => {
     b.onclick = () => {
       state.tab = 'voice';
-      [...$('tabs').children].forEach(x => x.classList.toggle('on', x.dataset.tab === 'voice'));
+      [...$('tabs').querySelectorAll('button')].forEach(x => x.classList.toggle('on', x.dataset.tab === 'voice'));
       document.querySelectorAll('[data-panel]').forEach(s =>
         s.classList.toggle('hide', s.dataset.panel !== 'voice'));
       const target = [...$('finalDownloads').children]
@@ -2723,21 +2848,115 @@ const saveLook = () => {
 ['shapeSel', 'framingSel', 'burnCaps', 'capStyle', 'capLang']
   .forEach(id => { $(id).onchange = saveLook; });
 
+/* ------------------------------------------------------------ the trimmer
+
+   Typing "how many seconds is the copyright card" means watching the video
+   with a stopwatch. Dragging a handle along a strip of its own frames means
+   looking at it instead: the card is visibly not the film, so the seam is
+   somewhere you can point at. The video seeks as you drag, so the frame you
+   stop on is the frame you keep. */
+const trim = { a: 0, b: 0, dur: 0, pid: '', playing: false };
+
+function trimLoad(p) {
+  if (!p || !p.has_source) return;
+  trim.dur = p.duration || 0;
+  if (trim.pid === p.id) return;
+  trim.pid = p.id;
+  $('trimVid').src = '/api/recap/projects/' + p.id + '/file?name=source.mp4';
+  $('trimStrip').style.backgroundImage =
+    "url('/api/recap/projects/" + p.id + "/filmstrip')";
+  trim.a = p.skip_start || 0;
+  trim.b = trim.dur - (p.skip_end || 0);
+  trimPaint();
+}
+
+function trimPaint() {
+  if (trim.dur <= 0) return;
+  const pct = t => (t / trim.dur) * 100;
+  $('gripA').style.left = pct(trim.a) + '%';
+  $('gripB').style.left = pct(trim.b) + '%';
+  $('veilA').style.width = pct(trim.a) + '%';
+  $('veilB').style.width = (100 - pct(trim.b)) + '%';
+  const dropped = trim.a > 0.05 || trim.b < trim.dur - 0.05;
+  $('trimRead').textContent =
+    'keeps ' + fmt(Math.max(0, trim.b - trim.a)) +
+    ' -- ' + fmt(trim.a) + ' to ' + fmt(trim.b) +
+    (dropped ? ' (dropping ' + fmt(trim.a) + ' at the front, ' +
+               fmt(trim.dur - trim.b) + ' at the end)' : '');
+}
+
+function trimSeek(t) {
+  const v = $('trimVid');
+  if (v.readyState >= 1) { try { v.currentTime = Math.max(0, t); } catch (e) {} }
+  if (trim.dur > 0) $('trimHead').style.left = (t / trim.dur) * 100 + '%';
+}
+
+function trimAt(ev) {
+  const box = $('trimBar').getBoundingClientRect();
+  const x = Math.min(box.width, Math.max(0, ev.clientX - box.left));
+  return (x / box.width) * trim.dur;
+}
+
+['gripA', 'gripB'].forEach(id => {
+  const grip = $(id);
+  grip.onpointerdown = ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    grip.setPointerCapture(ev.pointerId);
+    $('trimVid').pause(); trim.playing = false;
+    const side = grip.dataset.side;
+    grip.onpointermove = e => {
+      const t = trimAt(e);
+      /* the handles may not cross, and something has to be left between them
+         -- a recap of nothing is not a recap */
+      if (side === 'a') trim.a = Math.max(0, Math.min(t, trim.b - 5));
+      else trim.b = Math.min(trim.dur, Math.max(t, trim.a + 5));
+      trimPaint();
+      trimSeek(side === 'a' ? trim.a : trim.b);
+    };
+    grip.onpointerup = () => { grip.onpointermove = null; grip.onpointerup = null; };
+  };
+});
+
+$('trimBar').onpointerdown = ev => {
+  $('trimVid').pause(); trim.playing = false;
+  trimSeek(trimAt(ev));
+};
+
+$('trimVid').ontimeupdate = () => {
+  const v = $('trimVid');
+  if (trim.dur > 0) $('trimHead').style.left = (v.currentTime / trim.dur) * 100 + '%';
+  /* playing the kept part means stopping where the end card starts */
+  if (trim.playing && v.currentTime >= trim.b) { v.pause(); trim.playing = false; }
+};
+
+$('trimPlay').onclick = () => {
+  const v = $('trimVid');
+  if (trim.playing) { v.pause(); trim.playing = false; return; }
+  if (v.currentTime < trim.a || v.currentTime >= trim.b) trimSeek(trim.a);
+  trim.playing = true;
+  v.play().catch(() => {});
+};
+
+$('trimReset').onclick = () => {
+  trim.a = 0; trim.b = trim.dur; trimPaint(); trimSeek(0);
+};
+
 $('applySkip').onclick = () => {
   const p = current(); if (!p) return;
-  const s = Math.max(0, Number($('skipStart').value) || 0);
-  const e = Math.max(0, Number($('skipEnd').value) || 0);
+  const s = Math.max(0, Math.round(trim.a * 10) / 10);
+  const e = Math.max(0, Math.round((trim.dur - trim.b) * 10) / 10);
   $('skipNote').textContent = 'saving...';
-  patch(`/api/recap/projects/${p.id}`, { skip_start: s, skip_end: e })
+  patch('/api/recap/projects/' + p.id, { skip_start: s, skip_end: e })
     .then(upsert)
-    /* The script is already written; only where each line sits changes, so
-       it is laid out again rather than asked for a second time. */
+    /* The script is already written; only where each line sits changes, so it
+       is laid out again rather than asked for a second time. */
     .then(() => (current().beats || []).length
-      ? post(`/api/recap/projects/${p.id}/script/respread`, {})
+      ? post('/api/recap/projects/' + p.id + '/script/respread', {})
       : { lines: 0 })
     .then(r => {
       $('skipNote').textContent = r.lines
-        ? `the ${r.lines} lines now run from ${r.from}s to ${r.to}s -- rebuild the cut`
+        ? 'the ' + r.lines + ' lines now run from ' + fmt(r.from) + ' to ' +
+          fmt(r.to) + ' -- rebuild the cut'
         : 'saved';
     })
     .catch(err => { $('skipNote').textContent = ''; showError($('stepErr'), err.message); });

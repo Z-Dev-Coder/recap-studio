@@ -1520,6 +1520,27 @@ def preview_final(pid: str, seconds: float = 25.0) -> dict:
     return {"ok": True, "file": dest.name, "seconds": seconds}
 
 
+@router.get("/projects/{pid}/filmstrip")
+def filmstrip(pid: str):
+    """A strip of frames across the whole source, for picking the ends by eye."""
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    src = project.source_path
+    if not src.exists():
+        raise HTTPException(400, "the video has not been downloaded yet")
+
+    dest = project.dir / "filmstrip.jpg"
+    # Cheap to keep, expensive to make: built once and reused until the source
+    # itself changes, which is the only thing that can make it wrong.
+    if not dest.exists() or dest.stat().st_mtime < src.stat().st_mtime:
+        try:
+            media_mod.filmstrip(src, dest)
+        except MediaError as err:
+            raise HTTPException(400, str(err)) from None
+    return FileResponse(dest, headers={"Cache-Control": "no-cache"})
+
+
 @router.post("/projects/{pid}/source/trim")
 def trim_source(pid: str, req: TrimRequest) -> dict:
     """

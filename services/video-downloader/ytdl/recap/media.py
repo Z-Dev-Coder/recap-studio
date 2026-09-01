@@ -281,6 +281,32 @@ SHAPES = {
 MY_FONTS = ("Pyidaungsu", "Padauk Book", "Myanmar Text", "Noto Sans Myanmar")
 
 
+def filmstrip(src: Path, dest: Path, count: int = 48, height: int = 56,
+              cancel=None) -> Path:
+    """
+    One wide image of the whole video, sampled evenly.
+
+    Trimming by typing a number means watching the video with a stopwatch to
+    find where the copyright card ends. A strip of frames turns that into
+    looking: the card is visibly a different picture from the film, so the
+    seam is somewhere you can point at.
+    """
+    seconds = probe(src).duration or 0.0
+    if seconds <= 0:
+        raise MediaError("that video has no length to sample")
+    count = max(8, count)
+    # fps as a fraction, so the frames land evenly however long the video is
+    args = [
+        _tool("ffmpeg"), "-y", "-i", str(src),
+        "-vf", f"fps={count}/{seconds:.6f},scale=-1:{height},tile={count}x1",
+        "-frames:v", "1", "-q:v", "5", str(dest),
+    ]
+    _run(args, cancel=cancel)
+    if not dest.exists():
+        raise MediaError("the filmstrip came out empty")
+    return dest
+
+
 def burn_subtitles(src: Path, srt: Path, dest: Path, style: str = "clean",
                    cancel=None, lang: str = "") -> Path:
     """
