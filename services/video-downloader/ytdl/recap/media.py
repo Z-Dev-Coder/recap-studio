@@ -350,7 +350,8 @@ def burn_caption_images(src: Path, rows: list[dict], dest: Path,
     transparent PNGs, and composited. ffmpeg never sees the text.
 
     Each image is shown only between its own timestamps, so one filter chain
-    carries the whole subtitle track.
+    carries the whole subtitle track. Each row may carry x and y, fractions of
+    the frame naming where its centre goes.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     usable = [r for r in rows if Path(r["path"]).exists()]
@@ -366,9 +367,15 @@ def burn_caption_images(src: Path, rows: list[dict], dest: Path,
     for i, r in enumerate(usable, start=1):
         out = f"[v{i}]"
         start, end = float(r["start"]), float(r["end"])
-        # centred horizontally, sitting where the caption box belongs
+        # Where the caption sits, as a fraction of the frame -- the point the
+        # user dragged it to, which is its centre. Clamped inside the picture
+        # so a caption dragged to the edge is still wholly readable.
+        fx = min(1.0, max(0.0, float(r.get("x", 0.5))))
+        fy = min(1.0, max(0.0, float(r.get("y", 0.86))))
+        place = (f"x='min(max({fx:.4f}*W-w/2,0),W-w)'"
+                 f":y='min(max({fy:.4f}*H-h/2,0),H-h)'")
         chain.append(
-            f"{last}[{i}:v]overlay=(W-w)/2:(H-h)-{int(r.get('margin', 60))}"
+            f"{last}[{i}:v]overlay={place}"
             f":enable='between(t,{start:.3f},{end:.3f})'{out}"
         )
         last = out

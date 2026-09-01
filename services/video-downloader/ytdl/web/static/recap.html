@@ -294,6 +294,20 @@ details.more .card > h3 { display: none; }
   .tabs button { width: auto; }
   .rail-head { display: none; }
 }
+
+/* Placing the captions: the cut with a draggable stand-in on top. */
+.cap-stage { position: relative; margin-top: 10px; border-radius: 8px;
+             overflow: hidden; background: #000; max-height: 300px;
+             display: flex; justify-content: center; touch-action: none; }
+.cap-stage video { max-height: 300px; max-width: 100%; display: block; }
+.cap-ghost {
+  position: absolute; transform: translate(-50%, -50%); cursor: grab;
+  padding: 5px 11px; border-radius: 5px; background: rgba(0,0,0,.62);
+  color: #fff; font-weight: 700; white-space: nowrap; font-size: 13px;
+  max-width: 88%; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.35);
+}
+.cap-ghost:active { cursor: grabbing; }
 </style>
 </head>
 <body>
@@ -530,6 +544,23 @@ details.more .card > h3 { display: none; }
                   </select>
                 </div>
               </div>
+              <div style="margin-top:14px">
+                <div style="font-size:13px">Where the captions sit</div>
+                <div class="tiny" style="margin-top:2px">
+                  Drag the caption. Where you drop it is where every line is
+                  burned in.
+                </div>
+                <div class="cap-stage" id="capStage">
+                  <video id="capStageVid" muted playsinline preload="metadata"></video>
+                  <div class="cap-ghost" id="capGhost"></div>
+                </div>
+                <div class="row" style="margin-top:8px">
+                  <span class="tiny" id="capPosNote"></span>
+                  <div class="grow"></div>
+                  <button class="sm ghost" id="capPosReset">Back to the bottom</button>
+                </div>
+              </div>
+
               <div class="row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
                 <div class="grow">
                   <div style="font-size:13px">Where the caption text comes from</div>
@@ -1715,6 +1746,7 @@ function renderProject() {
   if (document.activeElement !== $('framingSel')) $('framingSel').value = p.framing || 'blur';
   $('fitVoice').checked = p.fit_to_voice !== false;
   trimLoad(p);
+  loadCapStage(p);
   const trimmed = (p.trim_start || 0) > 0 || (p.trim_end || 0) > 0;
   $('undoTrim').classList.toggle('hide', !trimmed);
   if (trimmed && !$('trimNote').textContent) {
@@ -2760,6 +2792,78 @@ const CAPTION_LOOKS = {
   neon:          { colour: '#7cf7ff', box: false, boxColour: 'rgba(0,0,0,.62)', outlineMul: 0.2 },
 };
 
+/* Placing the captions by dragging one.
+
+   A margin in pixels is a number you have to guess and then re-encode to
+   check. The stand-in sits on the actual cut at the actual position, so
+   placing it is looking rather than guessing. It carries a real line of the
+   script, because a box of lorem tells you nothing about how wide the
+   Burmese runs. */
+const capPos = { x: 0.5, y: 0.86, dragging: false };
+
+function loadCapStage(p) {
+  /* The service pushes a snapshot on every progress tick. Reading the saved
+     position out of one mid-drag would snatch the caption back under the
+     pointer. */
+  if (!p || capPos.dragging) return;
+  capPos.x = p.caption_x == null ? 0.5 : p.caption_x;
+  capPos.y = p.caption_y == null ? 0.86 : p.caption_y;
+  const src = p.has_recap
+    ? `/api/recap/projects/${p.id}/file?name=recap_${p.mode}.mp4`
+    : (p.has_source ? `/api/recap/projects/${p.id}/file?name=source.mp4` : '');
+  const v = $('capStageVid');
+  if (v.dataset.src !== src) {
+    v.dataset.src = src;
+    v.src = src;
+    v.onloadedmetadata = () => { try { v.currentTime = v.duration * 0.35; } catch (e) {} };
+  }
+  const lang = p.caption_lang || p.voice_lang || 'my';
+  const first = (p.beats || []).find(b => (b[lang] || '').trim());
+  const words = ((first && first[lang]) || 'caption').trim().split(/\s+/);
+  $('capGhost').textContent = words.slice(0, 6).join(' ');
+  paintCapPos();
+}
+
+function paintCapPos() {
+  const g = $('capGhost');
+  g.style.left = (capPos.x * 100) + '%';
+  g.style.top = (capPos.y * 100) + '%';
+  $('capPosNote').textContent =
+    `${Math.round(capPos.x * 100)}% across, ${Math.round(capPos.y * 100)}% down`;
+}
+
+$('capGhost').onpointerdown = ev => {
+  ev.preventDefault();
+  const g = $('capGhost');
+  g.setPointerCapture(ev.pointerId);
+  capPos.dragging = true;
+  const move = e => {
+    const box = $('capStage').getBoundingClientRect();
+    capPos.x = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
+    capPos.y = Math.min(1, Math.max(0, (e.clientY - box.top) / box.height));
+    paintCapPos();
+  };
+  g.onpointermove = move;
+  g.onpointerup = () => {
+    g.onpointermove = null; g.onpointerup = null;
+    capPos.dragging = false;
+    saveCapPos();
+  };
+};
+
+const saveCapPos = () => {
+  const p = current(); if (!p) return;
+  patch(`/api/recap/projects/${p.id}`,
+        { caption_x: Math.round(capPos.x * 1000) / 1000,
+          caption_y: Math.round(capPos.y * 1000) / 1000 })
+    .then(upsert)
+    .catch(e => showError($('capErr'), e.message));
+};
+
+$('capPosReset').onclick = () => {
+  capPos.x = 0.5; capPos.y = 0.86; paintCapPos(); saveCapPos();
+};
+
 $('drawCaptions').onclick = async () => {
   const p = current(); if (!p) return;
   const btn = $('drawCaptions');
@@ -2810,7 +2914,8 @@ $('drawCaptions').onclick = async () => {
 
     btn.textContent = `burning ${images.length}...`;
     const r = await post(`/api/recap/projects/${p.id}/captions/images`,
-                         { images, margin: Math.round(size * 2.2) });
+                         { images, margin: Math.round(size * 2.2),
+                           x: capPos.x, y: capPos.y });
     $('capSourceNote').textContent =
       `${r.captions} captions drawn here and burned in`;
     upsert(await request(`/api/recap/projects/${p.id}`));

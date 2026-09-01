@@ -307,6 +307,8 @@ class EditRequest(BaseModel):
     narration_speed: float | None = None
     line_gap: float | None = None
     content_type: str | None = None
+    caption_x: float | None = None
+    caption_y: float | None = None
     skip_start: float | None = None
     skip_end: float | None = None
     caption_style: str | None = None
@@ -379,6 +381,8 @@ class CaptionImage(BaseModel):
 class CaptionImagesRequest(BaseModel):
     images: list[CaptionImage]
     margin: int = 60
+    x: float = 0.5            # where the caption's centre sits, 0..1 of frame
+    y: float = 0.86
 
 
 class CaptionFileRequest(BaseModel):
@@ -1431,7 +1435,7 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
         path = shots / f"cap_{img.index:04d}.png"
         path.write_bytes(blob)
         rows.append({"path": path, "start": img.start, "end": img.end,
-                     "margin": req.margin})
+                     "margin": req.margin, "x": req.x, "y": req.y})
 
     try:
         media_mod.burn_caption_images(project.recap_path, rows,
