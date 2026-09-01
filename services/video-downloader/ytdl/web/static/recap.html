@@ -396,6 +396,7 @@ details.more .card > h3 { display: none; }
           <aside class="rail">
             <div class="rail-head">Stages</div>
             <div class="tabs" id="tabs">
+              <button data-tab="source" data-step="source"><span class="dot"></span><b>Download</b><i></i></button>
               <button data-tab="source" data-step="transcript"><span class="dot"></span><b>Transcript</b><i></i></button>
               <button data-tab="script" data-step="script"><span class="dot"></span><b>Script</b><i></i></button>
               <button data-tab="voice" data-step="voice"><span class="dot"></span><b>Voice</b><i></i></button>
@@ -1503,7 +1504,15 @@ $('tabs').addEventListener('click', ev => {
 function showTab(name) {
   if (!name || state.tab === name) return;
   state.tab = name;
-  [...$('tabs').querySelectorAll('button')].forEach(x => x.classList.toggle('on', x.dataset.tab === name));
+  /* Download and Transcript share a panel, so the first row for a tab is the
+     one that lights up -- two highlighted rows would say the page was in two
+     places at once. */
+  let lit = false;
+  [...$('tabs').querySelectorAll('button')].forEach(x => {
+    const on = !lit && x.dataset.tab === name;
+    if (on) lit = true;
+    x.classList.toggle('on', on);
+  });
   document.querySelectorAll('[data-panel]').forEach(s =>
     s.classList.toggle('hide', s.dataset.panel !== name));
   if (name === 'voice' && current()) {
