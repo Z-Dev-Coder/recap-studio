@@ -108,7 +108,7 @@
   textarea#urls {
     width: 100%; border: none; background: none; color: var(--text);
     padding: 14px 14px 8px; resize: none; font: inherit; font-size: 15px;
-    min-height: 52px; max-height: 190px; overflow-y: auto;
+    min-height: 52px; max-height: 190px; overflow-y: hidden;
   }
   textarea#urls:focus { outline: none; }
   textarea#urls::placeholder { color: var(--faint); }
@@ -391,7 +391,8 @@
   <section class="composer" id="composer">
     <div class="composer-main">
       <textarea id="urls" rows="1" spellcheck="false"
-        placeholder="Paste a video link&#10;&#10;Add more on separate lines to download a batch"></textarea>
+        placeholder="Paste a video link"
+        title="One per line downloads a batch"></textarea>
       <div id="preview"></div>
     </div>
 
@@ -554,7 +555,11 @@ $("theme").onclick = () => {
 const ta = $("urls");
 function autosize() {
   ta.style.height = "auto";
-  ta.style.height = Math.min(ta.scrollHeight, 190) + "px";
+  const wanted = ta.scrollHeight;
+  ta.style.height = Math.min(wanted, 190) + "px";
+  // A scrollbar sitting in an empty box says the field is full when it is
+  // not. It appears only once there is genuinely more than fits.
+  ta.style.overflowY = wanted > 190 ? "auto" : "hidden";
 }
 ta.addEventListener("input", () => { autosize(); schedulePreview(); });
 
