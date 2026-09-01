@@ -2703,12 +2703,23 @@ $('writeCopy').onclick = async () => {
    the thumbnail overlay has always looked right. So each line is drawn here,
    sent as a transparent PNG, and composited by ffmpeg, which never sees the
    text. */
+/* Measuring has to use the same font the drawing will, or the pieces are
+   sized against one face and rendered in another. */
+function measurer(style) {
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.font = capFont(style);
+  return ctx;
+}
+
+const capFont = style =>
+  `700 ${style.size}px "Pyidaungsu", "Myanmar Text", "Padauk Book", sans-serif`;
+
 function drawCaptionImage(text, width, style) {
   const pad = Math.round(style.size * 0.45);
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d');
 
-  const font = `700 ${style.size}px "Pyidaungsu", "Myanmar Text", "Padauk Book", sans-serif`;
+  const font = capFont(style);
   ctx.font = font;
   const lines = wrapCaption(ctx, text, width - pad * 4);
   const lineHeight = Math.round(style.size * 1.55);   // Myanmar stacks need room
@@ -2778,12 +2789,21 @@ $('drawCaptions').onclick = async () => {
         .filter(l => l.trim() && !stamp.test(l) && !/^\d+$/.test(l.trim()))
         .join(' ').trim();
       if (!text) continue;
-      images.push({
-        index: images.length,
-        start: secs(m[1], m[2], m[3], m[4]),
-        end: secs(m[5], m[6], m[7], m[8]),
-        png_base64: drawCaptionImage(text, w, style).split(',')[1],
-      });
+      const from = secs(m[1], m[2], m[3], m[4]);
+      const to = secs(m[5], m[6], m[7], m[8]);
+      const pad = Math.round(style.size * 0.45);
+      const room = w - pad * 4;
+      const chunks = splitCaption(measurer(style), text, room, CAP_LINES);
+      const timed = timeCaption(chunks, from, to,
+                                t => t.replace(/\s+/g, '').length || 1);
+      for (const piece of timed) {
+        images.push({
+          index: images.length,
+          start: piece.start,
+          end: piece.end,
+          png_base64: drawCaptionImage(piece.text, w, style).split(',')[1],
+        });
+      }
       btn.textContent = `drawing ${images.length}...`;
     }
     if (!images.length) throw new Error('there are no subtitle lines to draw');
@@ -3395,6 +3415,69 @@ function roundRect(ctx, x, y, w, h, r) {
    So: no cap, and anything still too wide is broken by grapheme cluster.
    Intl.Segmenter is what keeps that safe -- a Myanmar syllable is several code
    points, and splitting between them would strand a vowel sign on its own. */
+/* One line of script is not one caption.
+
+   A narrated line runs ten or fifteen seconds and can be two full sentences.
+   Put all of it on screen at once and it is a wall of text that appears
+   before it is spoken and lingers after -- and the reader is left hunting for
+   the part being said now.
+
+   So the line is broken into pieces that fit CAP_LINES rows, and the line's
+   own span is shared out between them by length: the voice reads at a steady
+   rate, so a piece twice as long is on screen twice as long, and the caption
+   keeps pace with what is being said. Sentence and clause marks are preferred
+   break points, because that is where a reader expects one. */
+const CAP_LINES = 2;          // rows on screen at once
+const CAP_MIN = 0.7;          // seconds; below this a piece only flickers
+
+function splitCaption(ctx, text, maxWidth, maxLines) {
+  const rows = piece => wrapCaption(ctx, piece, maxWidth).length;
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const chunks = [];
+  let cur = '';
+
+  for (const word of words) {
+    const attempt = cur ? cur + ' ' + word : word;
+    if (cur && rows(attempt) > maxLines) {
+      chunks.push(cur);
+      cur = word;
+    } else {
+      cur = attempt;
+    }
+    // A full stop is where a reader expects the text to change. Only a
+    // full stop: U+104A is Burmese's comma, and breaking there chops a
+    // sentence into fragments too short to be worth putting on screen.
+    if (cur && /[\u104B.!?]$/.test(cur)) { chunks.push(cur); cur = ''; }
+  }
+  if (cur) chunks.push(cur);
+  return chunks.length ? chunks : [String(text)];
+}
+
+/* Share one line's span between its pieces, by how much there is to read. */
+function timeCaption(chunks, start, end, sizeOf) {
+  const span = Math.max(0, end - start);
+  const sizes = chunks.map(sizeOf);
+  const total = sizes.reduce((a, b) => a + b, 0) || 1;
+  const out = [];
+  let at = start;
+  chunks.forEach((text, i) => {
+    const last = i === chunks.length - 1;
+    const to = last ? end : at + (span * sizes[i]) / total;
+    out.push({ text, start: at, end: to });
+    at = to;
+  });
+  /* A piece too brief to read is worse than a longer one: fold it into its
+     neighbour rather than flashing it. */
+  for (let i = out.length - 1; i > 0; i--) {
+    if (out[i].end - out[i].start < CAP_MIN) {
+      out[i - 1].text += ' ' + out[i].text;
+      out[i - 1].end = out[i].end;
+      out.splice(i, 1);
+    }
+  }
+  return out;
+}
+
 function wrapCaption(ctx, text, maxWidth) {
   const seg = typeof Intl !== 'undefined' && Intl.Segmenter
     ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
