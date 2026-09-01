@@ -327,6 +327,8 @@ def run_script(
         frames=frames,
         treatment=project.content_type or "recap",
         cancel=cancel,
+        skip_start=project.skip_start,
+        skip_end=project.skip_end,
         light_model=light_model,
         light_analysis=light_analysis,
         quality=quality,
@@ -402,6 +404,8 @@ def run_video(project: Project, on_progress=None, cancel=None) -> None:
             framing=project.framing or "blur",
             shape=project.shape or "",
             fit_seconds=wants,
+            first=project.skip_start,
+            last=(project.duration - project.skip_end) if project.skip_end else 0.0,
         )
     except MediaError as exc:
         raise StepError(str(exc)) from exc

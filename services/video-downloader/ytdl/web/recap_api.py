@@ -307,6 +307,8 @@ class EditRequest(BaseModel):
     narration_speed: float | None = None
     line_gap: float | None = None
     content_type: str | None = None
+    skip_start: float | None = None
+    skip_end: float | None = None
     caption_style: str | None = None
     caption_lang: str | None = None
     language: str | None = None
@@ -677,7 +679,9 @@ def manual_script(pid: str, req: ManualScriptRequest) -> dict:
 
     lang = req.lang if req.lang in ("en", "my") else "my"
     duration = project.duration or 0.0
-    written = script_mod.parse_manual(req.text, duration, lang)
+    written = script_mod.parse_manual(req.text, duration, lang,
+                                      skip_start=project.skip_start,
+                                      skip_end=project.skip_end)
     if not written:
         raise HTTPException(400, "there are no lines in that script")
 
@@ -692,7 +696,9 @@ def manual_script(pid: str, req: ManualScriptRequest) -> dict:
                  for b in written]
         at = len(rows) if req.after < 0 else max(0, min(len(rows), req.after + 1))
         rows[at:at] = fresh
-        beats = script_mod.respread(rows, duration)
+        beats = script_mod.respread(rows, duration,
+                                    skip_start=project.skip_start,
+                                    skip_end=project.skip_end)
         if not beats:
             raise HTTPException(400, "there are no lines in that script")
 
@@ -974,6 +980,38 @@ def write_post_copy(pid: str, req: StepRequest) -> dict:
     project.save()
     push(project)
     return {"ok": True, "model": spec, "hashtags": len(out["hashtags"])}
+
+
+@router.post("/projects/{pid}/script/respread")
+def respread_script(pid: str) -> dict:
+    """
+    Lay the existing script across the video again.
+
+    Used after changing which parts of the video the recap may draw on -- the
+    lines are already written and are not touched, only where each one sits.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    if not project.beats:
+        raise HTTPException(400, "there is no script to lay out")
+
+    beats = script_mod.respread(
+        [dict(b) for b in project.beats], project.duration or 0.0,
+        skip_start=project.skip_start, skip_end=project.skip_end,
+    )
+    if not beats:
+        raise HTTPException(400, "there is no script to lay out")
+
+    project.beats = [b.as_dict() for b in beats]
+    project.timeline = []
+    for step in ("video", "final"):
+        project.mark(step, "idle", message="the script moved - rebuild the cut")
+    pipeline.write_subtitles(project)
+    project.save()
+    push(project)
+    return {"ok": True, "lines": len(beats),
+            "from": round(beats[0].start, 1), "to": round(beats[-1].end, 1)}
 
 
 @router.post("/projects/{pid}/script/extend")

@@ -357,6 +357,30 @@
                 The re-trim happens when the narration is generated, because only
                 then is it known how long each line runs.
               </div>
+
+              <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+                <div class="note">Skip the ends</div>
+                <div class="tiny" style="margin-top:4px">
+                  A copyright card, a channel logo or an end title is not the
+                  story, and a beat placed on one narrates a logo -- the voice
+                  then runs a few seconds ahead of the picture for the whole
+                  video. Say how much to leave alone and no moment is taken
+                  from there. The file itself is untouched, so the transcript
+                  and the script survive.
+                </div>
+                <div class="row" style="margin-top:10px;gap:14px;align-items:flex-end">
+                  <label class="tiny">first
+                    <input type="number" id="skipStart" min="0" step="1" value="0"
+                           style="width:80px;display:block;margin-top:4px"> seconds
+                  </label>
+                  <label class="tiny">last
+                    <input type="number" id="skipEnd" min="0" step="1" value="0"
+                           style="width:80px;display:block;margin-top:4px"> seconds
+                  </label>
+                  <button class="ghost" id="applySkip">Apply</button>
+                </div>
+                <div class="tiny" id="skipNote" style="margin-top:8px"></div>
+              </div>
             </div>
 
             <div class="card">
@@ -1542,6 +1566,8 @@ function renderProject() {
   if (document.activeElement !== $('shapeSel')) $('shapeSel').value = p.shape || '';
   if (document.activeElement !== $('framingSel')) $('framingSel').value = p.framing || 'blur';
   $('fitVoice').checked = p.fit_to_voice !== false;
+  if (document.activeElement !== $('skipStart')) $('skipStart').value = p.skip_start || 0;
+  if (document.activeElement !== $('skipEnd')) $('skipEnd').value = p.skip_end || 0;
   const trimmed = (p.trim_start || 0) > 0 || (p.trim_end || 0) > 0;
   $('undoTrim').classList.toggle('hide', !trimmed);
   if (trimmed && !$('trimNote').textContent) {
@@ -2696,6 +2722,26 @@ const saveLook = () => {
 };
 ['shapeSel', 'framingSel', 'burnCaps', 'capStyle', 'capLang']
   .forEach(id => { $(id).onchange = saveLook; });
+
+$('applySkip').onclick = () => {
+  const p = current(); if (!p) return;
+  const s = Math.max(0, Number($('skipStart').value) || 0);
+  const e = Math.max(0, Number($('skipEnd').value) || 0);
+  $('skipNote').textContent = 'saving...';
+  patch(`/api/recap/projects/${p.id}`, { skip_start: s, skip_end: e })
+    .then(upsert)
+    /* The script is already written; only where each line sits changes, so
+       it is laid out again rather than asked for a second time. */
+    .then(() => (current().beats || []).length
+      ? post(`/api/recap/projects/${p.id}/script/respread`, {})
+      : { lines: 0 })
+    .then(r => {
+      $('skipNote').textContent = r.lines
+        ? `the ${r.lines} lines now run from ${r.from}s to ${r.to}s -- rebuild the cut`
+        : 'saved';
+    })
+    .catch(err => { $('skipNote').textContent = ''; showError($('stepErr'), err.message); });
+};
 
 $('lenSlider').oninput = paintLength;
 // This only moved the slider, so on a fresh project -- where it already sits

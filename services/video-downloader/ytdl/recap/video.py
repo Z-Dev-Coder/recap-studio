@@ -48,7 +48,8 @@ def _bounds(beats: list[dict], duration: float) -> list[tuple[float, float]]:
 
 
 def plan_fitted(beats: list[dict], wants: list[float],
-                duration: float = 0.0) -> list[tuple[float, float]]:
+                duration: float = 0.0, first: float = 0.0,
+                last: float = 0.0) -> list[tuple[float, float]]:
     """
     Give each beat exactly as much footage as its narration needs.
 
@@ -63,9 +64,20 @@ def plan_fitted(beats: list[dict], wants: list[float],
     its neighbours -- footage belonging to the next beat is not this beat's to
     borrow.
     """
+    # The ends the recap may not draw on. A beat's neighbours bound it from
+    # the inside; these bound the outermost beats from the outside, so no clip
+    # reaches back into the copyright card the beats were told to avoid.
+    floor = max(0.0, first)
+    ceiling = last if last > floor else (duration or 0.0)
+
     limits = _bounds(beats, duration)
     out = []
     for beat, want, (lo, hi) in zip(beats, wants, limits):
+        lo = max(lo, floor)
+        if ceiling:
+            hi = min(hi, ceiling)
+        if hi - lo < MIN_CLIP:        # a beat sitting inside a skipped end
+            lo, hi = floor, max(floor + MIN_CLIP, min(ceiling or hi, floor + MIN_CLIP))
         start, end = float(beat["start"]), float(beat["end"])
         want = max(MIN_CLIP, float(want or 0))
         middle = (start + end) / 2
@@ -78,11 +90,11 @@ def plan_fitted(beats: list[dict], wants: list[float],
             # taking footage a neighbour also takes costs a moment of repeated
             # picture; the voice staying on its own clip is worth more than
             # that. Only the video's own ends are hard limits.
-            lo = max(0.0, middle - want / 2)
+            lo = max(floor, middle - want / 2)
             hi = lo + want
-            if duration > 0 and hi > duration:
-                hi = duration
-                lo = max(0.0, duration - want)
+            if ceiling and hi > ceiling:
+                hi = ceiling
+                lo = max(floor, ceiling - want)
             out.append((lo, hi))
             continue
 
@@ -212,6 +224,8 @@ def build(
     framing: str = "blur",
     shape: str = "",
     fit_seconds: list[float] | None = None,
+    first: float = 0.0,
+    last: float = 0.0,
 ) -> dict:
     """
     Splice the beats out of `source` into `dest`.
@@ -277,7 +291,7 @@ def build(
         }
 
     if fit_seconds:
-        plan = plan_fitted(ordered, fit_seconds, duration)
+        plan = plan_fitted(ordered, fit_seconds, duration, first, last)
     else:
         plan = plan_clips(ordered, budget, duration)
 

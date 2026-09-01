@@ -105,6 +105,12 @@ class Project:
     # a subtitle file the user supplied, used for the burned-in captions
     # instead of the one generated from the script
     caption_file: str = ""
+    # Stretches at the start and end the recap must not draw on -- the channel
+    # logo, the copyright card, the end titles. Unlike trimming, the file is
+    # left alone: only where the beats may be placed changes, so the script and
+    # the transcript survive.
+    skip_start: float = 0.0
+    skip_end: float = 0.0
     trim_start: float = 0.0
     trim_end: float = 0.0
     # What the video turned out to be about: characters, events, causes.
@@ -216,6 +222,8 @@ class Project:
             "narration_speed": self.narration_speed,
             "line_gap": self.line_gap,
             "caption_file": self.caption_file,
+            "skip_start": self.skip_start,
+            "skip_end": self.skip_end,
             "trim_start": self.trim_start,
             "trim_end": self.trim_end,
             "voice_reference": self.voice_reference,
@@ -307,6 +315,8 @@ class Project:
             narration_speed=float(data.get("narration_speed", 1.0) or 1.0),
             line_gap=float(data.get("line_gap", 0.55) if data.get("line_gap") is not None else 0.55),
             caption_file=data.get("caption_file", "") or "",
+            skip_start=float(data.get("skip_start", 0) or 0),
+            skip_end=float(data.get("skip_end", 0) or 0),
             trim_start=float(data.get("trim_start", 0) or 0),
             trim_end=float(data.get("trim_end", 0) or 0),
             story=data.get("story") or {},

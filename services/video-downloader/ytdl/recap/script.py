@@ -56,6 +56,8 @@ def plan_windows(
     count: int,
     cues: list[Cue] | None = None,
     events: list[dict] | None = None,
+    skip_start: float = 0.0,
+    skip_end: float = 0.0,
 ) -> list[tuple[float, float]]:
     """
     Chapters across the whole video: the coverage guarantee.
@@ -74,8 +76,18 @@ def plan_windows(
     count = max(1, count)
     if duration <= 0:
         return [(0.0, 0.0)]
-    step = duration / count
-    edges = [i * step for i in range(count + 1)]
+
+    # The chapters cover the part of the video worth recapping, which is not
+    # always the whole file: a channel logo at the front and an end card at the
+    # back are not the story, and a beat placed on one narrates a logo.
+    first = max(0.0, float(skip_start or 0))
+    last = duration - max(0.0, float(skip_end or 0))
+    if last - first < 5.0:            # an absurd pair of numbers; ignore them
+        first, last = 0.0, duration
+    span = last - first
+
+    step = span / count
+    edges = [first + i * step for i in range(count + 1)]
 
     seams = _boundary_candidates(cues, events)
     if seams:
@@ -617,6 +629,8 @@ def generate(
     frames: list[tuple[str, bytes]] | None = None,
     treatment: str = "recap",
     cancel=None,
+    skip_start: float = 0.0,
+    skip_end: float = 0.0,
     light_model: str = "",
     light_analysis: bool = False,
     quality: str = "",
@@ -712,7 +726,8 @@ def generate(
     )
 
     # chapters can now avoid cutting an event in half
-    windows = plan_windows(duration, count, cues, story.events if story else None)
+    windows = plan_windows(duration, count, cues, story.events if story else None,
+                           skip_start=skip_start, skip_end=skip_end)
 
     # The frames were read in stage 1 and what they showed is in the events, so
     # sending them again here would pay for the same pictures twice to tell the
@@ -792,7 +807,8 @@ def generate(
 
 # ------------------------------------------------------- a script of your own
 
-def parse_manual(text: str, duration: float, lang: str = "my") -> list[Beat]:
+def parse_manual(text: str, duration: float, lang: str = "my",
+                 skip_start: float = 0.0, skip_end: float = 0.0) -> list[Beat]:
     """
     Turn a script the user wrote themselves into beats.
 
@@ -820,7 +836,8 @@ def parse_manual(text: str, duration: float, lang: str = "my") -> list[Beat]:
     if not rows:
         return []
 
-    windows = plan_windows(duration, len(rows)) if duration > 0 else []
+    windows = (plan_windows(duration, len(rows), skip_start=skip_start,
+                            skip_end=skip_end) if duration > 0 else [])
     beats: list[Beat] = []
     for i, (start, end, body) in enumerate(rows):
         if start is None and windows:
@@ -862,7 +879,8 @@ def _manual_srt(text: str) -> list[tuple[float, float, str]] | None:
     return out or None
 
 
-def respread(rows: list[dict], duration: float) -> list[Beat]:
+def respread(rows: list[dict], duration: float,
+             skip_start: float = 0.0, skip_end: float = 0.0) -> list[Beat]:
     """
     Lay a set of lines across the whole video again, in order.
 
@@ -876,7 +894,8 @@ def respread(rows: list[dict], duration: float) -> list[Beat]:
     if not rows:
         return []
 
-    windows = plan_windows(duration, len(rows)) if duration > 0 else []
+    windows = (plan_windows(duration, len(rows), skip_start=skip_start,
+                            skip_end=skip_end) if duration > 0 else [])
     beats: list[Beat] = []
     for i, row in enumerate(rows):
         if windows:
