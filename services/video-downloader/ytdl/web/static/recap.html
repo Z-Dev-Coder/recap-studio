@@ -1747,9 +1747,10 @@ function renderProject() {
 
   /* cut */
   const v = $('recapVideo');
-  const src = p.has_recap
-    ? `/api/recap/projects/${p.id}/file?name=recap_${p.mode}.mp4&t=${Math.round(p.steps.video.updated || 0)}`
-    : '';
+  const cutStamp = stableStamp(p.steps.video);
+  const src = !p.has_recap ? ''
+    : cutStamp === null ? null
+    : `/api/recap/projects/${p.id}/file?name=recap_${p.mode}.mp4&t=${cutStamp}`;
   pointAt(v, src);
   const full = Math.max(5, Math.round(p.duration || 0));
   const floor = Math.min(full, Math.max(5, Math.ceil((p.beats || []).length * 1.5)));
@@ -1927,7 +1928,17 @@ function renderGuide(p) {
    never while you are watching it. A player showing something you chose
    yourself -- a preview, another language -- keeps it until you choose again
    or the underlying file is rebuilt. */
+/* The cache-buster is the step's timestamp, and mark() rewrites that on every
+   progress tick -- so while a step runs its own player was re-pointed once a
+   second at a file that is not finished being written. The timestamp is only
+   worth reading once the step has stopped. */
+function stableStamp(step) {
+  if (!step || step.status === 'running') return null;    // hold what we have
+  return Math.round(step.updated || 0);
+}
+
 function pointAt(v, src, { force = false } = {}) {
+  if (src === null) return;          // nothing new to say while work is running
   if (v.dataset.src === src) return;
   if (!force && v.dataset.pinned === '1' && src) return;
   if (!force && !v.paused && !v.ended && v.currentTime > 0) return;
@@ -1942,9 +1953,10 @@ function renderVoice(p) {
   /* Busted by the step that writes the file. It used to be the voice step,
      which ticks once per spoken line, so the finished video reloaded dozens
      of times while narration was being generated. */
-  const src = p.has_final
-    ? `/api/recap/projects/${p.id}/file?name=final_${p.mode}_${p.voice_lang}.mp4&t=${Math.round((p.steps.final || {}).updated || 0)}`
-    : '';
+  const stamp = stableStamp(p.steps.final);
+  const src = !p.has_final ? ''
+    : stamp === null ? null
+    : `/api/recap/projects/${p.id}/file?name=final_${p.mode}_${p.voice_lang}.mp4&t=${stamp}`;
   pointAt(v, src);
   const finals = p.finals || {};
   const names = { en: 'English', my: 'Burmese' };
