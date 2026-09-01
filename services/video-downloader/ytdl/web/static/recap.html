@@ -2710,7 +2710,7 @@ function drawCaptionImage(text, width, style) {
 
   const font = `700 ${style.size}px "Pyidaungsu", "Myanmar Text", "Padauk Book", sans-serif`;
   ctx.font = font;
-  const lines = wrapText(ctx, text, width - pad * 4);
+  const lines = wrapCaption(ctx, text, width - pad * 4);
   const lineHeight = Math.round(style.size * 1.55);   // Myanmar stacks need room
 
   c.width = width;
@@ -3381,6 +3381,58 @@ function roundRect(ctx, x, y, w, h, r) {
   c.addEventListener('pointerup', stop);
   c.addEventListener('pointercancel', stop);
 })();
+
+/* Wrapping a caption, which is not wrapping a thumbnail.
+
+   wrapText() below caps at three lines, because a thumbnail with more than
+   three is not a thumbnail. A caption that loses its fourth line has simply
+   lost the end of the sentence, and does it silently.
+
+   It also breaks on spaces, and Burmese frequently has none for a whole
+   clause -- so the clause is one "word", wider than the line, and what does
+   not fit runs off the edge of the canvas. Either way the tail disappears.
+
+   So: no cap, and anything still too wide is broken by grapheme cluster.
+   Intl.Segmenter is what keeps that safe -- a Myanmar syllable is several code
+   points, and splitting between them would strand a vowel sign on its own. */
+function wrapCaption(ctx, text, maxWidth) {
+  const seg = typeof Intl !== 'undefined' && Intl.Segmenter
+    ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
+
+  const clusters = piece => seg
+    ? [...seg.segment(piece)].map(g => g.segment)
+    : [...piece];
+
+  /* a token with no break in it, cut into as many lines as it needs */
+  const hardBreak = piece => {
+    const out = [];
+    let line = '';
+    for (const c of clusters(piece)) {
+      if (line && ctx.measureText(line + c).width > maxWidth) {
+        out.push(line);
+        line = c;
+      } else {
+        line += c;
+      }
+    }
+    if (line) out.push(line);
+    return out;
+  };
+
+  const lines = [];
+  let line = '';
+  for (const word of String(text).split(/\s+/).filter(Boolean)) {
+    const attempt = line ? line + ' ' + word : word;
+    if (ctx.measureText(attempt).width <= maxWidth) { line = attempt; continue; }
+    if (line) { lines.push(line); line = ''; }
+    if (ctx.measureText(word).width <= maxWidth) { line = word; continue; }
+    const parts = hardBreak(word);
+    lines.push(...parts.slice(0, -1));
+    line = parts[parts.length - 1] || '';
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [''];
+}
 
 function wrapText(ctx, text, maxWidth) {
   const words = text.split(/\s+/);
