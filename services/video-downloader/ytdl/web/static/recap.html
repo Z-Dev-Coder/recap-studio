@@ -274,8 +274,14 @@ details.more > summary::before { content: '\25B8  '; color: var(--faint); }
 details.more[open] > summary { color: var(--text); }
 details.more[open] > summary::before { content: '\25BE  '; }
 details.more > summary:hover { color: var(--text); }
-details.more > *:last-child { padding-bottom: 14px; }
-details.more .card { border: 0; padding: 0; margin: 0; }
+details.more > *:last-child { padding-bottom: 16px; }
+details.more[open] > summary { border-bottom: 1px solid var(--line);
+                               margin-bottom: 14px; }
+/* One box, not a box inside a box: the summary is the card's heading now, so
+   the card inside gives up its frame, its shadow and its own title. */
+details.more .card { border: 0; padding: 0; margin: 0; background: none;
+                     box-shadow: none; }
+details.more .card > h3 { display: none; }
 
 @media (max-width: 900px) {
   .editor { grid-template-columns: 1fr; }
