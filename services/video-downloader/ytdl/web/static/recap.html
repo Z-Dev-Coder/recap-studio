@@ -713,6 +713,11 @@ details.more .card > h3 { display: none; }
                   keeps the pitch as spoken; neither needs the lines speaking
                   again.
                 </div>
+                <div class="row" style="margin-top:6px">
+                  <span class="tiny" id="rateNote"></span>
+                  <div class="grow"></div>
+                  <button class="sm ghost" id="hearPace">Hear a line at this speed</button>
+                </div>
                 <div class="tiny" id="paceNote" style="margin-top:6px;color:var(--accent)"></div>
                 <div class="row" style="margin-top:16px">
                   <label class="f grow" style="margin:0">Narration speed</label>
@@ -2030,7 +2035,7 @@ async function previewVoice(name) {
     if (!res.ok) throw new Error((await res.json()).detail || 'preview failed');
     const blob = await res.blob();
     if (state.audio) { state.audio.pause(); }
-    state.audio = new Audio(URL.createObjectURL(blob));
+    state.audio = atVoiceRate(new Audio(URL.createObjectURL(blob)));
     state.audio.play();
   } catch (e) { showError($('stepErr'), e.message); }
   finally { if (btn) { btn.disabled = false; btn.innerHTML = '&#9654;'; } }
@@ -2111,7 +2116,8 @@ async function loadVoiceLines(p) {
       } else if (b.dataset.hear !== undefined) {
         const l = state.lines.find(x => x.index === Number(b.dataset.hear));
         if (state.audio) state.audio.pause();
-        state.audio = new Audio(`/api/recap/projects/${proj.id}/file?name=${encodeURIComponent('voice/' + l.file)}`);
+        state.audio = atVoiceRate(new Audio(
+          `/api/recap/projects/${proj.id}/file?name=${encodeURIComponent('voice/' + l.file)}`));
         state.audio.play();
       }
     };
@@ -2312,6 +2318,7 @@ function renderCandidates(p) {
         ${c.suspect ? '<span class="pill" style="color:var(--err)">rambles past the line</span>' : ''}
       </span>
       <audio controls preload="none" style="height:32px"
+             onloadedmetadata="atVoiceRate(this)"
              src="/api/recap/projects/${p.id}/file?name=${encodeURIComponent(c.file)}"></audio>
       <button class="sm ${on ? 'ghost' : ''}" data-pick="${c.index}" ${on ? 'disabled' : ''}>
         ${on ? 'chosen' : 'Use this'}
@@ -2874,6 +2881,17 @@ const saveCapPos = () => {
     .catch(e => showError($('capErr'), e.message));
 };
 
+/* One click to hear the pace, without hunting for a line to press play on. */
+$('hearPace').onclick = () => {
+  const p = current(); if (!p) return;
+  const line = (state.lines || []).find(l => l.file);
+  if (!line) { showError($('stepErr'), 'no narration has been generated yet'); return; }
+  if (state.audio) state.audio.pause();
+  state.audio = atVoiceRate(new Audio(
+    `/api/recap/projects/${p.id}/file?name=${encodeURIComponent('voice/' + line.file)}`));
+  state.audio.play();
+};
+
 $('capPosReset').onclick = () => {
   capPos.x = 0.5; capPos.y = 0.86; paintCapPos(); saveCapPos();
 };
@@ -3193,6 +3211,42 @@ $('titleField').oninput = saveCopy;
 $('descField').oninput = saveCopy;
 
 $('voiceStyle').oninput = autosaveLater(() => ({ voice_style: $('voiceStyle').value }), 1200);
+/* Hearing the speed before committing to it.
+
+   The slider decides how fast the narration is played in the final render,
+   but until you have heard it, 1.35x is a number. So everything that plays a
+   voice clip here plays it at that rate: the per-line players, the ones in
+   the list, the audition. preservesPitch keeps it the same voice rather than
+   a chipmunk, which is what the render does too.
+
+   Nothing is re-spoken and no file changes -- this is playback, the same way
+   an audio player has a speed control. */
+const voiceRate = () => {
+  const v = Number($('narrSpeedSlider').value) / 100;
+  return v > 0.1 ? v : 1;
+};
+
+function atVoiceRate(el) {
+  if (!el) return el;
+  el.preservesPitch = true;
+  el.mozPreservesPitch = true;
+  el.webkitPreservesPitch = true;
+  el.playbackRate = voiceRate();
+  return el;
+}
+
+/* Everything already on screen follows the slider as it moves, so the change
+   is audible mid-listen rather than on the next click. */
+function applyVoiceRate() {
+  const rate = voiceRate();
+  if (state.audio) { state.audio.preservesPitch = true; state.audio.playbackRate = rate; }
+  document.querySelectorAll('audio').forEach(a => {
+    a.preservesPitch = true;
+    a.playbackRate = rate;
+  });
+  $('rateNote').textContent = rate === 1 ? '' : `players are at ${rate.toFixed(2)}x`;
+}
+
 const saveMix = autosaveLater(() => ({
   original_volume: Number($('origVolSlider').value) / 100,
   narration_volume: Number($('narrVolSlider').value) / 100,
@@ -3212,7 +3266,7 @@ const paceChanged = () => {
     : '';
 };
 $('narrSpeedSlider').onchange = paceChanged;
-$('narrSpeedSlider').oninput = paintMix;
+$('narrSpeedSlider').oninput = () => { paintMix(); applyVoiceRate(); };
 $('lineGapSlider').onchange = paceChanged;
 $('lineGapSlider').oninput = paintMix;
 
