@@ -252,6 +252,35 @@ def _plausible_reference(clip: Path, text: str, slack: float = 2.2) -> bool:
     return expected / slack <= seconds <= expected * slack
 
 
+def trim_silence(pcm: bytes, rate: int, floor: float = 0.006,
+                 keep: float = 0.06) -> bytes:
+    """
+    Cut the silence the model leaves at either end of a clip.
+
+    VoxCPM pads its output -- measured on real narration, up to 1.4 seconds
+    before the first word and a fifth of a second after the last. That silence
+    was being measured as part of the line, so the cut allocated footage for
+    it, and the app's own lead-in was then added on top. The picture changed,
+    then nothing happened, twice over.
+
+    A little is kept at each end so the speech does not begin on the very first
+    sample, which sounds clipped.
+    """
+    import numpy as np
+
+    audio = np.frombuffer(pcm, dtype=np.int16)
+    if audio.size == 0:
+        return pcm
+    loud = np.abs(audio.astype(np.float32) / 32768.0) > floor
+    if not loud.any():
+        return pcm          # nothing but silence: leave it alone rather than empty
+
+    margin = int(keep * rate)
+    first = max(0, int(np.argmax(loud)) - margin)
+    last = min(audio.size, audio.size - int(np.argmax(loud[::-1])) + margin)
+    return audio[first:last].tobytes()
+
+
 def split_for_speech(text: str, limit: int = CHUNK_CHARS) -> list[str]:
     """
     Break a line into pieces small enough to speak in one pass.
@@ -433,7 +462,7 @@ def speak(
                 f"VoxCPM could not speak this part -- {str(exc)[:120]} "
                 f"(text was {len(chunk)} characters)"
             ) from exc
-        piece = _pcm(audio)
+        piece = trim_silence(_pcm(audio), rate)
         spoken.append(piece)
 
         # the first thing spoken becomes the voice everything after it copies

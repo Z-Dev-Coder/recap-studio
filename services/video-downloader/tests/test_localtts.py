@@ -126,3 +126,55 @@ def test_a_reference_with_no_text_is_not_judged(tmp_path):
     """With no claim about what it says, there is nothing to contradict."""
     clip = make_wav(tmp_path / "any.wav", 30.0)
     assert localtts._plausible_reference(clip, "")
+
+
+# ------------------------------------------------------- silence in the clips
+
+def tone(seconds, rate=16000, level=6000):
+    import numpy as np
+    return (np.random.randn(int(rate * seconds)) * level).astype("int16")
+
+
+def quiet(seconds, rate=16000):
+    import numpy as np
+    return np.zeros(int(rate * seconds), dtype="int16")
+
+
+def joined(*parts):
+    import numpy as np
+    return np.concatenate(parts).tobytes()
+
+
+def test_padding_at_both_ends_is_removed():
+    """
+    Measured on real narration: up to 1.4 seconds before the first word. That
+    silence was counted as part of the line, so footage was cut for it and the
+    app's own lead-in was added on top.
+    """
+    rate = 16000
+    out = localtts.trim_silence(joined(quiet(1.4), tone(1.0), quiet(0.2)), rate)
+    seconds = len(out) // 2 / rate
+    assert 1.0 <= seconds <= 1.2      # the speech, plus a little kept either side
+
+
+def test_a_clip_that_is_already_tight_is_left_as_it_is():
+    rate = 16000
+    pcm = joined(tone(2.0))
+    assert len(localtts.trim_silence(pcm, rate)) == len(pcm)
+
+
+def test_silence_is_kept_at_the_edges_so_speech_is_not_clipped():
+    rate = 16000
+    out = localtts.trim_silence(joined(quiet(0.5), tone(1.0), quiet(0.5)), rate)
+    assert len(out) // 2 / rate > 1.0
+
+
+def test_a_silent_clip_is_not_emptied():
+    """Nothing but silence is a failure to report, not something to delete."""
+    rate = 16000
+    pcm = joined(quiet(1.0))
+    assert len(localtts.trim_silence(pcm, rate)) == len(pcm)
+
+
+def test_an_empty_clip_survives():
+    assert localtts.trim_silence(b"", 16000) == b""
