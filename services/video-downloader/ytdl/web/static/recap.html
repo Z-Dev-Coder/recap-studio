@@ -704,6 +704,42 @@ details.more .card > h3 { display: none; }
                 <span class="tiny">Free tier speaks ~3 lines a minute.</span>
               </div>
 
+              <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+                <div class="note">Pace</div>
+                <div class="tiny" style="margin-top:4px">
+                  Both of these decide how long the narration runs, and the
+                  footage is cut to fit it &mdash; so they belong here, before the
+                  cut is built. Set them once and the cut is built once. Speed
+                  keeps the pitch as spoken; neither needs the lines speaking
+                  again.
+                </div>
+                <div class="tiny" id="paceNote" style="margin-top:6px;color:var(--accent)"></div>
+                <div class="row" style="margin-top:16px">
+                  <label class="f grow" style="margin:0">Narration speed</label>
+                  <span class="lenval" id="narrSpeed">1.00&times;</span>
+                </div>
+                <input type="range" id="narrSpeedSlider" min="50" max="200" value="100">
+                <div class="row">
+                  <span class="tiny">slower</span><div class="grow"></div><span class="tiny">faster</span>
+                </div>
+
+                <div class="row" style="margin-top:16px">
+                  <label class="f grow" style="margin:0">Pause around each line</label>
+                  <span class="lenval" id="lineGap">0.55s</span>
+                </div>
+                <input type="range" id="lineGapSlider" min="0" max="150" value="55">
+                <div class="row">
+                  <span class="tiny">none</span><div class="grow"></div><span class="tiny">1.5s</span>
+                </div>
+                <div class="tiny" style="margin-top:6px">
+                  Silence before the voice starts and after it finishes, on every
+                  clip. Too much reads as the picture arriving early and the voice
+                  arriving late. Changing it needs the cut rebuilding, because the
+                  footage is cut to fit.
+                </div>
+
+              </div>
+
               <div class="hide" id="extendBox" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
                 <div class="tiny" id="extendWhy" style="margin-bottom:8px"></div>
                 <div class="row">
@@ -824,34 +860,12 @@ details.more .card > h3 { display: none; }
                 </div>
                 <input type="range" id="narrVolSlider" min="20" max="200" value="100">
 
-                <div class="row" style="margin-top:16px">
-                  <label class="f grow" style="margin:0">Narration speed</label>
-                  <span class="lenval" id="narrSpeed">1.00&times;</span>
-                </div>
-                <input type="range" id="narrSpeedSlider" min="50" max="200" value="100">
-                <div class="row">
-                  <span class="tiny">slower</span><div class="grow"></div><span class="tiny">faster</span>
-                </div>
-
-                <div class="row" style="margin-top:16px">
-                  <label class="f grow" style="margin:0">Pause around each line</label>
-                  <span class="lenval" id="lineGap">0.55s</span>
-                </div>
-                <input type="range" id="lineGapSlider" min="0" max="150" value="55">
-                <div class="row">
-                  <span class="tiny">none</span><div class="grow"></div><span class="tiny">1.5s</span>
-                </div>
-                <div class="tiny" style="margin-top:6px">
-                  Silence before the voice starts and after it finishes, on every
-                  clip. Too much reads as the picture arriving early and the voice
-                  arriving late. Changing it needs the cut rebuilding, because the
-                  footage is cut to fit.
-                </div>
-
                 <div class="tiny" style="margin-top:8px">
-                  The mix and speed apply when the final video is rendered, so changing them
-                  costs one render &mdash; never another round of speech. Speed keeps
-                  the pitch as spoken.
+                  Levels apply when the final video is rendered, so changing them
+                  costs one render and nothing else. Speed and pause moved to the
+                  Voice stage, because they change how long the narration runs and
+                  the footage is cut to fit it &mdash; setting them here meant
+                  building the cut twice.
                 </div>
 
               </div>
@@ -3187,9 +3201,19 @@ const saveMix = autosaveLater(() => ({
 }));
 $('origVolSlider').onchange = saveMix;
 $('narrVolSlider').onchange = saveMix;
-$('narrSpeedSlider').onchange = saveMix;
+/* Speed and pause change how long the narration runs, and the footage is cut
+   to fit it -- so a cut built before them is out of date. Say so where the
+   slider is, rather than letting a stale cut go quietly into the final. */
+const paceChanged = () => {
+  saveMix();
+  const p = current();
+  $('paceNote').textContent = (p && p.has_recap)
+    ? 'the cut was built for the old pace -- rebuild it before the final video'
+    : '';
+};
+$('narrSpeedSlider').onchange = paceChanged;
 $('narrSpeedSlider').oninput = paintMix;
-$('lineGapSlider').onchange = saveMix;
+$('lineGapSlider').onchange = paceChanged;
 $('lineGapSlider').oninput = paintMix;
 
 $('tagsField').oninput = autosave(() => ({
