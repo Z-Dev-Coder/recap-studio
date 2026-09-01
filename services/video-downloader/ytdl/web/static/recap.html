@@ -257,6 +257,10 @@
 }
 .tabs button:hover i, .tabs button.on i { opacity: 1; }
 .tabs button i:hover { border-color: var(--accent); color: var(--accent); }
+/* Title & tags and Files are not stages: there is nothing to run and nothing
+   to report, so hovering must not offer an empty pill or a status light. */
+.tabs button:not([data-step]) i { display: none; }
+.tabs button:not([data-step]) .dot { visibility: hidden; }
 .tabs button .dot { width: 7px; height: 7px; border-radius: 50%;
                     background: var(--faint); flex: 0 0 7px; }
 .tabs button.st-done .dot { background: var(--ok); }
