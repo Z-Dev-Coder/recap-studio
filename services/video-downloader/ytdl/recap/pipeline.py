@@ -458,10 +458,22 @@ def _reburn_captions(project: Project, cancel=None) -> None:
             srt = supplied
     if not srt.exists():
         return
+    lang = project.caption_lang or project.voice_lang
+    if lang == "my":
+        # ffmpeg cannot shape Myanmar, so burning here would produce a video
+        # full of broken text and report success. The page can shape it --
+        # Chromium does -- so the burn waits for the button on the Captions
+        # panel rather than being quietly wrong.
+        # left "running": the step runner is what marks it done, and it keeps
+        # whatever the video step was saying at the time
+        project.mark("video", "running", message=(
+            "the cut is ready -- press Burn captions to add the Burmese, "
+            "which has to be drawn on the page"))
+        return
     try:
         burn_subtitles(project.recap_path, srt, captioned,
                        style=project.caption_style, cancel=cancel,
-                       lang=project.caption_lang or project.voice_lang)
+                       lang=lang)
     except MediaError as exc:
         raise StepError(f"captions could not be burned in: {exc}") from exc
 

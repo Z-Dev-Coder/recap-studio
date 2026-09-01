@@ -312,8 +312,11 @@ def burn_subtitles(src: Path, srt: Path, dest: Path, style: str = "clean",
     """
     Burn an SRT into the picture, for feeds that autoplay muted.
 
-    Burmese shapes correctly here even though it does not in Pillow: libass
-    goes through HarfBuzz, which reorders Myanmar glyph clusters properly.
+    Latin only. libass does NOT shape Myanmar -- the claim that once stood here
+    was never tested and is false. Rendering the same line through libass,
+    drawtext and Pillow gives identical, identically wrong output: the glyphs
+    are placed in storage order, so no font can fix it. Burmese goes through
+    burn_caption_images() instead, drawn by Chromium, which does shape it.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     # ffmpeg's filter parser needs the drive colon and backslashes escaped

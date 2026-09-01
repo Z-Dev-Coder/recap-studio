@@ -447,7 +447,8 @@ details.more .card { border: 0; padding: 0; margin: 0; }
                   transcript, the script and the narration all survive.
                 </div>
 
-                <video id="trimVid" class="trim-vid" preload="metadata" playsinline></video>
+                <video id="trimVid" class="trim-vid" preload="metadata" playsinline
+                       onloadedmetadata="trimSeek(trim.a)"></video>
 
                 <div class="trim-bar" id="trimBar">
                   <div class="trim-strip" id="trimStrip"></div>
@@ -532,9 +533,11 @@ details.more .card { border: 0; padding: 0; margin: 0; }
               <div id="capErr"></div>
 
               <div class="tiny" style="margin-top:8px">
-                Any change here needs the cut rebuilding. Burmese burns in
-                correctly &mdash; the subtitle renderer shapes Myanmar script
-                properly, unlike the thumbnail overlay.
+                Any change here needs the cut rebuilding. <b>Burmese has to go
+                through &ldquo;Burn captions&rdquo;</b> &mdash; ffmpeg places
+                Myanmar glyphs in storage order whatever font it is given, so
+                the lines are drawn on this page, where they shape correctly,
+                and sent over as pictures. English can be burned either way.
               </div>
             </div>
 </details>
