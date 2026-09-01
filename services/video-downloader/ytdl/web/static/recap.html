@@ -1750,7 +1750,7 @@ function renderProject() {
   const src = p.has_recap
     ? `/api/recap/projects/${p.id}/file?name=recap_${p.mode}.mp4&t=${Math.round(p.steps.video.updated || 0)}`
     : '';
-  if (v.dataset.src !== src) { v.dataset.src = src; v.src = src; }
+  pointAt(v, src);
   const full = Math.max(5, Math.round(p.duration || 0));
   const floor = Math.min(full, Math.max(5, Math.ceil((p.beats || []).length * 1.5)));
   const slider = $('lenSlider');
@@ -1915,13 +1915,37 @@ function renderGuide(p) {
   };
 }
 
+/* Pointing a player at a file, without yanking it out from under you.
+
+   The service pushes a snapshot on every progress tick. These players used to
+   rebuild their src from that snapshot each time, and assigning src -- even
+   the same string with a new cache-buster -- reloads the video and drops it
+   back to zero. While anything was running that happened every second or so,
+   which is what looked like the preview looping.
+
+   So: only when the file being pointed at is genuinely a different one, and
+   never while you are watching it. A player showing something you chose
+   yourself -- a preview, another language -- keeps it until you choose again
+   or the underlying file is rebuilt. */
+function pointAt(v, src, { force = false } = {}) {
+  if (v.dataset.src === src) return;
+  if (!force && v.dataset.pinned === '1' && src) return;
+  if (!force && !v.paused && !v.ended && v.currentTime > 0) return;
+  v.dataset.src = src;
+  v.dataset.pinned = '';
+  v.src = src;
+}
+
 /* ------------------------------------------------------------------ voice */
 function renderVoice(p) {
   const v = $('finalVideo');
+  /* Busted by the step that writes the file. It used to be the voice step,
+     which ticks once per spoken line, so the finished video reloaded dozens
+     of times while narration was being generated. */
   const src = p.has_final
-    ? `/api/recap/projects/${p.id}/file?name=final_${p.mode}_${p.voice_lang}.mp4&t=${Math.round(p.steps.voice.updated || 0)}`
+    ? `/api/recap/projects/${p.id}/file?name=final_${p.mode}_${p.voice_lang}.mp4&t=${Math.round((p.steps.final || {}).updated || 0)}`
     : '';
-  if (v.dataset.src !== src) { v.dataset.src = src; v.src = src; }
+  pointAt(v, src);
   const finals = p.finals || {};
   const names = { en: 'English', my: 'Burmese' };
   const made = Object.keys(finals);
@@ -1944,7 +1968,9 @@ function renderVoice(p) {
   [...$('finalSwitch').children].forEach(b => {
     b.onclick = () => {
       const v = $('finalVideo');
-      v.src = `/api/recap/projects/${p.id}/file?name=${encodeURIComponent(finals[b.dataset.show])}`;
+      pointAt(v, `/api/recap/projects/${p.id}/file?name=${encodeURIComponent(finals[b.dataset.show])}`,
+              { force: true });
+      v.dataset.pinned = '1';
       [...$('finalSwitch').children].forEach(x => x.classList.toggle('primary', x === b));
     };
   });
@@ -2992,7 +3018,9 @@ $('previewFinal').onclick = async () => {
   try {
     const r = await post(`/api/recap/projects/${p.id}/final/preview?seconds=25`, {});
     const v = $('finalVideo');
-    v.src = `/api/recap/projects/${p.id}/file?name=${encodeURIComponent(r.file)}&t=${Date.now()}`;
+    const src = `/api/recap/projects/${p.id}/file?name=${encodeURIComponent(r.file)}&t=${Date.now()}`;
+    pointAt(v, src, { force: true });
+    v.dataset.pinned = '1';       // yours until you pick something else
     v.play().catch(() => {});
     $('finalNote').textContent = 'preview of the first 25s - not the finished file';
   } catch (e) { showError($('stepErr'), e.message); }
