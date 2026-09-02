@@ -307,6 +307,7 @@ class EditRequest(BaseModel):
     narration_speed: float | None = None
     line_gap: float | None = None
     content_type: str | None = None
+    footage_pace: float | None = None
     caption_x: float | None = None
     caption_y: float | None = None
     skip_start: float | None = None

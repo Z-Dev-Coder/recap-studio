@@ -468,6 +468,26 @@ details.more .card > h3 { display: none; }
               </div>
 
               <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+                <div class="row">
+                  <label class="f grow" style="margin:0">How much action per line</label>
+                  <span class="lenval" id="paceVal">1.00&times;</span>
+                </div>
+                <input type="range" id="paceSlider" min="100" max="200" value="100">
+                <div class="row">
+                  <span class="tiny">real time</span><div class="grow"></div>
+                  <span class="tiny">twice the action</span>
+                </div>
+                <div class="tiny" style="margin-top:6px">
+                  At 1&times; each line plays over exactly as much footage as it
+                  takes to say. Above that, more of the original is taken and the
+                  picture is quickened to fit &mdash; so a line about Goofy and the
+                  bell shows the whole gag rather than the two seconds of it that
+                  happened to fit. Use it when the cartoon ambles and the
+                  narration does not.
+                </div>
+              </div>
+
+              <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
                 <div class="note">Trim the ends</div>
                 <div class="tiny" style="margin-top:4px">
                   A copyright card, a channel logo or an end title is not the
@@ -1797,6 +1817,10 @@ function renderProject() {
   if (document.activeElement !== $('shapeSel')) $('shapeSel').value = p.shape || '';
   if (document.activeElement !== $('framingSel')) $('framingSel').value = p.framing || 'blur';
   $('fitVoice').checked = p.fit_to_voice !== false;
+  if (document.activeElement !== $('paceSlider')) {
+    $('paceSlider').value = Math.round((p.footage_pace || 1) * 100);
+  }
+  $('paceVal').innerHTML = (Number($('paceSlider').value) / 100).toFixed(2) + '&times;';
   trimLoad(p);
   loadCapStage(p);
   const trimmed = (p.trim_start || 0) > 0 || (p.trim_end || 0) > 0;
@@ -3118,6 +3142,15 @@ const saveLook = () => {
 };
 ['shapeSel', 'framingSel', 'burnCaps', 'capStyle', 'capLang']
   .forEach(id => { $(id).onchange = saveLook; });
+
+$('paceSlider').oninput = () =>
+  $('paceVal').innerHTML = (Number($('paceSlider').value) / 100).toFixed(2) + '&times;';
+$('paceSlider').onchange = () => {
+  const p = current(); if (!p) return;
+  patch(`/api/recap/projects/${p.id}`,
+        { footage_pace: Number($('paceSlider').value) / 100 })
+    .then(upsert).catch(e => showError($('stepErr'), e.message));
+};
 
 /* ------------------------------------------------------------ the trimmer
 

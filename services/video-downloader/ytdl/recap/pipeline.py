@@ -404,6 +404,7 @@ def run_video(project: Project, on_progress=None, cancel=None) -> None:
             framing=project.framing or "blur",
             shape=project.shape or "",
             fit_seconds=wants,
+            pace=project.footage_pace or 1.0,
             first=project.skip_start,
             last=(project.duration - project.skip_end) if project.skip_end else 0.0,
         )

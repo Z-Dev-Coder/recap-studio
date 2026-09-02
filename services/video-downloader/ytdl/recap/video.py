@@ -226,6 +226,7 @@ def build(
     fit_seconds: list[float] | None = None,
     first: float = 0.0,
     last: float = 0.0,
+    pace: float = 1.0,
 ) -> dict:
     """
     Splice the beats out of `source` into `dest`.
@@ -290,8 +291,14 @@ def build(
             "uncut": True,
         }
 
+    # A line gets `pace` times as much footage as it has time to play it in,
+    # and the picture is quickened to fit. At 1.0 that is a plain cut. Above
+    # it, more of the action survives into the recap -- the alternative is
+    # narration racing ahead of a cartoon ambling along underneath it.
+    pace = min(2.0, max(1.0, float(pace or 1.0)))
     if fit_seconds:
-        plan = plan_fitted(ordered, fit_seconds, duration, first, last)
+        sought = [w * pace if w else 0.0 for w in fit_seconds]
+        plan = plan_fitted(ordered, sought, duration, first, last)
     else:
         plan = plan_clips(ordered, budget, duration)
 

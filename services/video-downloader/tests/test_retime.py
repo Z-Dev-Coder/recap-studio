@@ -63,3 +63,63 @@ def test_the_source_span_is_bounded_on_the_input_not_the_output(tmp_path, monkey
     media.cut(tmp_path / "s.mp4", tmp_path / "d.mp4", 100, 106, fit_to=9.0)
     args = seen["args"]
     assert args.index("-t") < args.index("-i")
+
+
+# ------------------------------------------------------- more action per line
+
+def test_a_livelier_pace_takes_more_footage_and_compresses_it(monkeypatch):
+    """At pace 1.5 a 6s line shows 9s of action, quickened to fit."""
+    from ytdl.recap import video as vid
+
+    asked = {}
+    def fake_plan(beats, wants, *a, **k):
+        asked["wants"] = list(wants)
+        return [(10.0, 19.0)]
+    monkeypatch.setattr(vid, "plan_fitted", fake_plan)
+
+    cuts = []
+    def fake_cut(src, dest, start, end, **k):
+        cuts.append(k.get("fit_to"))
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"")
+        return dest
+    monkeypatch.setattr(vid, "cut", fake_cut)
+    monkeypatch.setattr(vid, "probe", lambda p: type("P", (), {"duration": 6.0})())
+    monkeypatch.setattr(vid, "concat", lambda parts, dest, cancel=None: dest)
+
+    import pathlib, tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        vid.build(pathlib.Path(tmp) / "src.mp4",
+                  [{"index": 0, "start": 10.0, "end": 16.0, "my": "x"}],
+                  pathlib.Path(tmp) / "out.mp4",
+                  work_dir=pathlib.Path(tmp) / "w",
+                  fit_seconds=[6.0], pace=1.5)
+
+    assert asked["wants"] == [9.0]      # 1.5x the footage was sought
+    assert cuts == [6.0]                # and compressed back into the line
+
+
+def test_the_plain_cut_is_still_the_default(monkeypatch):
+    from ytdl.recap import video as vid
+    asked = {}
+    def fake_plan(beats, wants, *a, **k):
+        asked["wants"] = list(wants)
+        return [(10.0, 16.0)]
+    monkeypatch.setattr(vid, "plan_fitted", fake_plan)
+
+    def fake_cut(src, dest, start, end, **k):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"")
+        return dest
+    monkeypatch.setattr(vid, "cut", fake_cut)
+    monkeypatch.setattr(vid, "probe", lambda p: type("P", (), {"duration": 6.0})())
+    monkeypatch.setattr(vid, "concat", lambda parts, dest, cancel=None: dest)
+
+    import pathlib, tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        vid.build(pathlib.Path(tmp) / "src.mp4",
+                  [{"index": 0, "start": 10.0, "end": 16.0, "my": "x"}],
+                  pathlib.Path(tmp) / "out.mp4",
+                  work_dir=pathlib.Path(tmp) / "w",
+                  fit_seconds=[6.0])
+    assert asked["wants"] == [6.0]

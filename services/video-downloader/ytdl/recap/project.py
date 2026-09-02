@@ -111,6 +111,11 @@ class Project:
     # the transcript survive.
     # Where the burned-in captions sit, as fractions of the frame. Centred,
     # near the bottom, until dragged somewhere else.
+    # How much source footage each line gets, as a multiple of the time it
+    # has to play in. 1.0 is real time. Above it, more of the action is shown
+    # and the picture is quickened to fit -- which is how a recap keeps up
+    # with narration written at a livelier pace than the original.
+    footage_pace: float = 1.0
     caption_x: float = 0.5
     caption_y: float = 0.86
     skip_start: float = 0.0
@@ -226,6 +231,7 @@ class Project:
             "narration_speed": self.narration_speed,
             "line_gap": self.line_gap,
             "caption_file": self.caption_file,
+            "footage_pace": self.footage_pace,
             "caption_x": self.caption_x,
             "caption_y": self.caption_y,
             "skip_start": self.skip_start,
@@ -321,6 +327,7 @@ class Project:
             narration_speed=float(data.get("narration_speed", 1.0) or 1.0),
             line_gap=float(data.get("line_gap", 0.55) if data.get("line_gap") is not None else 0.55),
             caption_file=data.get("caption_file", "") or "",
+            footage_pace=float(data.get("footage_pace", 1.0) or 1.0),
             caption_x=float(data.get("caption_x", 0.5) or 0.5),
             caption_y=float(data.get("caption_y", 0.86) or 0.86),
             skip_start=float(data.get("skip_start", 0) or 0),
