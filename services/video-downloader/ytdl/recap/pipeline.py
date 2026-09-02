@@ -14,6 +14,7 @@ import hashlib
 from pathlib import Path
 
 from . import scrape as scrape_mod
+from . import watch
 from . import script as script_mod
 from . import thumbnail as thumb_mod
 from . import tts as tts_mod
@@ -28,6 +29,7 @@ from .media import (
     mux_narration,
     probe,
 )
+from .gemini import Gemini
 from .project import Project
 
 # Silence around each spoken line, so the picture does not change on the same
@@ -169,8 +171,13 @@ def _adopt_local_file(project: Project) -> None:
 
 # -------------------------------------------------------------- 2. transcript
 
-def run_transcript(project: Project, cookies_browser: str = "", whisper_model: str = "small", cancel=None) -> None:
-    """Platform captions if they exist, local transcription if they do not."""
+def run_transcript(project: Project, cookies_browser: str = "",
+                   whisper_model: str = "small", cancel=None,
+                   api_key: str = "", model: str = "") -> None:
+    """
+    Platform captions if they exist, local transcription if they do not, and
+    the picture itself if there is nothing to hear.
+    """
     cues: list[Cue] = []
     language = ""
 
@@ -200,6 +207,23 @@ def run_transcript(project: Project, cookies_browser: str = "", whisper_model: s
     # words. Refusing here stopped the pipeline on exactly the material it was
     # built to handle, and on a script the user was going to write themselves.
     if not cues:
+        # Nothing was said, which for a silent cartoon is the correct answer
+        # rather than a failure. What happens is still there to be read -- it
+        # is just shown instead of spoken -- so look at it.
+        try:
+            cues = _watch(project, api_key, model, cancel=cancel)
+            language = "en"
+        except StepError:
+            raise
+        except Exception as exc:      # noqa: BLE001
+            project.mark("transcript", "done", message=(
+                f"no speech, and the picture could not be read ({exc}). Write "
+                "the script yourself, or try again."))
+            project.transcript = []
+            project.save()
+            return
+
+    if not cues:
         project.transcript = []
         project.transcript_language = language
         (project.dir / "transcript.srt").write_text("", encoding="utf-8")
@@ -214,6 +238,43 @@ def run_transcript(project: Project, cookies_browser: str = "", whisper_model: s
     (project.dir / "transcript.srt").write_text(to_srt(cues), encoding="utf-8")
     (project.dir / "transcript.txt").write_text(plain_text(cues), encoding="utf-8")
     project.save()
+
+
+def _watch(project: Project, api_key: str, model: str = "",
+           cancel=None) -> list[Cue]:
+    """
+    Read the picture when there is nothing to hear.
+
+    The description comes back in English and goes into the transcript, so
+    every later stage -- chapters, story analysis, the Burmese writing -- works
+    exactly as it does for a video that talks. Which is the point: this is a
+    different source for the same rows, not a second pipeline.
+    """
+    if not project.source_path.exists():
+        raise StepError("the source video is missing")
+
+    if not api_key:
+        raise StepError(
+            "Nothing is said in this video, so it has to be read from the "
+            "picture -- which needs an API key. Paste one in Settings."
+        )
+    client = Gemini(api_key, model=model or "")
+    project.mark("transcript", "running",
+                 message="nothing is said in this video -- reading what is shown")
+
+    def progress(done: int, total: int) -> None:
+        project.mark("transcript", "running",
+                     message=f"reading what is shown ({done} of {total})")
+
+    cues = watch.read(
+        project.source_path, project.dir / "frames_read", client,
+        duration=project.duration or 0.0, on_progress=progress, cancel=cancel,
+    )
+    if not cues:
+        return []
+    project.mark("transcript", "running",
+                 message=f"{len(cues)} moments described from the picture")
+    return cues
 
 
 # ------------------------------------------------------------------ 3. script

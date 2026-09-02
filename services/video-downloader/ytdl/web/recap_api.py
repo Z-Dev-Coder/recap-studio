@@ -171,6 +171,10 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
                 cookies_browser=options.get("cookies_browser", ""),
                 whisper_model=settings.get("whisper_model", "small"),
                 cancel=stop,
+                # A silent video is read from its frames instead, which needs
+                # a model that can see.
+                api_key=options.get("api_key") or settings.get("gemini_key", ""),
+                model=settings.get("gemini_model", ""),
             )
         elif step == "script":
             key = options.get("api_key") or settings.get("gemini_key", "")
