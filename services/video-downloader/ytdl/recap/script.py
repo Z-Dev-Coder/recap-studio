@@ -35,6 +35,11 @@ class Beat:
     my: str = ""
     score: float = 5.0        # how essential this moment is, 1-10
     why: str = ""             # one line on why it earned its place
+    # Set when these times came from the user rather than from the planner --
+    # an SRT written against the video. A planned beat names a rough moment
+    # and the cut may centre a clip on it; a timed one names an exact one, and
+    # moving it overrules the person who watched the video to write it.
+    timed: bool = False
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -836,6 +841,10 @@ def parse_manual(text: str, duration: float, lang: str = "my",
     if not rows:
         return []
 
+    # Someone who wrote timestamps meant them. Everything downstream treats
+    # these spans as given rather than as a suggestion to improve on.
+    timed = any(s is not None for s, _e, _t in rows)
+
     windows = (plan_windows(duration, len(rows), skip_start=skip_start,
                             skip_end=skip_end) if duration > 0 else [])
     beats: list[Beat] = []
@@ -847,7 +856,8 @@ def parse_manual(text: str, duration: float, lang: str = "my",
         elif start is None:
             start, end = float(i), float(i) + 2.0
         beat = Beat(index=i, start=round(float(start), 3), end=round(float(end), 3),
-                    score=5.0, why="written by hand")
+                    score=5.0, timed=timed,
+                    why="timed by hand" if timed else "written by hand")
         setattr(beat, lang, body)
         beats.append(beat)
     return beats
@@ -893,6 +903,18 @@ def respread(rows: list[dict], duration: float,
     rows = [r for r in rows if (r.get("en") or r.get("my") or "").strip()]
     if not rows:
         return []
+
+    # A script whose times were written by hand is not re-spread. Spreading it
+    # evenly throws away the one thing that made it aligned, and it is not this
+    # function's place to overrule the person who timed it against the video.
+    if all(r.get("timed") for r in rows):
+        return [Beat(index=i, start=float(r.get("start", 0) or 0),
+                     end=float(r.get("end", 0) or 0),
+                     en=(r.get("en") or "").strip(),
+                     my=(r.get("my") or "").strip(),
+                     score=float(r.get("score", 5) or 5), timed=True,
+                     why=(r.get("why") or "").strip())
+                for i, r in enumerate(rows)]
 
     windows = (plan_windows(duration, len(rows), skip_start=skip_start,
                             skip_end=skip_end) if duration > 0 else [])

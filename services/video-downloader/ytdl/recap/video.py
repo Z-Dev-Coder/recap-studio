@@ -63,6 +63,12 @@ def plan_fitted(beats: list[dict], wants: list[float],
     The span stays centred on the moment the beat named, and cannot grow past
     its neighbours -- footage belonging to the next beat is not this beat's to
     borrow.
+
+    A beat marked `timed` is the exception. Its times came from an SRT written
+    against the video, so they name where the clip STARTS rather than a moment
+    to centre on, and it runs from there for as long as the line takes.
+    Centring one of those slides the picture half a clip away from the words
+    that were written for it.
     """
     # The ends the recap may not draw on. A beat's neighbours bound it from
     # the inside; these bound the outermost beats from the outside, so no clip
@@ -73,6 +79,18 @@ def plan_fitted(beats: list[dict], wants: list[float],
     limits = _bounds(beats, duration)
     out = []
     for beat, want, (lo, hi) in zip(beats, wants, limits):
+        if beat.get("timed"):
+            # Anchored, not centred: it starts where it was written to start.
+            start = max(floor, float(beat["start"]))
+            length = max(MIN_CLIP, float(want or 0)
+                         or (float(beat["end"]) - float(beat["start"])))
+            end = start + length
+            if ceiling and end > ceiling:
+                end = ceiling
+                start = max(floor, ceiling - length)
+            out.append((start, end))
+            continue
+
         lo = max(lo, floor)
         if ceiling:
             hi = min(hi, ceiling)
