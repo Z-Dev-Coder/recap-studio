@@ -177,6 +177,7 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
                 model=settings.get("gemini_model", ""),
                 watch_only=bool(options.get("watch")),
                 on_progress=lambda done, total: push(project),
+                stage_models=settings.get("stage_models") or {},
             )
         elif step == "script":
             key = options.get("api_key") or settings.get("gemini_key", "")

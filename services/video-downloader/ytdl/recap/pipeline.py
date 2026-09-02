@@ -13,6 +13,7 @@ import hashlib
 
 from pathlib import Path
 
+from . import llm
 from . import scrape as scrape_mod
 from . import watch
 from . import script as script_mod
@@ -174,7 +175,8 @@ def _adopt_local_file(project: Project) -> None:
 def run_transcript(project: Project, cookies_browser: str = "",
                    whisper_model: str = "small", cancel=None,
                    api_key: str = "", model: str = "",
-                   watch_only: bool = False, on_progress=None) -> None:
+                   watch_only: bool = False, on_progress=None,
+                   stage_models: dict | None = None) -> None:
     """
     Platform captions if they exist, local transcription if they do not, and
     the picture itself if there is nothing to hear.
@@ -188,7 +190,7 @@ def run_transcript(project: Project, cookies_browser: str = "",
     # source even though speech exists. The user decides that, not a heuristic.
     if watch_only:
         cues = _watch(project, api_key, model, cancel=cancel,
-                      on_progress=on_progress)
+                      on_progress=on_progress, stage_models=stage_models)
         language = "en"
         _store_transcript(project, cues, language)
         return
@@ -224,7 +226,7 @@ def run_transcript(project: Project, cookies_browser: str = "",
         # is just shown instead of spoken -- so look at it.
         try:
             cues = _watch(project, api_key, model, cancel=cancel,
-                          on_progress=on_progress)
+                          on_progress=on_progress, stage_models=stage_models)
             language = "en"
         except StepError:
             raise
@@ -259,7 +261,8 @@ def _store_transcript(project: Project, cues: list[Cue], language: str) -> None:
 
 
 def _watch(project: Project, api_key: str, model: str = "",
-           cancel=None, on_progress=None) -> list[Cue]:
+           cancel=None, on_progress=None,
+           stage_models: dict | None = None) -> list[Cue]:
     """
     Read the picture when there is nothing to hear.
 
@@ -276,7 +279,19 @@ def _watch(project: Project, api_key: str, model: str = "",
             "Nothing is said in this video, so it has to be read from the "
             "picture -- which needs an API key. Paste one in Settings."
         )
-    client = Gemini(api_key, model=model or "")
+    # The "Read the video" stage model, when it is one that can actually see.
+    # Setting that picker to flash-lite and then having this ignore it and use
+    # the global model is exactly the kind of control that looks like it works
+    # and does not. Groq has no vision, and a local model may or may not, so
+    # anything that is not Gemini falls back with the reason said out loud.
+    spec = (stage_models or {}).get("read") or ""
+    backend, name = llm.split_spec(spec) if spec else ("gemini", "")
+    if backend != "gemini":
+        project.mark("transcript", "running", message=(
+            f"the read stage is set to {backend}, which cannot see pictures -- "
+            f"using Gemini for this step"))
+        name = ""
+    client = Gemini(api_key, model=name or model or "")
     # Two ways to get here: nothing was said, or the captions were not enough
     # and the user asked for this. Saying "nothing is said" in the second case
     # is simply wrong.
