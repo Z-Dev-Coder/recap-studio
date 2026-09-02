@@ -112,7 +112,12 @@ async function openModule(id) {
       return;
     }
     frame.dataset.module = m.id;
-    frame.src = res.url;
+    /* A fresh query each time, so the frame can never re-show a document it
+       already has. The service sends no-store, but a frame that is simply
+       never re-fetched keeps whatever it loaded first -- which is how an
+       updated page can sit on disk, be served correctly, and still not be
+       what is on screen. */
+    frame.src = res.url + (res.url.includes('?') ? '&' : '?') + 'v=' + Date.now();
     frame.onload = () => { hideLoader(); $('moduleState').textContent = res.url; };
     return;
   }
