@@ -303,7 +303,15 @@ def build(
             continue                      # squeezed out by stronger moments
 
         part = work / f"part_{i:03d}.mp4"
-        cut(source, part, start, end, vertical=vertical, cancel=cancel, framing=framing)
+        # What this beat's line needs, when the plan could not find it that
+        # much footage -- a beat against the start or end of the video has
+        # nowhere to grow into, and the voice would otherwise carry on over a
+        # picture that has run out. Retiming the footage is the edit; letting
+        # it run out is the fault.
+        want = float(fit_seconds[i]) if fit_seconds and i < len(fit_seconds) else 0.0
+        fit_to = want if want and abs(want - (end - start)) > 0.08 else 0.0
+        cut(source, part, start, end, vertical=vertical, cancel=cancel,
+            framing=framing, fit_to=fit_to)
         actual = probe(part).duration or (end - start)   # encoders round; trust the file
         parts.append(part)
 

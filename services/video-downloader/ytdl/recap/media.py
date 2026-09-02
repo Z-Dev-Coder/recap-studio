@@ -151,17 +151,39 @@ def probe(path: Path) -> Probe:
     )
 
 
+# How far a clip may be retimed to meet its narration. Beyond these the cure
+# is worse than the complaint: below 0.5 the picture crawls, above 2.0 it
+# scurries, and either reads as a fault rather than an edit.
+SLOWEST = 0.5
+FASTEST = 2.0
+
+
 def cut(src: Path, dest: Path, start: float, end: float, vertical: bool = False,
-        cancel=None, framing: str = "blur") -> Path:
+        cancel=None, framing: str = "blur", fit_to: float = 0.0) -> Path:
     """
     Copy one segment out of `src`, re-encoding so the joins are frame-exact.
 
     Stream copying would be faster but can only cut on keyframes, which slides
     every clip boundary by up to several seconds -- fatal when the whole point
     is that the clip matches the line of script being spoken over it.
+
+    `fit_to` is the length the finished clip must be. When the footage
+    available is not that length -- a beat near the start or end of the video
+    has nowhere to grow into -- the picture is retimed to fill it rather than
+    left to run out from under the voice. Slowing footage to meet a longer
+    line is an ordinary edit; leaving the last seconds of a line playing over
+    a frozen or repeated picture is not.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     duration = max(0.2, end - start)
+
+    # The factor the picture has to be stretched by to last as long as its
+    # line. Above 1 the footage is slowed; below 1 it is quickened.
+    stretch = 1.0
+    if fit_to and fit_to > 0:
+        wanted = max(0.2, float(fit_to))
+        if abs(wanted - duration) > 0.08:
+            stretch = min(FASTEST, max(SLOWEST, wanted / duration))
 
     shape = SHAPES.get(str(vertical), None) if isinstance(vertical, str) else None
     if shape:
@@ -198,12 +220,27 @@ def cut(src: Path, dest: Path, start: float, end: float, vertical: bool = False,
         # even dimensions keep libx264 happy on odd-sized sources
         vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1"
 
+    af = []
+    if abs(stretch - 1.0) > 0.01:
+        # setpts multiplies each frame's timestamp, so a factor above 1 spreads
+        # the same frames over more time. The original audio has to travel with
+        # it or it finishes early and the two drift apart; atempo takes the
+        # reciprocal, and stays inside its own 0.5-2.0 range because `stretch`
+        # already does.
+        vf = f"{vf},setpts={stretch:.4f}*PTS"
+        af = ["-af", f"atempo={1 / stretch:.4f}"]
+
     _run([
         _tool("ffmpeg"), "-y",
-        "-ss", f"{start:.3f}", "-i", str(src), "-t", f"{duration:.3f}",
+        # Both are INPUT options: -t after the input would cap the finished
+        # clip instead, which silently threw away exactly the extra length
+        # retiming had just created. Bounding the source here leaves the
+        # output's length to the filters, which is where it is decided.
+        "-ss", f"{start:.3f}", "-t", f"{duration:.3f}", "-i", str(src),
         "-filter_complex" if ((vertical or shape) and framing != "crop") else "-vf", vf,
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-pix_fmt", "yuv420p", "-r", "30",
+        *af,
         "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2",
         "-avoid_negative_ts", "make_zero",
         str(dest),
