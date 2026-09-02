@@ -81,13 +81,20 @@ def plan_fitted(beats: list[dict], wants: list[float],
     for beat, want, (lo, hi) in zip(beats, wants, limits):
         if beat.get("timed"):
             # Anchored, not centred: it starts where it was written to start.
-            start = max(floor, float(beat["start"]))
+            #
+            # And the trimmed ends do NOT apply here. Someone who timed a line
+            # to 0:10 was watching the video when they wrote it; clamping that
+            # to a 29s trim silently moved two different lines onto the same
+            # footage, which played as the picture starting over. The trim
+            # governs where the planner may look, not where a person may
+            # point. Only the file's own ends are a limit.
+            start = max(0.0, float(beat["start"]))
             length = max(MIN_CLIP, float(want or 0)
                          or (float(beat["end"]) - float(beat["start"])))
             end = start + length
-            if ceiling and end > ceiling:
-                end = ceiling
-                start = max(floor, ceiling - length)
+            if duration and end > duration:
+                end = duration
+                start = max(0.0, duration - length)
             out.append((start, end))
             continue
 

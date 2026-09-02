@@ -64,3 +64,24 @@ def test_an_untimed_script_still_is():
     rows = [{"index": i, "start": 0.0, "end": 0.0, "my": "x"} for i in range(4)]
     again = respread(rows, 400)
     assert again[0].start == 0.0 and again[-1].start > 200
+
+
+def test_a_trim_does_not_move_a_line_someone_timed_by_hand():
+    """
+    Two lines timed inside a trimmed opening both clamped to the trim, so the
+    same footage played twice and neither matched its words. The trim governs
+    where the planner may look, not where a person may point.
+    """
+    beats = [
+        {"start": 10.0, "end": 15.0, "timed": True},
+        {"start": 15.5, "end": 20.0, "timed": True},
+    ]
+    plan = plan_fitted(beats, [4.0, 5.0], duration=490, first=29.2, last=483)
+    assert [round(a, 1) for a, _ in plan] == [10.0, 15.5]
+    assert plan[0][0] != plan[1][0]          # never the same footage twice
+
+
+def test_a_planned_beat_still_respects_the_trim():
+    beats = [{"start": 10.0, "end": 20.0}]        # no timed flag
+    (a, _b), = plan_fitted(beats, [4.0], duration=490, first=29.2, last=483)
+    assert a >= 29.2
