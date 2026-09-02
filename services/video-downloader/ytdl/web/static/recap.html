@@ -308,6 +308,11 @@ details.more .card > h3 { display: none; }
   box-shadow: 0 0 0 1px rgba(255,255,255,.35);
 }
 .cap-ghost:active { cursor: grabbing; }
+
+/* Aiming a hand-written line at the moment it describes. */
+.aim-vid { width: 100%; max-height: 260px; background: #000; border-radius: 8px;
+           margin-bottom: 8px; }
+.beat .bplay, .beat .bhere { padding: 2px 7px; line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -598,6 +603,19 @@ details.more .card > h3 { display: none; }
                    style="background:var(--accent-soft);border-radius:var(--r-sm);padding:11px 13px;margin-bottom:12px">
                 <div class="tiny" style="margin-bottom:3px">Opening hook &mdash; the line that stops the scroll</div>
                 <div id="hookText" style="font-weight:600"></div>
+              </div>
+              <!-- A script written by hand carries no idea of when anything
+                   happens, so its lines are laid evenly across the video. The
+                   words are then right and the picture under them is only
+                   approximately right. This is where that gets aimed: play the
+                   source, find the moment, send the line to it. -->
+              <video id="aimVid" class="aim-vid hide" controls preload="metadata"></video>
+              <div class="row hide" id="aimBar" style="margin:8px 0">
+                <span class="tiny" id="aimNote">
+                  Press &#9654; on a line to see the moment it plays over.
+                </span>
+                <div class="grow"></div>
+                <button class="sm ghost" id="aimHide">Hide the video</button>
               </div>
               <div class="scroll" id="beatRows"></div>
               <div class="row" style="margin-top:14px">
@@ -1825,6 +1843,10 @@ function renderProject() {
         <span class="pill ${sc >= 8 ? 'hi' : ''}" title="${escapeHtml(b.why || '')}">${sc.toFixed(0)}</span>
         <input type="number" step="0.1" class="bs" value="${(+b.start).toFixed(1)}">
         <input type="number" step="0.1" class="be" value="${(+b.end).toFixed(1)}">
+        <button class="sm ghost bplay" title="Play the moment this line runs over"
+                data-at="${(+b.start).toFixed(2)}">&#9654;</button>
+        <button class="sm ghost bhere" title="Move this line to where the video is now"
+                >set</button>
       </div>
       <textarea class="bt" rows="2">${escapeHtml(lang === 'my' ? b.my : b.en)}</textarea>
     </div>`;
@@ -3256,6 +3278,28 @@ function autosaveLater(build, delay = 700) {
   };
 }
 
+/* The source video, on the Script tab, so a line can be aimed by looking
+   rather than by guessing a number. Only loaded once someone asks for it --
+   a second copy of the video on a tab nobody opened is bandwidth and memory
+   for nothing. */
+function showAim(p, at) {
+  const v = $('aimVid');
+  const src = `/api/recap/projects/${p.id}/file?name=source.mp4`;
+  if (v.dataset.src !== src) { v.dataset.src = src; v.src = src; }
+  v.classList.remove('hide');
+  $('aimBar').classList.remove('hide');
+  const go = () => { try { v.currentTime = Math.max(0, at); } catch (e) {} v.play().catch(() => {}); };
+  if (v.readyState >= 1) go(); else v.onloadedmetadata = go;
+  $('aimNote').textContent = `playing from ${fmt(at)} -- the moment this line runs over`;
+}
+
+$('aimHide').onclick = () => {
+  const v = $('aimVid');
+  v.pause();
+  v.classList.add('hide');
+  $('aimBar').classList.add('hide');
+};
+
 function bindBeatSaving() {
   const save = autosave(p => {
     const beats = p.beats.map(b => ({ ...b }));
@@ -3269,6 +3313,35 @@ function bindBeatSaving() {
     return { beats };
   }, 'beatsSaved');
   [...$('beatRows').querySelectorAll('input,textarea')].forEach(el => { el.oninput = save; });
+
+  [...$('beatRows').querySelectorAll('.bplay')].forEach(b => {
+    b.onclick = () => {
+      const p = current(); if (!p) return;
+      const row = b.closest('.beat');
+      showAim(p, parseFloat(row.querySelector('.bs').value) || 0);
+    };
+  });
+
+  /* The other direction: find the moment first, then send the line to it.
+     Which is the way round it actually happens -- you recognise the shot, and
+     then you say which line belongs on it. */
+  [...$('beatRows').querySelectorAll('.bhere')].forEach(b => {
+    b.onclick = () => {
+      const v = $('aimVid');
+      if (v.classList.contains('hide')) {
+        $('aimNote').textContent = 'play the video first, then set a line to where it is';
+        return;
+      }
+      const row = b.closest('.beat');
+      const at = v.currentTime;
+      const was = parseFloat(row.querySelector('.bs').value) || 0;
+      const len = Math.max(2, (parseFloat(row.querySelector('.be').value) || 0) - was);
+      row.querySelector('.bs').value = at.toFixed(1);
+      row.querySelector('.be').value = (at + len).toFixed(1);
+      row.querySelector('.bs').dispatchEvent(new Event('input'));
+      $('aimNote').textContent = `this line now plays over ${fmt(at)}`;
+    };
+  });
 }
 
 const saveCopy = autosave(p => {
