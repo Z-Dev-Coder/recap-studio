@@ -556,10 +556,17 @@ def test_no_script_means_no_call(fake_gemini):
     assert client.calls == 0
 
 
-def test_a_failed_call_leaves_the_post_alone(fake_gemini, gemini_error):
+def test_a_failed_call_says_why_rather_than_returning_nothing(fake_gemini, gemini_error):
+    """
+    Returning {} turned "today's quota on this model is spent" into "nothing
+    came back -- try another model", which points at the one setting that was
+    not the problem.
+    """
+    import pytest
     beats = [Beat(index=0, start=0, end=6, my="x")]
-    client = fake_gemini([gemini_error("down")])
-    assert script_mod.write_copy(client, beats) == {}
+    client = fake_gemini([gemini_error("daily limit reached")])
+    with pytest.raises(Exception, match="daily limit"):
+        script_mod.write_copy(client, beats)
 
 
 def test_the_post_asks_for_a_modest_answer(fake_gemini):

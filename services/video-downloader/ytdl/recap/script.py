@@ -1010,10 +1010,10 @@ Describe what the narration above actually covers. Do not invent anything that
 is not in it.""",
     ] if x and x.strip())
 
-    try:
-        data = client.generate_json(prompt, _COPY_SCHEMA, temperature, max_tokens=2048)
-    except Exception:      # noqa: BLE001 - any provider's failure
-        return {}
+    # Swallowing the provider's own words turned "you have used today's quota
+    # on this model" into "nothing came back -- try another model", which sends
+    # the reader to the one setting that was not the problem. Let it through.
+    data = client.generate_json(prompt, _COPY_SCHEMA, temperature, max_tokens=2048)
 
     return {
         "title": {"en": (data.get("title_en") or "").strip(),

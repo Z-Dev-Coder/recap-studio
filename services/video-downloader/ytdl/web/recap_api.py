@@ -969,7 +969,12 @@ def write_post_copy(pid: str, req: StepRequest) -> dict:
     keys = {"gemini": key, "groq": settings.get("groq_key", "")}
     assigned = settings.get("stage_models") or {}
     # the post follows the script, so it uses whatever writes the script
-    spec = assigned.get("write") or settings.get("gemini_model", "") or _auto_model(key)
+    # An unassigned stage used to auto-select the newest flash model -- the one
+    # with twenty requests a day -- so leaving a picker on "choose
+    # automatically" quietly spent the scarcest quota the account has. A stage
+    # the user did assign is a better guide to what they meant.
+    spec = (assigned.get("write") or assigned.get("read")
+            or settings.get("gemini_model", "") or _auto_model(key))
     client = llm.build(spec, keys=keys, ollama_url=settings.get("ollama_url", ""))
 
     beats = [script_mod.Beat(**{k: v for k, v in b.items()
@@ -985,6 +990,8 @@ def write_post_copy(pid: str, req: StepRequest) -> dict:
         )
     except llm.LLMError as exc:
         raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:      # noqa: BLE001 - the provider's own words
+        raise HTTPException(400, f"{spec}: {exc}") from exc
     if not out:
         raise HTTPException(400, "nothing came back -- try another model for this stage")
 
