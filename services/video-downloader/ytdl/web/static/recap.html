@@ -901,6 +901,11 @@ details.more .card > h3 { display: none; }
                 the mix or re-cutting all need another render &mdash; but never
                 another round of speech.
               </div>
+              <!-- Three rounds of fixing the restarting have not stopped it, so
+                   stop guessing and measure. "page up" resets to zero if the page
+                   itself reloaded; the load counts rise if only the player is
+                   being re-pointed. Those are different bugs. -->
+              <div class="tiny" id="diagNote" style="margin-top:6px;opacity:.75"></div>
             </div>
 
           </section>
@@ -3827,6 +3832,36 @@ $('dlThumb').onclick = () => {
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }, 'image/png');
 };
+
+/* Measuring the restart rather than theorising about it.
+
+   If the page is reloading, "page up" keeps resetting to zero. If only the
+   player is being re-pointed, "page up" climbs while the load count climbs
+   with it. If neither moves and the picture still jumps back, it is the media
+   stack, not this page. */
+const diag = { at: Date.now(), final: 0, preview: 0, last: '' };
+
+['finalVideo', 'previewVideo'].forEach(id => {
+  const key = id === 'finalVideo' ? 'final' : 'preview';
+  const el = $(id);
+  if (!el) return;
+  ['loadstart', 'emptied', 'ended', 'stalled'].forEach(ev => {
+    el.addEventListener(ev, () => {
+      if (ev === 'loadstart') diag[key]++;
+      diag.last = `${key}:${ev}`;
+      paintDiag();
+    });
+  });
+});
+
+function paintDiag() {
+  const up = Math.round((Date.now() - diag.at) / 1000);
+  $('diagNote').textContent =
+    `page up ${up}s -- final loaded ${diag.final}x, preview ${diag.preview}x` +
+    (diag.last ? ` -- last ${diag.last}` : '');
+}
+setInterval(paintDiag, 1000);
+paintDiag();
 
 /* ------------------------------------------------------------------ live */
 function listen() {
