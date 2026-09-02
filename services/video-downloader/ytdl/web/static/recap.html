@@ -3041,7 +3041,10 @@ $('previewFinal').onclick = async () => {
     /* Its own element, and nothing in the render loop knows it exists, so no
        snapshot can reload it while it plays. */
     const v = $('previewVideo');
+    /* One player at a time. Two stacked, both showing this project, is a
+       question the page should not be asking the reader. */
     $('finalVideo').pause();
+    $('finalVideo').classList.add('hide');
     $('previewBox').classList.remove('hide');
     v.src = `/api/recap/projects/${p.id}/file?name=${encodeURIComponent(r.file)}&t=${Date.now()}`;
     v.play().catch(() => {});
@@ -3055,9 +3058,13 @@ $('closePreview').onclick = () => {
   v.removeAttribute('src');
   v.load();                     // let go of the file rather than buffering it
   $('previewBox').classList.add('hide');
+  $('finalVideo').classList.remove('hide');
 };
 
-$('renderFinal').onclick = () => runStep('final');
+$('renderFinal').onclick = () => {
+  $('closePreview').onclick();   // the finished file is what you want to see now
+  runStep('final');
+};
 
 $('regenScript').onclick = () => runStep('script');
 $('reframe').onclick = () => runStep('thumbnail', { frame_count: Number($('frameCount').value) || 16 });
