@@ -3854,10 +3854,29 @@ const diag = { at: Date.now(), final: 0, preview: 0, last: '' };
   });
 });
 
+/* Watching for the thing actually being reported: the clock going backwards.
+   A player that reloads and one that seeks backwards look identical on screen
+   and have nothing else in common, so count them separately. */
+diag.back = 0; diag.worst = '';
+setInterval(() => {
+  ['finalVideo', 'previewVideo'].forEach(id => {
+    const el = $(id);
+    if (!el || el.paused) return;
+    const was = Number(el.dataset.wasAt || 0);
+    const now = el.currentTime;
+    if (now < was - 0.15) {
+      diag.back++;
+      diag.worst = `${was.toFixed(1)}s -> ${now.toFixed(1)}s`;
+    }
+    el.dataset.wasAt = now;
+  });
+}, 150);
+
 function paintDiag() {
   const up = Math.round((Date.now() - diag.at) / 1000);
   $('diagNote').textContent =
     `page up ${up}s -- final loaded ${diag.final}x, preview ${diag.preview}x` +
+    ` -- clock went back ${diag.back}x` + (diag.worst ? ` (${diag.worst})` : '') +
     (diag.last ? ` -- last ${diag.last}` : '');
 }
 setInterval(paintDiag, 1000);
