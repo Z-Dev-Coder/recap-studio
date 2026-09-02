@@ -90,3 +90,18 @@ def test_a_model_that_rounds_a_timestamp_still_lands_on_its_frame():
                                 {"at": 6, "text": "also rounded"}]}
     cues = watch.describe(Rounder(), _shots([2.4, 6.4]))
     assert [c.text for c in cues] == ["rounded", "also rounded"]
+
+
+def test_what_has_been_read_is_handed_back_as_it_goes():
+    """Thirteen batches is minutes of waiting; an empty box reads as nothing."""
+    seen = []
+    watch.describe(FakeSeer(), _shots([float(i) * 4 for i in range(25)]),
+                   on_progress=lambda done, total, cues=None: seen.append(len(cues or [])))
+    assert seen == [10, 20, 25]          # growing, not all at the end
+
+
+def test_a_failed_batch_still_reports_what_came_before_it():
+    seen = []
+    watch.describe(FakeSeer(fail_on={2}), _shots([float(i) * 4 for i in range(25)]),
+                   on_progress=lambda done, total, cues=None: seen.append(len(cues or [])))
+    assert seen == [10, 10, 15]

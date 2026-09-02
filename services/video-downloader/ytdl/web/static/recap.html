@@ -1131,9 +1131,22 @@ details.more .card > h3 { display: none; }
                   <option value="my">SRT &middot; &#4119;&#4156;&#4116;&#4121;&#4140; Burmese</option>
                   <option value="en">SRT &middot; English</option>
                 </select>
+                <button class="sm" id="copyTranscript">Copy</button>
                 <button class="sm" id="dlTranscript">Download</button>
               </div>
               <textarea id="transcriptField" rows="18" readonly></textarea>
+              <div class="row" style="margin-top:10px">
+                <div class="grow">
+                  <div class="tiny">
+                    Captions are not always enough to recap from &mdash; sparse
+                    dialogue, or subtitles that name a speaker and nothing else.
+                    What happens is then still only visible. Reading the picture
+                    gives the same kind of description a silent video gets, and
+                    replaces what is above.
+                  </div>
+                </div>
+                <button class="sm" id="watchVideo">Read what is shown</button>
+              </div>
             </div>
           </section>
           </div>
@@ -3115,6 +3128,28 @@ $('closePreview').onclick = () => {
 $('renderFinal').onclick = () => {
   $('closePreview').onclick();   // the finished file is what you want to see now
   runStep('final');
+};
+
+/* The transcript is the thing you paste into a chat to write Burmese from,
+   so it needs to leave the app in one gesture. */
+$('copyTranscript').onclick = async () => {
+  const text = $('transcriptField').value;
+  if (!text.trim()) { $('transcriptNote').textContent = 'there is nothing to copy yet'; return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    const b = $('copyTranscript'); const was = b.textContent;
+    b.textContent = 'copied'; setTimeout(() => { b.textContent = was; }, 1400);
+  } catch (e) {
+    $('transcriptField').select();       // clipboard refused; let them do it
+    $('transcriptNote').textContent = 'selected -- press Ctrl+C';
+  }
+};
+
+$('watchVideo').onclick = () => {
+  const p = current(); if (!p) return;
+  if ((p.transcript || []).length &&
+      !confirm('Read the picture and replace the transcript above?')) return;
+  runStep('transcript', { watch: true });
 };
 
 $('regenScript').onclick = () => runStep('script');

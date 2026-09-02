@@ -175,6 +175,7 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
                 # a model that can see.
                 api_key=options.get("api_key") or settings.get("gemini_key", ""),
                 model=settings.get("gemini_model", ""),
+                watch_only=bool(options.get("watch")),
             )
         elif step == "script":
             key = options.get("api_key") or settings.get("gemini_key", "")

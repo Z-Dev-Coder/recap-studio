@@ -173,13 +173,24 @@ def _adopt_local_file(project: Project) -> None:
 
 def run_transcript(project: Project, cookies_browser: str = "",
                    whisper_model: str = "small", cancel=None,
-                   api_key: str = "", model: str = "") -> None:
+                   api_key: str = "", model: str = "",
+                   watch_only: bool = False) -> None:
     """
     Platform captions if they exist, local transcription if they do not, and
     the picture itself if there is nothing to hear.
     """
     cues: list[Cue] = []
     language = ""
+
+    # A video CAN have captions and still be no use to recap from: sparse
+    # dialogue, or subtitles that name a speaker and nothing else. What
+    # happens is then still only visible, so reading the picture is the right
+    # source even though speech exists. The user decides that, not a heuristic.
+    if watch_only:
+        cues = _watch(project, api_key, model, cancel=cancel)
+        language = "en"
+        _store_transcript(project, cues, language)
+        return
 
     if project.url and not project.source_file:
         try:
@@ -233,6 +244,11 @@ def run_transcript(project: Project, cookies_browser: str = "",
         project.save()
         return
 
+    _store_transcript(project, cues, language)
+
+
+def _store_transcript(project: Project, cues: list[Cue], language: str) -> None:
+    """Keep a transcript, however it was arrived at."""
     project.transcript = [c.as_dict() for c in cues]
     project.transcript_language = language
     (project.dir / "transcript.srt").write_text(to_srt(cues), encoding="utf-8")
@@ -262,9 +278,15 @@ def _watch(project: Project, api_key: str, model: str = "",
     project.mark("transcript", "running",
                  message="nothing is said in this video -- reading what is shown")
 
-    def progress(done: int, total: int) -> None:
+    def progress(done: int, total: int, so_far: list[Cue] | None = None) -> None:
+        # Written out as it goes, so the transcript fills while it is read
+        # rather than staying empty for the several minutes it takes.
+        if so_far:
+            project.transcript = [c.as_dict() for c in so_far]
+            project.transcript_language = "en"
         project.mark("transcript", "running",
-                     message=f"reading what is shown ({done} of {total})")
+                     message=f"reading what is shown ({done} of {total}) -- "
+                             f"{len(so_far or [])} moments so far")
 
     cues = watch.read(
         project.source_path, project.dir / "frames_read", client,

@@ -150,7 +150,7 @@ def describe(client, shots: list[Shot], on_progress=None, cancel=None) -> list[C
             # ending the read. Fifteen minutes of video is worth more than the
             # forty seconds one refused request covers.
             if on_progress:
-                on_progress(n, len(batches))
+                on_progress(n, len(batches), _to_cues(shots, said))
             continue
 
         for row in out.get("moments") or []:
@@ -161,8 +161,10 @@ def describe(client, shots: list[Shot], on_progress=None, cancel=None) -> list[C
             text = " ".join(str(row.get("text") or "").split())
             if text:
                 said[_nearest(at, batch)] = text
+        # Hand back what has been read so far. Thirteen batches is minutes of
+        # waiting, and an empty box for all of it reads as nothing happening.
         if on_progress:
-            on_progress(n, len(batches))
+            on_progress(n, len(batches), _to_cues(shots, said))
 
     return _to_cues(shots, said)
 
