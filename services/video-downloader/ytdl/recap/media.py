@@ -223,7 +223,14 @@ def concat(parts: list[Path], dest: Path, cancel=None) -> Path:
     try:
         _run([
             _tool("ffmpeg"), "-y", "-f", "concat", "-safe", "0",
-            "-i", str(listing), "-c", "copy", "-movflags", "+faststart", str(dest),
+            "-i", str(listing), "-c", "copy",
+            # concat of copied streams is where the negative start timestamp
+            # comes from: each part keeps its own, and the join inherits the
+            # first one. Left alone it surfaces much later, as the opening of
+            # the finished video jumping back on itself while a player sorts
+            # the ordering out.
+            "-avoid_negative_ts", "make_zero",
+            "-movflags", "+faststart", str(dest),
         ], cancel=cancel)
     finally:
         listing.unlink(missing_ok=True)
@@ -329,7 +336,8 @@ def burn_subtitles(src: Path, srt: Path, dest: Path, style: str = "clean",
         _tool("ffmpeg"), "-y", "-i", str(src),
         "-vf", f"subtitles='{escaped}':force_style='{style}'",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-        "-pix_fmt", "yuv420p", "-c:a", "copy", str(dest),
+        "-pix_fmt", "yuv420p", "-c:a", "copy",
+        "-avoid_negative_ts", "make_zero", str(dest),
     ], cancel=cancel)
     return dest
 
@@ -385,6 +393,7 @@ def burn_caption_images(src: Path, rows: list[dict], dest: Path,
         "-map", last, "-map", "0:a?",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-pix_fmt", "yuv420p", "-c:a", "copy",
+        "-avoid_negative_ts", "make_zero",
         "-movflags", "+faststart", str(dest),
     ]
     _run(args, cancel=cancel)
@@ -398,6 +407,7 @@ def mux_narration(
     original_volume: float = 0.25,
     narration_volume: float = 1.0,
     speed: float = 1.0,
+    reencode: bool = False,
     cancel=None,
 ) -> Path:
     """
@@ -449,9 +459,25 @@ def mux_narration(
 
     args += [
         "-filter_complex", ";".join(chains),
-        "-map", "0:v", "-c:v", "copy",
+        "-map", "0:v",
+        # Copying the video keeps its original timestamps, and a stream cut
+        # from the middle of a recap starts on a negative DTS with reordered
+        # frames around it. A player reconciles that by seeking, which is the
+        # opening second jumping back on itself. For a short preview the
+        # honest fix is to re-encode: seconds of work for a head that starts
+        # cleanly at zero. The finished render still copies -- it is minutes
+        # of video, and it is not the file being scrubbed.
+        *(["-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+           "-pix_fmt", "yuv420p"] if reencode else ["-c:v", "copy"]),
         "-map", "[aout]", "-c:a", "aac", "-b:a", "192k",
         "-shortest", "-movflags", "+faststart",
+        # The cut's first video packet carries a negative DTS and the frames
+        # around it arrive out of order, because the stream is copied rather
+        # than re-encoded. Chromium reconciles that by seeking, which shows as
+        # the opening second or two jumping back on itself before settling.
+        # Shifting the timestamps so nothing starts before zero removes the
+        # thing being reconciled.
+        "-avoid_negative_ts", "make_zero", "-muxpreload", "0", "-muxdelay", "0",
         str(dest),
     ]
     _run(args, cancel=cancel)

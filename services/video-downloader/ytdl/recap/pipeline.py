@@ -743,6 +743,7 @@ def run_preview(project: Project, seconds: float = 25.0, cancel=None) -> Path:
                           original_volume=project.original_volume,
                           narration_volume=project.narration_volume,
                           speed=project.narration_speed or 1.0,
+                          reencode=True,      # a clean head matters more here
                           cancel=cancel)
         else:
             part.replace(dest)            # no narration this early; still useful
