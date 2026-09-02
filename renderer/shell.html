@@ -78,7 +78,7 @@
         <!-- "camera *" not "camera": a bare feature name delegates to 'src', and a
              file:// module frame has an opaque origin that 'src' never matches, so the
              recorder would be refused the mic and camera before Electron is asked. -->
-        <iframe id="moduleFrame" allow="camera *; microphone *; display-capture *; autoplay *" src="about:blank"></iframe>
+        <iframe id="moduleFrame" allow="camera *; microphone *; display-capture *; autoplay *; clipboard-write *; clipboard-read *" src="about:blank"></iframe>
       </div>
     </section>
 

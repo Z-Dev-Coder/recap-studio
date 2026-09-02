@@ -3132,17 +3132,50 @@ $('renderFinal').onclick = () => {
 
 /* The transcript is the thing you paste into a chat to write Burmese from,
    so it needs to leave the app in one gesture. */
+/* Copying, in a frame that may not be allowed to use the clipboard API.
+
+   navigator.clipboard is governed by permissions policy, and inside an iframe
+   it is denied unless the frame was given clipboard-write. When it is denied
+   the promise rejects, so the old code silently fell through to "press
+   Ctrl+C" -- which is a way of saying the button does not work. The
+   selection-and-execCommand path is the old API, it needs no permission, and
+   it copies. */
+async function copyText(text, done) {
+  if (!text) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    if (done) done();
+    return true;
+  } catch (e) { /* denied or unavailable; the old way still works */ }
+
+  const box = document.createElement('textarea');
+  box.value = text;
+  box.style.position = 'fixed';
+  box.style.opacity = '0';
+  document.body.appendChild(box);
+  box.focus();
+  box.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  box.remove();
+  if (ok && done) done();
+  return ok;
+}
+
+/* `flash` above is for the saved-badge; this one relabels a button. */
+const saidCopied = (btn, word) => {
+  const was = btn.textContent;
+  btn.textContent = word;
+  setTimeout(() => { btn.textContent = was; }, 1400);
+};
+
 $('copyTranscript').onclick = async () => {
   const text = $('transcriptField').value;
   if (!text.trim()) { $('transcriptNote').textContent = 'there is nothing to copy yet'; return; }
-  try {
-    await navigator.clipboard.writeText(text);
-    const b = $('copyTranscript'); const was = b.textContent;
-    b.textContent = 'copied'; setTimeout(() => { b.textContent = was; }, 1400);
-  } catch (e) {
-    $('transcriptField').select();       // clipboard refused; let them do it
-    $('transcriptNote').textContent = 'selected -- press Ctrl+C';
-  }
+  const b = $('copyTranscript');
+  if (await copyText(text, () => saidCopied(b, 'copied'))) return;
+  $('transcriptField').select();
+  $('transcriptNote').textContent = 'the clipboard is blocked -- press Ctrl+C';
 };
 
 $('watchVideo').onclick = () => {
@@ -3487,7 +3520,8 @@ $('tagsField').oninput = autosave(() => ({
 
 $('copyTags').onclick = () => {
   const p = current(); if (!p) return;
-  navigator.clipboard.writeText((p.hashtags || []).map(t => '#' + t).join(' '));
+  copyText((p.hashtags || []).map(t => '#' + t).join(' '),
+           () => saidCopied($('copyTags'), 'copied'));
   $('copyTags').textContent = 'Copied';
   setTimeout(() => $('copyTags').textContent = 'Copy all', 1200);
 };
