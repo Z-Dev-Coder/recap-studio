@@ -174,7 +174,7 @@ def _adopt_local_file(project: Project) -> None:
 def run_transcript(project: Project, cookies_browser: str = "",
                    whisper_model: str = "small", cancel=None,
                    api_key: str = "", model: str = "",
-                   watch_only: bool = False) -> None:
+                   watch_only: bool = False, on_progress=None) -> None:
     """
     Platform captions if they exist, local transcription if they do not, and
     the picture itself if there is nothing to hear.
@@ -187,7 +187,8 @@ def run_transcript(project: Project, cookies_browser: str = "",
     # happens is then still only visible, so reading the picture is the right
     # source even though speech exists. The user decides that, not a heuristic.
     if watch_only:
-        cues = _watch(project, api_key, model, cancel=cancel)
+        cues = _watch(project, api_key, model, cancel=cancel,
+                      on_progress=on_progress)
         language = "en"
         _store_transcript(project, cues, language)
         return
@@ -222,7 +223,8 @@ def run_transcript(project: Project, cookies_browser: str = "",
         # rather than a failure. What happens is still there to be read -- it
         # is just shown instead of spoken -- so look at it.
         try:
-            cues = _watch(project, api_key, model, cancel=cancel)
+            cues = _watch(project, api_key, model, cancel=cancel,
+                          on_progress=on_progress)
             language = "en"
         except StepError:
             raise
@@ -257,7 +259,7 @@ def _store_transcript(project: Project, cues: list[Cue], language: str) -> None:
 
 
 def _watch(project: Project, api_key: str, model: str = "",
-           cancel=None) -> list[Cue]:
+           cancel=None, on_progress=None) -> list[Cue]:
     """
     Read the picture when there is nothing to hear.
 
@@ -275,8 +277,12 @@ def _watch(project: Project, api_key: str, model: str = "",
             "picture -- which needs an API key. Paste one in Settings."
         )
     client = Gemini(api_key, model=model or "")
-    project.mark("transcript", "running",
-                 message="nothing is said in this video -- reading what is shown")
+    # Two ways to get here: nothing was said, or the captions were not enough
+    # and the user asked for this. Saying "nothing is said" in the second case
+    # is simply wrong.
+    project.mark("transcript", "running", message=(
+        "reading what is shown" if project.transcript
+        else "nothing is said in this video -- reading what is shown"))
 
     def progress(done: int, total: int, so_far: list[Cue] | None = None) -> None:
         # Written out as it goes, so the transcript fills while it is read
@@ -287,6 +293,11 @@ def _watch(project: Project, api_key: str, model: str = "",
         project.mark("transcript", "running",
                      message=f"reading what is shown ({done} of {total}) -- "
                              f"{len(so_far or [])} moments so far")
+        # Writing it to disk is not the same as showing it. Without this the
+        # box stayed empty for the whole read, which is how "I see nothing"
+        # happened in the first place.
+        if on_progress:
+            on_progress(done, total)
 
     cues = watch.read(
         project.source_path, project.dir / "frames_read", client,

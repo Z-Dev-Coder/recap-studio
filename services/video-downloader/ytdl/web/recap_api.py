@@ -176,6 +176,7 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
                 api_key=options.get("api_key") or settings.get("gemini_key", ""),
                 model=settings.get("gemini_model", ""),
                 watch_only=bool(options.get("watch")),
+                on_progress=lambda done, total: push(project),
             )
         elif step == "script":
             key = options.get("api_key") or settings.get("gemini_key", "")
@@ -299,6 +300,11 @@ class StepRequest(BaseModel):
     use_scrape: bool | None = None
     use_vision: bool | None = None
     frame_count: int = 16
+    # Read the picture instead of the audio, on a video that does have
+    # captions. Pydantic drops fields it has never heard of, so a step option
+    # that is not declared here is silently ignored -- which is exactly what
+    # happened to this one.
+    watch: bool = False
 
 
 class EditRequest(BaseModel):
