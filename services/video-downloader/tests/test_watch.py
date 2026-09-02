@@ -105,3 +105,51 @@ def test_a_failed_batch_still_reports_what_came_before_it():
     watch.describe(FakeSeer(fail_on={2}), _shots([float(i) * 4 for i in range(25)]),
                    on_progress=lambda done, total, cues=None: seen.append(len(cues or [])))
     assert seen == [10, 10, 15]
+
+
+# ------------------------------------------------ finishing an interrupted read
+
+def test_frames_a_previous_read_described_are_not_paid_for_twice():
+    seer = FakeSeer()
+    shots = _shots([float(i) * 4 for i in range(25)])
+    known = {s.at: "already known" for s in shots[:20]}
+    cues = watch.describe(seer, shots, known=known)
+    assert len(seer.calls) == 1                 # only the five that were missing
+    assert seer.calls[0]["images"] == 5
+    assert len(cues) == 25                      # but the answer covers everything
+
+
+def test_a_read_with_nothing_left_to_do_asks_for_nothing():
+    seer = FakeSeer()
+    shots = _shots([2.0, 6.0])
+    cues = watch.describe(seer, shots, known={2.0: "a", 6.0: "b"})
+    assert seer.calls == []
+    assert [c.text for c in cues] == ["a", "b"]
+
+
+def test_failures_are_reported_rather_than_swallowed():
+    problems = []
+    watch.describe(FakeSeer(fail_on={2}), _shots([float(i) * 4 for i in range(25)]),
+                   problems=problems)
+    assert len(problems) == 1
+    assert problems[0].startswith("40s-76s")    # which stretch went missing
+
+
+def test_a_daily_cap_stops_the_read_instead_of_firing_doomed_requests():
+    class Capped(FakeSeer):
+        def generate_json(self, prompt, schema, images=None, **kw):
+            self.calls.append({"images": len(images or [])})
+            raise RuntimeError("Gemini free-tier daily limit reached for this model")
+    seer = Capped()
+    problems = []
+    watch.describe(seer, _shots([float(i) * 4 for i in range(50)]), problems=problems)
+    assert len(seer.calls) == 1        # not five
+    assert len(problems) == 1
+
+
+def test_a_previous_read_is_matched_to_the_frames_being_sampled_now():
+    shots = _shots([2.0, 6.0, 10.0])
+    rows = [{"start": 2.0, "text": "kept"},
+            {"start": 99.0, "text": "from a different sampling"},
+            {"start": 6.0, "text": ""}]
+    assert watch.already(rows, shots) == {2.0: "kept"}

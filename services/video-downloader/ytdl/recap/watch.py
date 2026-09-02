@@ -120,18 +120,31 @@ def sample(src: Path, work: Path, duration: float, every: float = EVERY,
     return shots
 
 
-def describe(client, shots: list[Shot], on_progress=None, cancel=None) -> list[Cue]:
+def describe(client, shots: list[Shot], on_progress=None, cancel=None,
+             known: dict[float, str] | None = None,
+             problems: list[str] | None = None) -> list[Cue]:
     """
     Turn sampled frames into timed English descriptions.
 
     The rows come back as Cues spanning frame to frame, so a description
     covers the stretch it was sampled from rather than an instant.
+
+    `known` is what a previous read already produced. Those frames are not
+    sent again: a read that ran out of quota two thirds of the way through
+    should be finishable without paying for the two thirds that worked.
+
+    Failures are appended to `problems` rather than swallowed. A transcript
+    that silently covers 82% of a video looks like a transcript that covers
+    the video, and the missing fifth is discovered much later.
     """
     if not shots:
         return []
 
-    said: dict[float, str] = {}
-    batches = [shots[i:i + BATCH] for i in range(0, len(shots), BATCH)]
+    said: dict[float, str] = dict(known or {})
+    todo = [s for s in shots if s.at not in said]
+    if not todo:
+        return _to_cues(shots, said)
+    batches = [todo[i:i + BATCH] for i in range(0, len(todo), BATCH)]
 
     for n, batch in enumerate(batches, 1):
         if cancel is not None and cancel.is_set():
@@ -145,12 +158,20 @@ def describe(client, shots: list[Shot], on_progress=None, cancel=None) -> list[C
                 cancel=cancel,
                 max_tokens=len(batch) * 120,
             )
-        except Exception:      # noqa: BLE001
+        except Exception as exc:      # noqa: BLE001
             # A batch that fails leaves a gap in the description rather than
             # ending the read. Fifteen minutes of video is worth more than the
             # forty seconds one refused request covers.
+            note = str(exc)
+            if problems is not None:
+                problems.append(f"{batch[0].at:.0f}s-{batch[-1].at:.0f}s: {note}")
             if on_progress:
                 on_progress(n, len(batches), _to_cues(shots, said))
+            # A daily cap will refuse every remaining batch too. Firing them
+            # anyway turns one clear failure into a dozen and takes minutes to
+            # do it.
+            if "day" in note.lower() or "daily" in note.lower():
+                break
             continue
 
         for row in out.get("moments") or []:
@@ -187,8 +208,34 @@ def _to_cues(shots: list[Shot], said: dict[float, str]) -> list[Cue]:
 
 
 def read(src: Path, work: Path, client, duration: float = 0.0,
-         every: float = EVERY, on_progress=None, cancel=None) -> list[Cue]:
+         every: float = EVERY, on_progress=None, cancel=None,
+         known: list[dict] | None = None,
+         problems: list[str] | None = None) -> list[Cue]:
     """Sample the video and describe it: the whole job, for one caller."""
     duration = duration or (probe(src).duration or 0.0)
     shots = sample(src, work, duration, every=every, cancel=cancel)
-    return describe(client, shots, on_progress=on_progress, cancel=cancel)
+    return describe(client, shots, on_progress=on_progress, cancel=cancel,
+                    known=already(known, shots), problems=problems)
+
+
+def already(rows: list[dict] | None, shots: list[Shot]) -> dict[float, str]:
+    """
+    Which sampled frames a previous read already described.
+
+    Matched by timestamp against the frames being sampled now, so it only
+    holds when the sampling interval is the same -- which it is, unless the
+    video's length changed, in which case starting over is correct anyway.
+    """
+    if not rows:
+        return {}
+    at = {s.at for s in shots}
+    out: dict[float, str] = {}
+    for r in rows:
+        try:
+            t = round(float(r.get("start")), 2)
+        except (TypeError, ValueError):
+            continue
+        text = str(r.get("text") or "").strip()
+        if text and t in at:
+            out[t] = text
+    return out

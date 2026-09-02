@@ -299,14 +299,34 @@ def _watch(project: Project, api_key: str, model: str = "",
         if on_progress:
             on_progress(done, total)
 
+    # What a previous read got through before it ran out of quota. Only used
+    # when that read was of the picture -- speech cues describe the same video
+    # but not the same thing, and mixing them would be nonsense.
+    known = project.transcript if project.transcript_language == "en" else None
+
+    problems: list[str] = []
     cues = watch.read(
         project.source_path, project.dir / "frames_read", client,
         duration=project.duration or 0.0, on_progress=progress, cancel=cancel,
+        known=known, problems=problems,
     )
     if not cues:
+        if problems:
+            raise StepError("the picture could not be read: " + problems[0])
         return []
-    project.mark("transcript", "running",
-                 message=f"{len(cues)} moments described from the picture")
+
+    # A transcript covering 82% of a video looks exactly like one covering all
+    # of it until something downstream is thin for no visible reason. Say what
+    # is missing, and say it where the number is still actionable.
+    covered = sum(c.end - c.start for c in cues)
+    total = project.duration or covered
+    note = f"{len(cues)} moments described from the picture"
+    if problems:
+        note += (f" -- {len(problems)} stretch(es) could not be read, "
+                 f"{max(0.0, total - covered):.0f}s of the video is undescribed. "
+                 f"Press Read what is shown again to fill the gaps. "
+                 f"({problems[0]})")
+    project.mark("transcript", "running", message=note)
     return cues
 
 
