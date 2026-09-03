@@ -1465,36 +1465,41 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
         rows.append({"path": path, "start": img.start, "end": img.end,
                      "margin": req.margin, "x": req.x, "y": req.y})
 
-    def burning(done: float) -> None:
-        project.mark("video", "running", progress=done,
-                     message=f"burning {len(rows)} captions into the picture")
-        push(project)
+    # Burning is minutes of work -- 238 captions is six passes over the whole
+    # video -- and holding an HTTP request open for it is how "Failed to
+    # fetch" happened: the browser gave up while the encode carried on
+    # perfectly well underneath. The images are saved here, where a bad one
+    # can still be reported, and the encode goes to a worker thread that
+    # reports itself over the event stream like every other long step.
+    if not _claim(pid, "video"):
+        raise HTTPException(409, "something is already running on this project")
 
-    try:
-        project.mark("video", "running", message="burning captions -- starting")
-        push(project)
-        media_mod.burn_caption_images(project.recap_path, rows,
-                                      project.captioned_path,
-                                      cancel=cancel_event(pid),
-                                      on_progress=burning)
-    except MediaError as exc:
-        raise HTTPException(400, f"the captions could not be burned in: {exc}") from exc
-    except Cancelled:
-        raise HTTPException(400, "stopped") from None
-    except Exception as exc:      # noqa: BLE001
-        # Anything ffmpeg or the OS raises that is not a MediaError used to
-        # escape as a bare 500, which tells the user nothing they can act on
-        # and hides the reason in a log they never see.
-        raise HTTPException(
-            400, f"the captions could not be burned in: {type(exc).__name__}: {exc}"
-        ) from exc
+    def burn() -> None:
+        def burning(done: float) -> None:
+            project.mark("video", "running", progress=done,
+                         message=f"burning {len(rows)} captions into the picture")
+            push(project)
+        try:
+            burning(0.0)
+            media_mod.burn_caption_images(project.recap_path, rows,
+                                          project.captioned_path,
+                                          cancel=cancel_event(pid),
+                                          on_progress=burning)
+            project.mark("video", "done", message=f"{len(rows)} captions burned in")
+            project.mark("final", "idle", message="captions redrawn - render again")
+        except Cancelled:
+            project.mark("video", "idle", message="stopped")
+        except Exception as exc:      # noqa: BLE001
+            project.mark("video", "error",
+                         error=f"the captions could not be burned in: "
+                               f"{type(exc).__name__}: {exc}")
+        finally:
+            _release(pid)
+            project.save()
+            push(project)
 
-    project.mark("video", "done",
-                 message=f"{len(rows)} captions burned in")
-    project.mark("final", "idle", message="captions redrawn - render again")
-    project.save()
-    push(project)
-    return {"ok": True, "captions": len(rows)}
+    threading.Thread(target=burn, daemon=True).start()
+    return {"ok": True, "captions": len(rows), "started": True}
 
 
 @router.post("/projects/{pid}/captions/file")

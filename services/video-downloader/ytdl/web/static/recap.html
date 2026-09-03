@@ -3090,8 +3090,11 @@ $('drawCaptions').onclick = async () => {
     const r = await post(`/api/recap/projects/${p.id}/captions/images`,
                          { images, margin: Math.round(size * 2.2),
                            x: capPos.x, y: capPos.y });
+    /* The burn runs on the service now, so this returns as soon as the
+       pictures are handed over. The bar in this panel is what says when it
+       has finished. */
     $('capSourceNote').textContent =
-      `${r.captions} captions drawn here and burned in`;
+      `${r.captions} captions drawn here -- burning them in now`;
     upsert(await request(`/api/recap/projects/${p.id}`));
   } catch (e) { showError($('capErr'), e.message); }
   finally { btn.disabled = false; btn.textContent = was; }
