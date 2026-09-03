@@ -109,8 +109,30 @@ def test_beats_come_back_in_playing_order():
 @pytest.mark.parametrize("duration", [30.0, 300.0, 3600.0])
 def test_beat_plan_scales_with_the_source(duration):
     count, clip = script_mod.beat_plan(duration, "long")
-    assert 6 <= count <= 24
+    assert 6 <= count <= 120
     assert clip >= 4.0
+
+
+@pytest.mark.parametrize("wanted,least", [(120.0, 10), (600.0, 50), (1200.0, 100)])
+def test_a_longer_recap_gets_enough_beats_to_fill_it(wanted, least):
+    """
+    The count used to cap at 24 whatever was asked for. Since the cut is
+    fitted to the narration, that cap WAS a cap on the finished length --
+    24 lines of ordinary Burmese is about four and a half minutes, so an
+    hour-long source could not produce a ten-minute recap however it was
+    asked.
+    """
+    count, _clip = script_mod.beat_plan(3600.0, "long", wanted)
+    assert count >= least
+    # Never fewer than the source itself warrants either: a two-minute recap
+    # of an hour with eleven beats would jump five minutes between clips, so
+    # the source's own floor wins there and the count is higher, not lower.
+    assert count >= min(24, int(3600 // 60) + 6)
+
+
+def test_the_count_never_runs_away():
+    count, _ = script_mod.beat_plan(36000.0, "long", 36000.0)
+    assert count <= 120
 
 
 def test_reels_stay_within_their_budget():

@@ -153,7 +153,16 @@ def beat_plan(duration: float, mode: str, target_seconds: float = 0.0) -> tuple[
     # video: seven minutes in, ninety seconds out. Long form now defaults to
     # the whole thing, which is also where the length slider starts.
     total = target_seconds or duration or 45.0
-    count = max(6, min(24, int(duration // 60) + 6))
+    # Long form used to cap at 24 beats however long the video or the wanted
+    # recap. Since the cut is fitted to the narration, that cap WAS a cap on
+    # the finished length: 24 lines of ordinary Burmese is about four and a
+    # half minutes, so an hour-long source could not produce a ten-minute
+    # recap however it was asked. Size the count to the length wanted instead,
+    # at roughly one line per eleven seconds -- the length a narrated line
+    # actually runs -- and let the source's own length be the floor.
+    by_source = max(6, min(24, int(duration // 60) + 6))
+    by_length = int(round(total / 11.0))
+    count = max(6, min(120, max(by_source, by_length)))
     return count, max(4.0, total / count)
 
 

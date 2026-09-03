@@ -37,8 +37,12 @@ EVERY = 4.0
 BATCH = 10
 
 # Above this the sampling stretches instead, because a long video at a fixed
-# interval is a bill nobody agreed to.
-MAX_FRAMES = 180
+# interval is a bill nobody agreed to. 300 frames is 30 requests -- an hour of
+# video described every twelve seconds, which is close enough together for the
+# descriptions to read as a sequence rather than as slides. At 180 an hour was
+# sampled every twenty seconds and a two-hour film every forty, which is not
+# enough for anyone to write from.
+MAX_FRAMES = 300
 
 
 @dataclass
