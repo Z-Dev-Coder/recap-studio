@@ -605,7 +605,7 @@ def mux_narration(
         str(dest),
     ]
     _run(args, cancel=cancel, on_progress=on_progress,
-         seconds=(probe(src).duration or 0.0) if on_progress else 0.0)
+         seconds=(probe(video).duration or 0.0) if on_progress else 0.0)
     return dest
 
 

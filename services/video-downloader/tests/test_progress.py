@@ -59,3 +59,35 @@ def test_not_asking_for_it_leaves_the_command_alone(tmp_path, monkeypatch):
                               [{"path": png, "start": 0, "end": 2}],
                               tmp_path / "d.mp4")
     assert seen["kw"].get("seconds", 0) == 0
+
+
+# ---------------------------------------------- the progress path itself runs
+
+def test_the_mix_reports_progress_without_falling_over(tmp_path, monkeypatch):
+    """
+    A NameError inside the progress branch only fires when progress is asked
+    for, so a test that never asks never sees it. This one asks.
+    """
+    seen = {}
+    monkeypatch.setattr(media, "_run", lambda a, **k: seen.update(kw=k))
+    monkeypatch.setattr(media, "probe",
+                        lambda p: media.Probe(90.0, 1080, 1920, 30.0, True))
+    wav = tmp_path / "line.wav"
+    wav.write_bytes(b"x")
+    media.mux_narration(tmp_path / "cut.mp4", [{"path": wav, "at": 1.0}],
+                        tmp_path / "out.mp4", on_progress=lambda f: None)
+    assert seen["kw"]["seconds"] == 90.0
+    assert seen["kw"]["on_progress"] is not None
+
+
+def test_the_mix_without_progress_still_works(tmp_path, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(media, "_run", lambda a, **k: seen.update(kw=k))
+    # the mix probes the cut for its audio whether or not progress is asked for
+    monkeypatch.setattr(media, "probe",
+                        lambda p: media.Probe(90.0, 1080, 1920, 30.0, True))
+    wav = tmp_path / "line.wav"
+    wav.write_bytes(b"x")
+    media.mux_narration(tmp_path / "cut.mp4", [{"path": wav, "at": 1.0}],
+                        tmp_path / "out.mp4")
+    assert seen["kw"].get("seconds", 0) == 0
