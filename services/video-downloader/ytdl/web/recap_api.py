@@ -222,8 +222,14 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
         elif step == "thumbnail":
             pipeline.run_thumbnail(project, count=int(options.get("frame_count") or 16), cancel=stop)
         elif step == "final":
-            def rendered(done: int, total: int) -> None:
-                project.mark("final", "running", message=f"rendering {done} of {total}")
+            def rendered(done: int, total: int, part: float | None = None) -> None:
+                # `part` is how far through the current render ffmpeg is. A
+                # single-language render is one step, so "1 of 1" never moves
+                # and the whole encode looks like nothing happening.
+                where = f"rendering {done + 1} of {total}" if part is not None                     else f"rendering {done} of {total}"
+                if part is not None:
+                    where += f" -- {part * 100:.0f}%"
+                project.mark("final", "running", message=where)
                 push(project)
 
             pipeline.run_final(project, on_progress=rendered, cancel=stop)
@@ -1457,10 +1463,19 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
         rows.append({"path": path, "start": img.start, "end": img.end,
                      "margin": req.margin, "x": req.x, "y": req.y})
 
+    def burning(done: float) -> None:
+        project.mark("video", "running",
+                     message=f"burning {len(rows)} captions into the picture "
+                             f"-- {done * 100:.0f}%")
+        push(project)
+
     try:
+        project.mark("video", "running", message="burning captions -- starting")
+        push(project)
         media_mod.burn_caption_images(project.recap_path, rows,
                                       project.captioned_path,
-                                      cancel=cancel_event(pid))
+                                      cancel=cancel_event(pid),
+                                      on_progress=burning)
     except MediaError as exc:
         raise HTTPException(400, f"the captions could not be burned in: {exc}") from exc
     except Cancelled:
@@ -1473,6 +1488,8 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
             400, f"the captions could not be burned in: {type(exc).__name__}: {exc}"
         ) from exc
 
+    project.mark("video", "done",
+                 message=f"{len(rows)} captions burned in")
     project.mark("final", "idle", message="captions redrawn - render again")
     project.save()
     push(project)

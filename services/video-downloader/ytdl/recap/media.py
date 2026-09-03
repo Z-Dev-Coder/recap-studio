@@ -12,6 +12,7 @@ import shutil
 import re
 import subprocess
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,14 +43,28 @@ def have_ffmpeg() -> bool:
     return bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
 
 
-def _run(args: list[str], timeout: int = 3600, cancel=None) -> str:
+def _run(args: list[str], timeout: int = 3600, cancel=None,
+         on_progress=None, seconds: float = 0.0) -> str:
     """
     Run a tool to completion, or until the user stops it.
 
     With a `cancel` event this polls instead of blocking, so a Stop press
     kills the encoder within a fraction of a second rather than after the
     several minutes a long re-encode would otherwise take.
+
+    `on_progress` is called with a fraction from 0 to 1 as ffmpeg works, which
+    needs `seconds` -- the length of the output -- to divide by. Burning
+    captions into a two-minute cut takes two minutes, and two minutes of a
+    button that looks stuck is indistinguishable from a button that is.
     """
+    watching = on_progress is not None and seconds > 0
+    if watching:
+        # -progress writes machine-readable lines; -nostats silences the
+        # human ones, which would otherwise be most of what we parse.
+        args = [args[0], "-progress", "pipe:1", "-nostats"] + list(args[1:])
+        if cancel is None:
+            cancel = threading.Event()      # the polling path is where we read
+
     if cancel is None:
         proc = subprocess.run(
             args,
@@ -78,6 +93,8 @@ def _run(args: list[str], timeout: int = 3600, cancel=None) -> str:
             creationflags=_NO_WINDOW,
         )
         deadline = time.monotonic() + timeout
+        read_at = 0
+        last_told = -1.0
         try:
             while popen.poll() is None:
                 if cancel.is_set():
@@ -87,6 +104,16 @@ def _run(args: list[str], timeout: int = 3600, cancel=None) -> str:
                 if time.monotonic() > deadline:
                     popen.kill()
                     raise MediaError(f"{args[0]} timed out")
+                if watching:
+                    out_f.seek(read_at)
+                    fresh = out_f.read()
+                    read_at += len(fresh)
+                    done = _how_far(fresh.decode("utf-8", "replace"), seconds)
+                    # only when it has actually moved: a snapshot pushed per
+                    # poll is fifty a second for no new information
+                    if done is not None and done - last_told >= 0.01:
+                        last_told = done
+                        on_progress(done)
                 time.sleep(0.15)
         finally:
             if popen.poll() is None:
@@ -101,6 +128,27 @@ def _run(args: list[str], timeout: int = 3600, cancel=None) -> str:
         tail = err.strip().splitlines()
         raise MediaError("\n".join(tail[-4:]) or f"{args[0]} failed")
     return out
+
+
+def _how_far(text: str, seconds: float) -> float | None:
+    """
+    How far through the output ffmpeg has got, from its -progress lines.
+
+    It reports out_time_us (or the older out_time_ms, which is also
+    microseconds despite the name -- a long-standing wart worth knowing about
+    rather than being caught by).
+    """
+    at = None
+    for line in text.splitlines():
+        key, _, value = line.partition("=")
+        if key.strip() in ("out_time_us", "out_time_ms"):
+            try:
+                at = int(value.strip()) / 1_000_000
+            except ValueError:
+                continue
+    if at is None:
+        return None
+    return max(0.0, min(1.0, at / seconds))
 
 
 @dataclass
@@ -385,7 +433,7 @@ def burn_subtitles(src: Path, srt: Path, dest: Path, style: str = "clean",
 
 
 def burn_caption_images(src: Path, rows: list[dict], dest: Path,
-                        cancel=None) -> Path:
+                        cancel=None, on_progress=None) -> Path:
     """
     Lay pre-rendered caption images over the picture.
 
@@ -419,12 +467,17 @@ def burn_caption_images(src: Path, rows: list[dict], dest: Path,
         step = src
         work = dest.parent / "_caption_passes"
         work.mkdir(parents=True, exist_ok=True)
+        passes = -(-len(usable) // PER_PASS)
         try:
-            for n in range(0, len(usable), PER_PASS):
+            for i, n in enumerate(range(0, len(usable), PER_PASS)):
                 batch = usable[n:n + PER_PASS]
                 last = n + PER_PASS >= len(usable)
                 out = dest if last else work / f"pass_{n:04d}.mp4"
-                burn_caption_images(step, batch, out, cancel=cancel)
+                # each pass covers its own slice of the whole job
+                here = ((lambda k: lambda f: on_progress((k + f) / passes))(i)
+                        if on_progress else None)
+                burn_caption_images(step, batch, out, cancel=cancel,
+                                    on_progress=here)
                 if step is not src:
                     step.unlink(missing_ok=True)
                 step = out
@@ -465,7 +518,8 @@ def burn_caption_images(src: Path, rows: list[dict], dest: Path,
         "-avoid_negative_ts", "make_zero",
         "-movflags", "+faststart", str(dest),
     ]
-    _run(args, cancel=cancel)
+    _run(args, cancel=cancel, on_progress=on_progress,
+         seconds=(probe(src).duration or 0.0) if on_progress else 0.0)
     return dest
 
 
@@ -475,6 +529,7 @@ def mux_narration(
     dest: Path,
     original_volume: float = 0.25,
     narration_volume: float = 1.0,
+    on_progress=None,
     speed: float = 1.0,
     reencode: bool = False,
     cancel=None,
@@ -549,7 +604,8 @@ def mux_narration(
         "-avoid_negative_ts", "make_zero", "-muxpreload", "0", "-muxdelay", "0",
         str(dest),
     ]
-    _run(args, cancel=cancel)
+    _run(args, cancel=cancel, on_progress=on_progress,
+         seconds=(probe(src).duration or 0.0) if on_progress else 0.0)
     return dest
 
 

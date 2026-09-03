@@ -813,6 +813,8 @@ def run_final(project: Project, on_progress=None, cancel=None) -> None:
                 narration_volume=project.narration_volume,
                 speed=project.narration_speed or 1.0,
                 cancel=cancel,
+                on_progress=(lambda f, l=lang: on_progress and on_progress(
+                    langs.index(l), len(langs), f)),
             )
         except MediaError as exc:
             raise StepError(str(exc)) from exc
