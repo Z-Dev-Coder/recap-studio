@@ -313,6 +313,31 @@ details.more .card > h3 { display: none; }
 .aim-vid { width: 100%; max-height: 260px; background: #000; border-radius: 8px;
            margin-bottom: 8px; }
 .beat .bplay, .beat .bhere { padding: 2px 7px; line-height: 1.6; }
+
+/* Progress, beside the thing that is working.
+
+   The step messages have always existed, but only on the rail -- so a burn
+   that takes two minutes looked, from the panel you were staring at, exactly
+   like nothing happening. */
+.work { display: none; margin: 12px 0; padding: 11px 13px; border-radius: 8px;
+        background: var(--accent-soft, #eaf2ff);
+        border: 1px solid var(--accent, #4a9eff); }
+.work.on { display: block; }
+.work-top { display: flex; align-items: center; gap: 10px;
+            font-size: 13px; font-weight: 600; }
+.work-pct { margin-left: auto; font-variant-numeric: tabular-nums; opacity: .8; }
+.work-track { height: 6px; margin-top: 8px; border-radius: 3px;
+              background: rgba(0,0,0,.12); overflow: hidden; }
+.work-fill { height: 100%; width: 0; border-radius: 3px;
+             background: var(--accent, #4a9eff); transition: width .3s ease; }
+/* When there is no number to show, sweep instead: it still says "moving". */
+.work-track.guess .work-fill { width: 40%; animation: sweep 1.4s ease-in-out infinite; }
+@keyframes sweep { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+.work-spin { width: 12px; height: 12px; flex: none; border-radius: 50%;
+             border: 2px solid rgba(0,0,0,.15);
+             border-top-color: var(--accent, #4a9eff);
+             animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -586,6 +611,7 @@ details.more .card > h3 { display: none; }
                 </div>
               </div>
 
+<div class="work" data-work="video"><div class="work-top"><span class="work-spin"></span><span class="work-say"></span><span class="work-pct"></span></div><div class="work-track"><div class="work-fill"></div></div></div>
               <div class="row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
                 <div class="grow">
                   <div style="font-size:13px">Where the caption text comes from</div>
@@ -637,6 +663,7 @@ details.more .card > h3 { display: none; }
                 <div class="grow"></div>
                 <button class="sm ghost" id="aimHide">Hide the video</button>
               </div>
+<div class="work" data-work="script"><div class="work-top"><span class="work-spin"></span><span class="work-say"></span><span class="work-pct"></span></div><div class="work-track"><div class="work-fill"></div></div></div>
               <div class="scroll" id="beatRows"></div>
               <div class="row" style="margin-top:14px">
                 <button class="sm" id="reReadStory" title="Re-read the video into story notes, one call">Re-read</button>
@@ -729,6 +756,7 @@ details.more .card > h3 { display: none; }
 
           <section data-panel="voice" class="hide">
             <div class="card">
+<div class="work" data-work="voice"><div class="work-top"><span class="work-spin"></span><span class="work-say"></span><span class="work-pct"></span></div><div class="work-track"><div class="work-fill"></div></div></div>
               <div class="row" style="margin-bottom:10px">
                 <h3 class="grow" style="margin:0">Narration</h3>
                 <span class="note" id="lengthNote"></span>
@@ -917,6 +945,7 @@ details.more .card > h3 { display: none; }
                 <h3 class="grow" style="margin:0">Final video</h3>
                 <span class="note" id="finalNote"></span>
               </div>
+<div class="work" data-work="final"><div class="work-top"><span class="work-spin"></span><span class="work-say"></span><span class="work-pct"></span></div><div class="work-track"><div class="work-fill"></div></div></div>
               <video id="finalVideo" controls preload="metadata"></video>
               <div id="previewBox" class="hide">
                 <video id="previewVideo" controls preload="metadata"></video>
@@ -1123,6 +1152,7 @@ details.more .card > h3 { display: none; }
 </details>
 
             <div class="card">
+<div class="work" data-work="transcript"><div class="work-top"><span class="work-spin"></span><span class="work-say"></span><span class="work-pct"></span></div><div class="work-track"><div class="work-fill"></div></div></div>
               <div class="row" style="margin-bottom:12px">
                 <h3 class="grow" style="margin:0">Original transcript</h3>
                 <span class="note" id="transcriptNote"></span>
@@ -1916,6 +1946,7 @@ function renderProject() {
     renderFrames(p);
   }
   renderVoice(p);
+  renderWork(p);
   renderGuide(p);
   followVoiceProgress(p);
   renderResultBar(p);
@@ -4056,6 +4087,28 @@ function paintDiag() {
 }
 setInterval(paintDiag, 1000);
 paintDiag();
+
+/* Progress where the work is.
+
+   Every long step already reported itself, but only to the rail. Someone
+   watching the Captions panel through a two-minute burn saw a disabled button
+   and nothing else. These bars sit inside the panel that owns the step, and
+   show a real fraction when the work can give one -- a sweep when it cannot,
+   because "moving" is still worth more than a frozen bar. */
+function renderWork(p) {
+  document.querySelectorAll('.work').forEach(box => {
+    const step = (p.steps || {})[box.dataset.work] || {};
+    const on = step.status === 'running';
+    box.classList.toggle('on', on);
+    if (!on) return;
+    const pct = Number(step.progress || 0);
+    box.querySelector('.work-say').textContent = step.message || 'working...';
+    box.querySelector('.work-pct').textContent = pct > 0 ? Math.round(pct * 100) + '%' : '';
+    const track = box.querySelector('.work-track');
+    track.classList.toggle('guess', !(pct > 0));
+    box.querySelector('.work-fill').style.width = pct > 0 ? (pct * 100) + '%' : '';
+  });
+}
 
 /* ------------------------------------------------------------------ live */
 function listen() {

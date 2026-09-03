@@ -305,7 +305,7 @@ def _watch(project: Project, api_key: str, model: str = "",
         if so_far:
             project.transcript = [c.as_dict() for c in so_far]
             project.transcript_language = "en"
-        project.mark("transcript", "running",
+        project.mark("transcript", "running", progress=done / max(1, total),
                      message=f"reading what is shown ({done} of {total}) -- "
                              f"{len(so_far or [])} moments so far")
         # Writing it to disk is not the same as showing it. Without this the

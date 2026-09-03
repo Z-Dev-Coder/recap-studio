@@ -201,7 +201,8 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
             )
         elif step == "video":
             def progress(done: int, total: int) -> None:
-                project.mark("video", "running", message=f"clip {done} of {total}")
+                project.mark("video", "running", progress=done / max(1, total),
+                             message=f"clip {done} of {total}")
                 push(project)
 
             pipeline.run_video(project, on_progress=progress, cancel=stop)
@@ -209,7 +210,8 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
             key = options.get("api_key") or settings.get("gemini_key", "")
 
             def voiced(done: int, total: int) -> None:
-                project.mark("voice", "running", message=f"line {done} of {total}")
+                project.mark("voice", "running", progress=done / max(1, total),
+                             message=f"line {done} of {total}")
                 push(project)
 
             pipeline.run_voice(
@@ -226,10 +228,10 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
                 # `part` is how far through the current render ffmpeg is. A
                 # single-language render is one step, so "1 of 1" never moves
                 # and the whole encode looks like nothing happening.
-                where = f"rendering {done + 1} of {total}" if part is not None                     else f"rendering {done} of {total}"
-                if part is not None:
-                    where += f" -- {part * 100:.0f}%"
-                project.mark("final", "running", message=where)
+                at = done + (part or 0.0)
+                project.mark("final", "running",
+                             progress=at / max(1, total),
+                             message=f"rendering {min(done + 1, total)} of {total}")
                 push(project)
 
             pipeline.run_final(project, on_progress=rendered, cancel=stop)
@@ -1464,9 +1466,8 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
                      "margin": req.margin, "x": req.x, "y": req.y})
 
     def burning(done: float) -> None:
-        project.mark("video", "running",
-                     message=f"burning {len(rows)} captions into the picture "
-                             f"-- {done * 100:.0f}%")
+        project.mark("video", "running", progress=done,
+                     message=f"burning {len(rows)} captions into the picture")
         push(project)
 
     try:

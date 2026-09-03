@@ -42,6 +42,9 @@ class Step:
     message: str = ""
     error: str = ""
     updated: float = 0.0
+    # How far along, 0 to 1, when the work can say. A sentence tells you what
+    # is happening; a number tells you whether it is moving.
+    progress: float = 0.0
 
 
 @dataclass
@@ -183,10 +186,12 @@ class Project:
         return self.dir / "project.json"
 
     # ---------------------------------------------------------------- state
-    def mark(self, step: str, status: str, message: str = "", error: str = "") -> None:
+    def mark(self, step: str, status: str, message: str = "", error: str = "",
+             progress: float = 0.0) -> None:
         with self._lock:
             self.steps[step] = Step(
-                status=status, message=message, error=error, updated=time.time()
+                status=status, message=message, error=error,
+                updated=time.time(), progress=max(0.0, min(1.0, progress)),
             )
         self.save()
 
