@@ -1465,6 +1465,13 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
         raise HTTPException(400, f"the captions could not be burned in: {exc}") from exc
     except Cancelled:
         raise HTTPException(400, "stopped") from None
+    except Exception as exc:      # noqa: BLE001
+        # Anything ffmpeg or the OS raises that is not a MediaError used to
+        # escape as a bare 500, which tells the user nothing they can act on
+        # and hides the reason in a log they never see.
+        raise HTTPException(
+            400, f"the captions could not be burned in: {type(exc).__name__}: {exc}"
+        ) from exc
 
     project.mark("final", "idle", message="captions redrawn - render again")
     project.save()

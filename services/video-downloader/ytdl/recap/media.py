@@ -322,6 +322,11 @@ SHAPES = {
 # one line collide with the line above -- legible but visibly wrong, and the
 # reason captions looked broken. Pyidaungsu leaves room for the stacks and is
 # the cleanest of the three; Padauk Book is close behind with wider tracking.
+# Captions per ffmpeg run. Each one costs an input and a filter link, and the
+# command line is bounded; 40 leaves generous room under every platform's
+# limit while keeping the number of re-encodes small.
+PER_PASS = 40
+
 MY_FONTS = ("Pyidaungsu", "Padauk Book", "Myanmar Text", "Noto Sans Myanmar")
 
 
@@ -402,6 +407,33 @@ def burn_caption_images(src: Path, rows: list[dict], dest: Path,
     usable = [r for r in rows if Path(r["path"]).exists()]
     if not usable:
         raise MediaError("there are no caption images to lay down")
+
+    # Every caption is another -i and another link in the filter chain, and
+    # Windows refuses a command line over 32,767 characters. That arrives at
+    # about 128 captions -- perfectly reachable, since a long script chunks
+    # into several captions per line -- and it arrives as OSError from
+    # subprocess, not as anything this module raises, so it surfaced as an
+    # Internal Server Error with nothing to act on. So lay them down in
+    # passes, each pass reading the last one's output.
+    if len(usable) > PER_PASS:
+        step = src
+        work = dest.parent / "_caption_passes"
+        work.mkdir(parents=True, exist_ok=True)
+        try:
+            for n in range(0, len(usable), PER_PASS):
+                batch = usable[n:n + PER_PASS]
+                last = n + PER_PASS >= len(usable)
+                out = dest if last else work / f"pass_{n:04d}.mp4"
+                burn_caption_images(step, batch, out, cancel=cancel)
+                if step is not src:
+                    step.unlink(missing_ok=True)
+                step = out
+        finally:
+            for leftover in work.glob("pass_*.mp4"):
+                leftover.unlink(missing_ok=True)
+            if not any(work.iterdir()):
+                work.rmdir()
+        return dest
 
     args = [_tool("ffmpeg"), "-y", "-i", str(src)]
     for r in usable:
