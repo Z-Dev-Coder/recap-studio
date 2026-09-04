@@ -140,6 +140,29 @@ def _release(pid: str) -> None:
         _running.pop(pid, None)
 
 
+def reconcile(project) -> bool:
+    """
+    A step is only running if something is actually running it.
+
+    _running is the truth about what is executing; a step saying "running"
+    with no worker behind it is a spinner over work that died -- the service
+    restarted under it, or the thread fell over. Left alone it shows progress
+    for ever and blocks the retry that would fix it. Found in the wild: a
+    narration marked running, untouched for 23 minutes, with the GPU idle.
+    """
+    with _running_lock:
+        live = _running.get(project.id)
+    changed = False
+    for name, step in (project.steps or {}).items():
+        if getattr(step, "status", "") == "running" and name != live:
+            project.mark(name, "idle",
+                         message="interrupted -- run it again")
+            changed = True
+    if changed:
+        project.save()
+    return changed
+
+
 def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
     """
     Run one step on a worker thread, reporting state as it goes.
@@ -552,6 +575,8 @@ def models() -> dict:
 
 @router.get("/projects")
 def projects() -> list[dict]:
+    for project in store.projects():
+        reconcile(project)
     return store.all()
 
 
@@ -608,6 +633,7 @@ def one(pid: str) -> dict:
     project = store.get(pid)
     if not project:
         raise HTTPException(404, "no such project")
+    reconcile(project)
     return project.snapshot()
 
 

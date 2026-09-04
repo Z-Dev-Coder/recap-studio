@@ -432,6 +432,11 @@ class Store:
         with self._lock:
             return self._projects.get(pid)
 
+    def projects(self) -> list:
+        """Every loaded project, for callers that need the object itself."""
+        with self._lock:
+            return list(self._projects.values())
+
     def all(self) -> list[dict]:
         with self._lock:
             items = sorted(self._projects.values(), key=lambda p: p.created, reverse=True)
