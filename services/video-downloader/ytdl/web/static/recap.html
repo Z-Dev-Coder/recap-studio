@@ -344,11 +344,14 @@ details.more .card > h3 { display: none; }
 .ov-stage { position: relative; margin: 0 auto; border-radius: 8px;
             overflow: hidden; background: #000; touch-action: none;
             user-select: none; max-height: 420px; }
-/* cover, not contain: the stage already has the frame's shape, so the video
-   fills it exactly as the finished cut will rather than sitting letterboxed
-   inside a differently-shaped box. */
-.ov-stage video { width: 100%; height: 100%; object-fit: cover;
+/* How the video sits in the frame has to match how the CUT will sit in it,
+   or the preview is a different picture from the one being placed on. The
+   cut letterboxes a wide source into a tall frame -- with blurred bars, but
+   in the same band -- so the preview contains rather than crops, unless the
+   project asked for a crop. */
+.ov-stage video { width: 100%; height: 100%; object-fit: contain;
                   display: block; background: #000; }
+.ov-stage.crop video { object-fit: cover; }
 .ov-item { position: absolute; transform: translate(-50%, -50%);
            cursor: grab; white-space: pre; line-height: 1.35;
            padding: 2px 6px; border-radius: 4px; }
@@ -675,6 +678,8 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
                   <button class="sm ghost danger hide" id="ovRemove">Remove this</button>
                   <div class="grow"></div>
                   <span class="tiny" id="capPosNote"></span>
+                  <button class="sm ghost" id="ovSaveDefault"
+                          title="Use this logo, text and caption style on every new video">Keep for every video</button>
                   <button class="sm ghost" id="capPosReset">Caption back to the bottom</button>
                 </div>
 
@@ -3374,6 +3379,10 @@ function loadCapStage(p) {
   if (!p || capPos.dragging) return;
   capPos.x = p.caption_x == null ? 0.5 : p.caption_x;
   capPos.y = p.caption_y == null ? 0.86 : p.caption_y;
+  /* The cut, once there is one: it is already the finished shape, so what
+     is placed on it lands exactly there. Before that the source stands in,
+     framed the way the cut will frame it. */
+  $('capStage').classList.toggle('crop', (p.framing || 'blur') === 'crop');
   const src = p.has_recap
     ? `/api/recap/projects/${p.id}/file?name=recap_${p.mode}.mp4`
     : (p.has_source ? `/api/recap/projects/${p.id}/file?name=source.mp4` : '');
@@ -3638,6 +3647,17 @@ const saveCapLook = () => {
     .then(upsert).catch(e => showError($('capErr'), e.message));
 };
 capLookFields.forEach(([id]) => { $(id).oninput = saveCapLook; });
+
+$('ovSaveDefault').onclick = async () => {
+  const p = current(); if (!p) return;
+  const b = $('ovSaveDefault');
+  try {
+    const r = await post(`/api/recap/projects/${p.id}/look/save`, {});
+    saidCopied(b, 'kept');
+    $('capPosNote').textContent =
+      `every new video will start with this${r.overlays ? ` (${r.overlays} on the picture)` : ''}`;
+  } catch (e) { showError($('capErr'), e.message); }
+};
 
 $('capPosReset').onclick = () => {
   capPos.x = 0.5; capPos.y = 0.86; paintCapPos(); saveCapPos();

@@ -55,6 +55,12 @@ SETTINGS_FILE = ROOT / "settings.json"
 # The voice is a property of the channel, not of one video: auditioning four
 # candidates before every recap is work nobody wants to repeat. A chosen voice
 # is kept here and every later project starts with it.
+# A channel looks the same every week: the same logo in the same corner, the
+# same caption style. Placing it again for every video is work that produces
+# nothing. Kept beside the saved voice, for the same reason.
+SAVED_LOOK = ROOT / "look.json"
+SAVED_LOGO = ROOT / "logo.png"
+
 SAVED_VOICE = ROOT / "voice.wav"
 SAVED_VOICE_TEXT = ROOT / "voice.txt"
 
@@ -603,6 +609,10 @@ def create(req: CreateRequest) -> dict:
     project.mode = req.mode if req.mode in ("reels", "long") else "reels"
     project.language = req.language if req.language in ("en", "my") else "en"
     project.content_type = content.normalise(req.content_type)
+
+    # And with the channel's own look: the same logo in the same corner, the
+    # same caption style. Placing it again for every video produces nothing.
+    apply_saved_look(project)
 
     # Start with the voice already chosen, so a new video does not send the
     # user back through the audition for an answer they gave last time.
@@ -1557,6 +1567,67 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
 
 class LogoRequest(BaseModel):
     png_base64: str
+
+
+@router.post("/projects/{pid}/look/save")
+def keep_look(pid: str) -> dict:
+    """Make this project's layout the one every new video starts with."""
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    SAVED_LOOK.write_text(json.dumps({
+        "overlays": project.overlays or [],
+        "caption_look": project.caption_look or {},
+        "caption_x": project.caption_x,
+        "caption_y": project.caption_y,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+    if project.logo_path.exists():
+        SAVED_LOGO.write_bytes(project.logo_path.read_bytes())
+    else:
+        SAVED_LOGO.unlink(missing_ok=True)
+    return {"ok": True, "overlays": len(project.overlays or [])}
+
+
+@router.get("/look")
+def saved_look() -> dict:
+    """The house style, if one has been kept."""
+    if not SAVED_LOOK.exists():
+        return {"saved": False}
+    try:
+        data = json.loads(SAVED_LOOK.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"saved": False}
+    return {"saved": True, "logo": SAVED_LOGO.exists(), **data}
+
+
+@router.delete("/look")
+def forget_look() -> dict:
+    """Stop starting new videos from the kept layout."""
+    SAVED_LOOK.unlink(missing_ok=True)
+    SAVED_LOGO.unlink(missing_ok=True)
+    return {"ok": True}
+
+
+def apply_saved_look(project) -> None:
+    """
+    Start a new project from the house style.
+
+    Only ever on a project that has none of its own -- reapplying it later
+    would throw away a layout someone had adjusted for this video.
+    """
+    if project.overlays or project.caption_look or not SAVED_LOOK.exists():
+        return
+    try:
+        data = json.loads(SAVED_LOOK.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    project.overlays = data.get("overlays") or []
+    project.caption_look = data.get("caption_look") or {}
+    project.caption_x = float(data.get("caption_x", 0.5) or 0.5)
+    project.caption_y = float(data.get("caption_y", 0.86) or 0.86)
+    if SAVED_LOGO.exists():
+        project.logo_path.write_bytes(SAVED_LOGO.read_bytes())
+    project.save()
 
 
 @router.post("/projects/{pid}/logo")
