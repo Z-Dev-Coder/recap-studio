@@ -270,6 +270,27 @@ def ollama_sees(model: str, url: str = "") -> bool:
     return can
 
 
+# Steps a context window can take. Bigger costs memory, and a machine running
+# a 7B model beside a TTS model has little to spare, so it is sized to the
+# prompt rather than set high and hoped for.
+_CTX_STEPS = (2048, 4096, 8192, 16384)
+
+
+def _context_for(prompt: str, max_tokens: int = 0) -> int:
+    """
+    A window the prompt fits inside, with room for the answer.
+
+    Burmese runs about 1.5 characters to the token -- denser than English, so
+    a byte count flatters it. Estimated low on purpose: guessing small here
+    means truncation, which is the failure being fixed.
+    """
+    need = len(prompt) / 1.5 + (max_tokens or MAX_COMPLETION_TOKENS)
+    for step in _CTX_STEPS:
+        if need <= step:
+            return step
+    return _CTX_STEPS[-1]
+
+
 class OllamaBackend:
     """
     A model running on this machine. No quota and no key.
@@ -293,7 +314,15 @@ class OllamaBackend:
             "stream": False,
             "format": "json",
             "options": {"temperature": temperature,
-                        "num_predict": max_tokens or MAX_COMPLETION_TOKENS},
+                        "num_predict": max_tokens or MAX_COMPLETION_TOKENS,
+                        # Ollama defaults to a 2048-token context and silently
+                        # drops whatever does not fit. A recap script is far
+                        # longer than that, so the instructions fell off the
+                        # front and the model, left with a tail of Burmese and
+                        # no task, invented a subject: a documentary about
+                        # Hiroshima came back tagged #darkenergy #blackholes.
+                        # Ask for a window the prompt actually fits in.
+                        "num_ctx": _context_for(prompt, max_tokens)},
         }
         if images and ollama_sees(self.model, self.url):
             body["images"] = [base64.b64encode(blob).decode("ascii")
