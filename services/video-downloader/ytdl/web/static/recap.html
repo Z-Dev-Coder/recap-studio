@@ -338,6 +338,32 @@ details.more .card > h3 { display: none; }
              border-top-color: var(--accent, #4a9eff);
              animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* The overlay stage: the cut, with everything that will be burned onto it
+   sitting where it will sit, draggable. */
+.ov-wrap { margin-top: 12px; }
+.ov-stage { position: relative; margin: 0 auto; border-radius: 8px;
+            overflow: hidden; background: #000; touch-action: none;
+            user-select: none; max-height: 420px; }
+.ov-stage video { width: 100%; height: 100%; object-fit: contain;
+                  display: block; background: #000; }
+.ov-item { position: absolute; transform: translate(-50%, -50%);
+           cursor: grab; white-space: pre; line-height: 1.35;
+           padding: 2px 6px; border-radius: 4px; }
+.ov-item.sel { outline: 2px dashed var(--accent, #4a9eff); outline-offset: 3px; }
+.ov-item img { display: block; }
+.ov-item:active { cursor: grabbing; }
+.ov-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;
+          margin-top: 10px; }
+.ov-row .field { margin: 0; }
+.ov-list { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.ov-chip { padding: 4px 10px; border-radius: 999px; font-size: 12px;
+           border: 1px solid var(--line); background: var(--surface);
+           cursor: pointer; }
+.ov-chip.on { border-color: var(--accent, #4a9eff);
+              background: var(--accent-soft, #eaf2ff); font-weight: 600; }
+input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
+                    border: 1px solid var(--line); background: var(--surface); }
 </style>
 </head>
 <body>
@@ -595,23 +621,126 @@ details.more .card > h3 { display: none; }
                 </div>
               </div>
               <div style="margin-top:14px">
-                <div style="font-size:13px">Where the captions sit</div>
+                <div style="font-size:13px">What sits on the picture</div>
                 <div class="tiny" style="margin-top:2px">
-                  Drag the caption. Where you drop it is where every line is
-                  burned in.
+                  Drag anything here to place it. The caption block is where
+                  every subtitle line lands; a logo and any extra text are
+                  burned in exactly as shown.
                 </div>
-                <div class="cap-stage" id="capStage">
-                  <video id="capStageVid" muted playsinline preload="metadata"></video>
-                  <div class="cap-ghost" id="capGhost"></div>
+
+                <div class="ov-wrap">
+                  <div class="cap-stage ov-stage" id="capStage">
+                    <video id="capStageVid" muted playsinline preload="metadata"></video>
+                    <div class="cap-ghost ov-item" id="capGhost" data-ov="caption"></div>
+                  </div>
                 </div>
-                <div class="row" style="margin-top:8px">
-                  <span class="tiny" id="capPosNote"></span>
+
+                <div class="ov-list" id="ovList"></div>
+
+                <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+                  <button class="sm" id="ovAddText">Add text</button>
+                  <button class="sm" id="ovAddLogo">Add logo</button>
+                  <input type="file" id="logoFile" accept="image/*" class="hide">
+                  <button class="sm ghost danger hide" id="ovRemove">Remove this</button>
                   <div class="grow"></div>
-                  <button class="sm ghost" id="capPosReset">Back to the bottom</button>
+                  <span class="tiny" id="capPosNote"></span>
+                  <button class="sm ghost" id="capPosReset">Caption back to the bottom</button>
+                </div>
+
+                <div id="ovEditor" class="hide" style="margin-top:12px;padding-top:12px;
+                     border-top:1px solid var(--line)">
+                  <div class="ov-row">
+                    <div class="field grow" style="min-width:220px">
+                      <label class="f">Text</label>
+                      <input type="text" id="ovText" placeholder="follow for more">
+                    </div>
+                    <div class="field" style="max-width:150px">
+                      <label class="f">Font</label>
+                      <select id="ovFont">
+                        <option value="Pyidaungsu">Pyidaungsu</option>
+                        <option value="Myanmar Text">Myanmar Text</option>
+                        <option value="Padauk Book">Padauk</option>
+                        <option value="Inter">Inter</option>
+                        <option value="Impact">Impact</option>
+                        <option value="Georgia">Georgia</option>
+                      </select>
+                    </div>
+                    <div class="field" style="max-width:120px">
+                      <label class="f">Size</label>
+                      <input type="range" id="ovSize" min="16" max="140" value="46">
+                    </div>
+                    <div class="field" style="max-width:74px">
+                      <label class="f">Colour</label>
+                      <input type="color" id="ovColour" value="#ffffff">
+                    </div>
+                    <div class="field" style="max-width:74px">
+                      <label class="f">Plate</label>
+                      <input type="color" id="ovBoxColour" value="#000000">
+                    </div>
+                    <div class="field" style="max-width:120px">
+                      <label class="f">Plate opacity</label>
+                      <input type="range" id="ovBoxAlpha" min="0" max="100" value="0">
+                    </div>
+                    <div class="field" style="max-width:120px">
+                      <label class="f">Opacity</label>
+                      <input type="range" id="ovAlpha" min="10" max="100" value="100">
+                    </div>
+                  </div>
+                  <div class="ov-row">
+                    <div class="field" style="max-width:120px">
+                      <label class="f">From (s)</label>
+                      <input type="number" id="ovFrom" min="0" step="0.5" value="0">
+                    </div>
+                    <div class="field" style="max-width:120px">
+                      <label class="f">To (s)</label>
+                      <input type="number" id="ovTo" min="0" step="0.5" value="0">
+                    </div>
+                    <span class="tiny">0 to 0 means the whole video.</span>
+                  </div>
                 </div>
               </div>
 
-<div class="work" data-work="video"><div class="work-top"><span class="work-spin"></span><span class="work-say"></span><span class="work-pct"></span></div><div class="work-track"><div class="work-fill"></div></div></div>
+              <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+                <div class="note">How the captions look</div>
+                <div class="tiny" style="margin-top:4px">
+                  One style does not suit every video: a bright cartoon needs a
+                  solid plate behind the words, a dark documentary does not.
+                  This is drawn live below.
+                </div>
+                <div class="ov-row">
+                  <div class="field" style="max-width:150px">
+                    <label class="f">Font</label>
+                    <select id="capFont">
+                      <option value="Pyidaungsu">Pyidaungsu</option>
+                      <option value="Myanmar Text">Myanmar Text</option>
+                      <option value="Padauk Book">Padauk</option>
+                      <option value="Noto Sans Myanmar">Noto Sans Myanmar</option>
+                    </select>
+                  </div>
+                  <div class="field" style="max-width:120px">
+                    <label class="f">Size</label>
+                    <input type="range" id="capSize" min="20" max="90" value="42">
+                  </div>
+                  <div class="field" style="max-width:74px">
+                    <label class="f">Text</label>
+                    <input type="color" id="capColour" value="#ffffff">
+                  </div>
+                  <div class="field" style="max-width:74px">
+                    <label class="f">Plate</label>
+                    <input type="color" id="capBoxColour" value="#000000">
+                  </div>
+                  <div class="field" style="max-width:130px">
+                    <label class="f">Plate opacity</label>
+                    <input type="range" id="capBoxAlpha" min="0" max="100" value="62">
+                  </div>
+                  <div class="field" style="max-width:120px">
+                    <label class="f">Outline</label>
+                    <input type="range" id="capOutline" min="0" max="30" value="16">
+                  </div>
+                  <span class="tiny" id="capLookNote"></span>
+                </div>
+              </div>
+
               <div class="row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
                 <div class="grow">
                   <div style="font-size:13px">Where the caption text comes from</div>
@@ -1866,6 +1995,8 @@ function renderProject() {
   $('paceVal').innerHTML = (Number($('paceSlider').value) / 100).toFixed(2) + '&times;';
   trimLoad(p);
   loadCapStage(p);
+  paintOverlays(p);
+  paintCapLook(p);
   const trimmed = (p.trim_start || 0) > 0 || (p.trim_end || 0) > 0;
   $('undoTrim').classList.toggle('hide', !trimmed);
   if (trimmed && !$('trimNote').textContent) {
@@ -2907,9 +3038,49 @@ function measurer(style) {
 }
 
 const capFont = style =>
-  `700 ${style.size}px "Pyidaungsu", "Myanmar Text", "Padauk Book", sans-serif`;
+  `700 ${style.size}px "${style.font || 'Pyidaungsu'}", "Myanmar Text", ` +
+  `"Padauk Book", "Noto Sans Myanmar", sans-serif`;
 
-function drawCaptionImage(text, width, style) {
+/* One overlay as a transparent picture, at the size it will be burned in.
+
+   Text is drawn the same way a caption is, which is what keeps Burmese
+   shaping correct. A logo is loaded and drawn at its chosen width, so the
+   service composites a picture rather than scaling one -- there is then only
+   one place where "how big is it" is decided, and it is the place you can
+   see. */
+async function drawOverlay(o, p, frameW, frameH) {
+  if (o.kind === 'logo') {
+    const img = await new Promise(ok => {
+      const i = new Image();
+      i.onload = () => ok(i);
+      i.onerror = () => ok(null);
+      i.src = `/api/recap/projects/${p.id}/file?name=logo.png&t=${Date.now()}`;
+    });
+    if (!img || !img.width) return '';
+    const w = Math.max(8, Number(o.size) || 140);
+    const h = Math.max(8, Math.round(w * (img.height / img.width)));
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    g.globalAlpha = o.alpha ?? 1;
+    g.drawImage(img, 0, 0, w, h);
+    return c.toDataURL('image/png');
+  }
+
+  const text = String(o.text || '').trim();
+  if (!text) return '';
+  return drawCaptionImage(text, frameW, {
+    size: Number(o.size) || 46,
+    font: o.font || 'Inter',
+    colour: o.colour || '#ffffff',
+    boxColour: o.box_colour || '#000000',
+    boxAlpha: o.box_alpha ?? 0,
+    outline: Math.round((Number(o.size) || 46) * 0.12),
+    alpha: o.alpha ?? 1,
+  }, true);
+}
+
+function drawCaptionImage(text, width, style, tight) {
   const pad = Math.round(style.size * 0.45);
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d');
@@ -2919,7 +3090,8 @@ function drawCaptionImage(text, width, style) {
   const lines = wrapCaption(ctx, text, width - pad * 4);
   const lineHeight = Math.round(style.size * 1.55);   // Myanmar stacks need room
 
-  c.width = width;
+  const widestNow = Math.max(...lines.map(l => ctx.measureText(l).width));
+  c.width = tight ? Math.ceil(widestNow + pad * 4) : width;
   c.height = lines.length * lineHeight + pad * 2;
   const g = c.getContext('2d');
   g.font = font;
@@ -2927,8 +3099,8 @@ function drawCaptionImage(text, width, style) {
   g.textBaseline = 'middle';
 
   const widest = Math.max(...lines.map(l => g.measureText(l).width));
-  if (style.box) {
-    g.fillStyle = style.boxColour;
+  if (style.boxAlpha > 0.01) {
+    g.fillStyle = rgba(style.boxColour, style.boxAlpha);
     roundRect(g, (c.width - widest) / 2 - pad, 0, widest + pad * 2, c.height,
               Math.round(style.size * 0.25));
     g.fill();
@@ -2948,6 +3120,27 @@ function drawCaptionImage(text, width, style) {
   return c.toDataURL('image/png');
 }
 
+/* The caption's look, as the project has it. The presets remain as starting
+   points, but a bright cartoon and a dark documentary do not want the same
+   plate behind the words, so every part of it is adjustable and kept with the
+   project rather than in a list of four. */
+const CAP_DEFAULT = {
+  font: 'Pyidaungsu', size: 42, colour: '#ffffff',
+  box_colour: '#000000', box_alpha: 0.62, outline: 0.16,
+};
+
+function capLook(p) {
+  return { ...CAP_DEFAULT, ...((p && p.caption_look) || {}) };
+}
+
+/* A colour and an opacity, as canvas wants it. */
+function rgba(hex, alpha) {
+  const h = String(hex || '#000').replace('#', '');
+  const n = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const v = parseInt(n, 16) || 0;
+  return `rgba(${(v >> 16) & 255},${(v >> 8) & 255},${v & 255},${alpha})`;
+}
+
 const CAPTION_LOOKS = {
   clean:         { colour: '#fff',    box: false, boxColour: 'rgba(0,0,0,.62)', outlineMul: 0.16 },
   boxed:         { colour: '#fff',    box: true,  boxColour: 'rgba(0,0,0,.72)', outlineMul: 0 },
@@ -2963,6 +3156,111 @@ const CAPTION_LOOKS = {
    script, because a box of lorem tells you nothing about how wide the
    Burmese runs. */
 const capPos = { x: 0.5, y: 0.86, dragging: false };
+
+/* Everything that will be burned onto the picture, as objects the page can
+   draw and drag. The caption block is one of them -- it is not a separate
+   idea, it just happens to be the one whose text changes line by line. */
+function overlays(p) { return (p && p.overlays) || []; }
+
+let ovSel = null;                       // which overlay is being edited
+
+function stageScale() {
+  const v = $('capStageVid');
+  const box = $('capStage').getBoundingClientRect();
+  return { w: box.width || 1, h: box.height || 1 };
+}
+
+function paintOverlays(p) {
+  const stage = $('capStage');
+  const look = capLook(p);
+  const [fw] = thumbShape(p);
+  const box = stage.getBoundingClientRect();
+  // the stage is a scaled copy of the finished frame, so a size in finished
+  // pixels has to be scaled the same way or the preview lies
+  const k = (box.width || fw) / fw;
+
+  [...stage.querySelectorAll('.ov-item[data-ov]')].forEach(el => {
+    if (el.id !== 'capGhost') el.remove();
+  });
+
+  const ghost = $('capGhost');
+  ghost.style.font = `700 ${Math.max(9, look.size * k)}px "${look.font}", sans-serif`;
+  ghost.style.color = look.colour;
+  ghost.style.background = rgba(look.box_colour, look.box_alpha);
+  ghost.classList.toggle('sel', ovSel === 'caption');
+
+  overlays(p).forEach((o, i) => {
+    const el = document.createElement('div');
+    el.className = 'ov-item' + (ovSel === i ? ' sel' : '');
+    el.dataset.ov = String(i);
+    el.style.left = (o.x ?? 0.5) * 100 + '%';
+    el.style.top = (o.y ?? 0.12) * 100 + '%';
+    el.style.opacity = String(o.alpha ?? 1);
+    el.style.background = rgba(o.box_colour || '#000', o.box_alpha ?? 0);
+    if (o.kind === 'logo') {
+      const img = document.createElement('img');
+      img.src = `/api/recap/projects/${p.id}/file?name=logo.png`;
+      img.style.width = Math.max(12, (o.size || 120) * k) + 'px';
+      el.appendChild(img);
+    } else {
+      el.textContent = o.text || 'text';
+      el.style.font = `700 ${Math.max(9, (o.size || 46) * k)}px "${o.font || 'Inter'}", sans-serif`;
+      el.style.color = o.colour || '#fff';
+    }
+    stage.appendChild(el);
+  });
+  renderOvList(p);
+}
+
+function renderOvList(p) {
+  const rows = overlays(p);
+  $('ovList').innerHTML =
+    `<span class="ov-chip ${ovSel === 'caption' ? 'on' : ''}" data-pick="caption">Captions</span>` +
+    rows.map((o, i) =>
+      `<span class="ov-chip ${ovSel === i ? 'on' : ''}" data-pick="${i}">` +
+      `${o.kind === 'logo' ? 'Logo' : escapeHtml((o.text || 'text').slice(0, 18))}</span>`).join('');
+  [...$('ovList').children].forEach(chip => {
+    chip.onclick = () => {
+      const v = chip.dataset.pick;
+      ovSel = v === 'caption' ? 'caption' : Number(v);
+      paintOverlays(current());
+      showOvEditor(current());
+    };
+  });
+  $('ovRemove').classList.toggle('hide', typeof ovSel !== 'number');
+}
+
+function showOvEditor(p) {
+  const on = typeof ovSel === 'number';
+  $('ovEditor').classList.toggle('hide', !on);
+  if (!on) return;
+  const o = overlays(p)[ovSel] || {};
+  $('ovText').value = o.text || '';
+  $('ovText').disabled = o.kind === 'logo';
+  $('ovFont').value = o.font || 'Inter';
+  $('ovSize').value = o.size || 46;
+  $('ovColour').value = o.colour || '#ffffff';
+  $('ovBoxColour').value = o.box_colour || '#000000';
+  $('ovBoxAlpha').value = Math.round((o.box_alpha ?? 0) * 100);
+  $('ovAlpha').value = Math.round((o.alpha ?? 1) * 100);
+  $('ovFrom').value = o.start || 0;
+  $('ovTo').value = o.end || 0;
+}
+
+const saveOverlays = () => {
+  const p = current(); if (!p) return Promise.resolve();
+  return patch(`/api/recap/projects/${p.id}`, { overlays: p.overlays || [] })
+    .then(upsert).catch(e => showError($('capErr'), e.message));
+};
+
+function editSelected(change) {
+  const p = current(); if (!p || typeof ovSel !== 'number') return;
+  const rows = [...overlays(p)];
+  rows[ovSel] = { ...rows[ovSel], ...change };
+  p.overlays = rows;
+  paintOverlays(p);
+  saveOverlays();
+}
 
 function loadCapStage(p) {
   /* The service pushes a snapshot on every progress tick. Reading the saved
@@ -3034,6 +3332,135 @@ $('hearPace').onclick = () => {
   state.audio.play();
 };
 
+/* Dragging anything on the stage, the caption block included. */
+$('capStage').addEventListener('pointerdown', ev => {
+  const el = ev.target.closest('.ov-item');
+  if (!el) return;
+  ev.preventDefault();
+  const p = current(); if (!p) return;
+  const which = el.dataset.ov;
+  ovSel = which === 'caption' ? 'caption' : Number(which);
+  capPos.dragging = true;
+  el.setPointerCapture(ev.pointerId);
+  paintOverlays(p);
+  showOvEditor(p);
+
+  const move = e => {
+    const box = $('capStage').getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
+    const y = Math.min(1, Math.max(0, (e.clientY - box.top) / box.height));
+    if (which === 'caption') { capPos.x = x; capPos.y = y; paintCapPos(); }
+    else {
+      el.style.left = x * 100 + '%';
+      el.style.top = y * 100 + '%';
+      el.dataset.x = x; el.dataset.y = y;
+    }
+  };
+  el.onpointermove = move;
+  el.onpointerup = () => {
+    el.onpointermove = null; el.onpointerup = null;
+    capPos.dragging = false;
+    if (which === 'caption') saveCapPos();
+    else editSelected({ x: Number(el.dataset.x), y: Number(el.dataset.y) });
+  };
+});
+
+$('ovAddText').onclick = () => {
+  const p = current(); if (!p) return;
+  p.overlays = [...overlays(p), {
+    kind: 'text', text: 'follow for more', x: 0.5, y: 0.12,
+    size: 46, colour: '#ffffff', font: 'Inter',
+    box_colour: '#000000', box_alpha: 0, alpha: 1, start: 0, end: 0,
+  }];
+  ovSel = p.overlays.length - 1;
+  paintOverlays(p); showOvEditor(p); saveOverlays();
+};
+
+$('ovAddLogo').onclick = () => $('logoFile').click();
+
+$('logoFile').onchange = async () => {
+  const p = current(); if (!p) return;
+  const file = $('logoFile').files[0];
+  $('logoFile').value = '';
+  if (!file) return;
+  try {
+    const b64 = await new Promise((ok, no) => {
+      const r = new FileReader();
+      r.onload = () => ok(String(r.result).split(',')[1]);
+      r.onerror = () => no(new Error('that file could not be read'));
+      r.readAsDataURL(file);
+    });
+    await post(`/api/recap/projects/${p.id}/logo`, { png_base64: b64 });
+    const cur = current();
+    cur.overlays = [...overlays(cur).filter(o => o.kind !== 'logo'), {
+      kind: 'logo', x: 0.12, y: 0.09, size: 140, alpha: 0.9,
+      box_colour: '#000000', box_alpha: 0, start: 0, end: 0,
+    }];
+    ovSel = cur.overlays.length - 1;
+    paintOverlays(cur); showOvEditor(cur);
+    await saveOverlays();
+  } catch (e) { showError($('capErr'), e.message); }
+};
+
+$('ovRemove').onclick = () => {
+  const p = current(); if (!p || typeof ovSel !== 'number') return;
+  const gone = overlays(p)[ovSel];
+  p.overlays = overlays(p).filter((_o, i) => i !== ovSel);
+  ovSel = null;
+  paintOverlays(p); showOvEditor(p); saveOverlays();
+  if (gone && gone.kind === 'logo') {
+    request(`/api/recap/projects/${p.id}/logo`, { method: 'DELETE' }).catch(() => {});
+  }
+};
+
+[['ovText', 'text', v => v],
+ ['ovFont', 'font', v => v],
+ ['ovSize', 'size', Number],
+ ['ovColour', 'colour', v => v],
+ ['ovBoxColour', 'box_colour', v => v],
+ ['ovBoxAlpha', 'box_alpha', v => Number(v) / 100],
+ ['ovAlpha', 'alpha', v => Number(v) / 100],
+ ['ovFrom', 'start', Number],
+ ['ovTo', 'end', Number],
+].forEach(([id, key, cast]) => {
+  $(id).oninput = () => editSelected({ [key]: cast($(id).value) });
+});
+
+/* The caption look, saved as it is dragged so the stage shows the truth. */
+const capLookFields = [
+  ['capFont', 'font', v => v],
+  ['capSize', 'size', Number],
+  ['capColour', 'colour', v => v],
+  ['capBoxColour', 'box_colour', v => v],
+  ['capBoxAlpha', 'box_alpha', v => Number(v) / 100],
+  ['capOutline', 'outline', v => Number(v) / 100],
+];
+/* Show the saved look in the controls, without fighting a slider being
+   dragged. */
+function paintCapLook(p) {
+  const look = capLook(p);
+  capLookFields.forEach(([id, key, _cast]) => {
+    if (document.activeElement === $(id)) return;
+    $(id).value = key === 'box_alpha' || key === 'outline'
+      ? Math.round(look[key] * 100) : look[key];
+  });
+  $('capLookNote').textContent =
+    `${look.size}px ${look.font}, plate ${Math.round(look.box_alpha * 100)}%`;
+}
+
+const saveCapLook = () => {
+  const p = current(); if (!p) return;
+  const look = capLook(p);
+  capLookFields.forEach(([id, key, cast]) => { look[key] = cast($(id).value); });
+  p.caption_look = look;
+  $('capLookNote').textContent =
+    `${look.size}px ${look.font}, plate ${Math.round(look.box_alpha * 100)}%`;
+  paintOverlays(p);
+  patch(`/api/recap/projects/${p.id}`, { caption_look: look })
+    .then(upsert).catch(e => showError($('capErr'), e.message));
+};
+capLookFields.forEach(([id]) => { $(id).oninput = saveCapLook; });
+
 $('capPosReset').onclick = () => {
   capPos.x = 0.5; capPos.y = 0.86; paintCapPos(); saveCapPos();
 };
@@ -3052,10 +3479,13 @@ $('drawCaptions').onclick = async () => {
     if (!res.ok) throw new Error((await res.json()).detail || 'no subtitles yet');
     const srt = await res.text();
 
-    const [w] = thumbShape(p);                       // the cut's own width
-    const size = Math.round(w / 26);                 // readable at a glance
-    const look = CAPTION_LOOKS[p.caption_style] || CAPTION_LOOKS.clean;
-    const style = { size, ...look, outline: Math.round(size * look.outlineMul) };
+    const [w, h] = thumbShape(p);                    // the cut's own frame
+    const chosen = capLook(p);
+    const style = {
+      size: chosen.size, font: chosen.font, colour: chosen.colour,
+      boxColour: chosen.box_colour, boxAlpha: chosen.box_alpha,
+      outline: Math.round(chosen.size * chosen.outline),
+    };
 
     const stamp = /(\d\d):(\d\d):(\d\d),(\d\d\d) --> (\d\d):(\d\d):(\d\d),(\d\d\d)/;
     const images = [];
@@ -3084,6 +3514,23 @@ $('drawCaptions').onclick = async () => {
       }
       btn.textContent = `drawing ${images.length}...`;
     }
+    /* The logo and any free text are drawn here too, for the same reason the
+       captions are: Chromium is the only renderer in this app that shapes
+       Myanmar, and a second path would only be a second thing to get wrong.
+       They go over the whole video unless given their own times. */
+    const span = Number(p.duration || 0) || 0;
+    for (const o of (p.overlays || [])) {
+      const png = await drawOverlay(o, p, w, h);
+      if (!png) continue;
+      images.push({
+        index: images.length,
+        start: Number(o.start) || 0,
+        end: (Number(o.end) || 0) > (Number(o.start) || 0) ? Number(o.end) : (span || 1e6),
+        png_base64: png.split(',')[1],
+        x: o.x ?? 0.5, y: o.y ?? 0.12,
+      });
+    }
+
     if (!images.length) throw new Error('there are no subtitle lines to draw');
 
     btn.textContent = `burning ${images.length}...`;

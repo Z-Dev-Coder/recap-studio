@@ -328,6 +328,8 @@ class EditRequest(BaseModel):
     line_gap: float | None = None
     content_type: str | None = None
     footage_pace: float | None = None
+    caption_look: dict | None = None
+    overlays: list | None = None
     caption_x: float | None = None
     caption_y: float | None = None
     skip_start: float | None = None
@@ -393,6 +395,11 @@ class SettingsRequest(BaseModel):
 
 
 class CaptionImage(BaseModel):
+    # A logo sits where it was dragged, not where the captions sit, so each
+    # picture may name its own place. Left unset it falls back to the request's
+    # -- which is what every caption does.
+    x: float | None = None
+    y: float | None = None
     index: int
     start: float
     end: float
@@ -1463,7 +1470,9 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
         path = shots / f"cap_{img.index:04d}.png"
         path.write_bytes(blob)
         rows.append({"path": path, "start": img.start, "end": img.end,
-                     "margin": req.margin, "x": req.x, "y": req.y})
+                     "margin": req.margin,
+                     "x": req.x if img.x is None else img.x,
+                     "y": req.y if img.y is None else img.y})
 
     # Burning is minutes of work -- 238 captions is six passes over the whole
     # video -- and holding an HTTP request open for it is how "Failed to
@@ -1500,6 +1509,49 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
 
     threading.Thread(target=burn, daemon=True).start()
     return {"ok": True, "captions": len(rows), "started": True}
+
+
+class LogoRequest(BaseModel):
+    png_base64: str
+
+
+@router.post("/projects/{pid}/logo")
+def set_logo(pid: str, req: LogoRequest) -> dict:
+    """
+    Keep a channel logo for this project.
+
+    Stored as a PNG so transparency survives; the page scales and places it,
+    and draws it into the overlay picture along with everything else, so the
+    burn has one kind of thing to composite rather than two.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    raw = req.png_base64.split(",", 1)[-1]
+    try:
+        blob = base64.b64decode(raw, validate=True)
+    except Exception as exc:      # noqa: BLE001
+        raise HTTPException(400, f"that is not valid image data: {exc}") from exc
+    if not blob:
+        raise HTTPException(400, "the logo came through empty")
+    project.logo_path.write_bytes(blob)
+    project.save()
+    push(project)
+    return {"ok": True, "bytes": len(blob)}
+
+
+@router.delete("/projects/{pid}/logo")
+def clear_logo(pid: str) -> dict:
+    """Stop using a logo on this project."""
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    project.logo_path.unlink(missing_ok=True)
+    project.overlays = [o for o in (project.overlays or [])
+                        if o.get("kind") != "logo"]
+    project.save()
+    push(project)
+    return {"ok": True}
 
 
 @router.post("/projects/{pid}/captions/file")

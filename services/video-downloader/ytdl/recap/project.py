@@ -119,6 +119,18 @@ class Project:
     # and the picture is quickened to fit -- which is how a recap keeps up
     # with narration written at a livelier pace than the original.
     footage_pace: float = 1.0
+    # How the burned-in captions look. One style cannot suit every video: a
+    # bright cartoon needs a solid plate behind the words, a dark documentary
+    # does not. Kept per project because it is a decision about this footage.
+    caption_look: dict = field(default_factory=dict)
+
+    # Channel logo and any free text laid over the picture -- the things that
+    # make a cut look like a post rather than a clip. Each one carries its own
+    # position, size and styling, and the page draws it: Chromium is the only
+    # renderer here that shapes Myanmar, so Burmese overlay text has to come
+    # from the same place the captions do.
+    overlays: list = field(default_factory=list)
+
     caption_x: float = 0.5
     caption_y: float = 0.86
     skip_start: float = 0.0
@@ -150,6 +162,11 @@ class Project:
     @property
     def recap_path(self) -> Path:
         return self.dir / f"recap_{self.mode}.mp4"
+
+    @property
+    def logo_path(self) -> Path:
+        """The channel logo, if one has been uploaded."""
+        return self.dir / "logo.png"
 
     @property
     def captioned_path(self) -> Path:
@@ -237,6 +254,8 @@ class Project:
             "line_gap": self.line_gap,
             "caption_file": self.caption_file,
             "footage_pace": self.footage_pace,
+            "caption_look": self.caption_look,
+            "overlays": self.overlays,
             "caption_x": self.caption_x,
             "caption_y": self.caption_y,
             "skip_start": self.skip_start,
@@ -257,6 +276,7 @@ class Project:
             "has_final": self.final_path.exists(),
             "steps": {k: asdict(v) for k, v in self.steps.items()},
             "has_source": self.source_path.exists(),
+            "has_logo": self.logo_path.exists(),
             "has_recap": self.recap_path.exists(),
             "has_captioned": self.captioned_path.exists(),
             "has_thumbnail": self.thumbnail_path.exists(),
@@ -271,6 +291,7 @@ class Project:
         # broadcast on every progress tick. Persisted here instead.
         data["story"] = self.story
         data.pop("has_source", None)
+        data.pop("has_logo", None)
         data.pop("has_recap", None)
         data.pop("has_thumbnail", None)
         data.pop("has_final", None)
@@ -333,6 +354,8 @@ class Project:
             line_gap=float(data.get("line_gap", 0.55) if data.get("line_gap") is not None else 0.55),
             caption_file=data.get("caption_file", "") or "",
             footage_pace=float(data.get("footage_pace", 1.0) or 1.0),
+            caption_look=data.get("caption_look") or {},
+            overlays=data.get("overlays") or [],
             caption_x=float(data.get("caption_x", 0.5) or 0.5),
             caption_y=float(data.get("caption_y", 0.86) or 0.86),
             skip_start=float(data.get("skip_start", 0) or 0),
