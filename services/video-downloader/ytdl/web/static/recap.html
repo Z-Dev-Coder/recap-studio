@@ -3726,7 +3726,13 @@ $('drawCaptions').onclick = async () => {
           index: images.length,
           start: piece.start,
           end: piece.end,
-          png_base64: drawCaptionImage(piece.text, w, style).split(',')[1],
+          /* Drawn to the size of its own text, not the width of the frame.
+             A full-frame-width picture cannot be placed anywhere: the
+             compositor clamps it inside the frame, and since it IS the frame
+             every horizontal position collapses to the same one -- so
+             dragging the caption sideways moved it on screen and nowhere in
+             the finished video. */
+          png_base64: drawCaptionImage(piece.text, w, style, true).split(',')[1],
         });
       }
       btn.textContent = `drawing ${images.length}...`;
