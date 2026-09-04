@@ -308,7 +308,7 @@ details.more .card > h3 { display: none; }
   position: absolute; transform: translate(-50%, -50%); cursor: grab;
   padding: 5px 11px; border-radius: 5px; background: rgba(0,0,0,.62);
   color: #fff; font-weight: 700; font-size: 13px; text-align: center;
-  max-width: 88%; overflow-wrap: anywhere;
+  overflow-wrap: anywhere; line-height: 1.55;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
   box-shadow: 0 0 0 1px rgba(255,255,255,.35);
@@ -367,10 +367,13 @@ details.more .card > h3 { display: none; }
    percentage is a different number from the one drawCaptionImage uses, so the
    preview wrapped text the burn keeps on one line -- which is a preview that
    lies about the thing it exists to show. */
+/* line-height and padding match drawCaptionImage exactly -- 1.55 and
+   0.45em -- because a preview whose box is a different shape from the burn's
+   is a preview of something else. Padding is set in script, in scaled
+   pixels, for the same reason. */
 .ov-item { position: absolute; transform: translate(-50%, -50%);
-           cursor: grab; line-height: 1.35; text-align: center;
-           overflow-wrap: anywhere;
-           padding: 2px 6px; border-radius: 4px; }
+           cursor: grab; line-height: 1.55; text-align: center;
+           overflow-wrap: anywhere; border-radius: 4px; }
 .ov-item.sel { outline: 2px dashed var(--accent, #4a9eff); outline-offset: 3px; }
 .ov-item img { display: block; }
 .ov-item:active { cursor: grabbing; }
@@ -410,10 +413,13 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
 
 /* The corner you pull to resize. Only on what is selected, so the stage is
    not covered in handles. */
-.ov-grip { position: absolute; right: -7px; bottom: -7px; width: 14px;
-           height: 14px; border-radius: 50%; cursor: nwse-resize;
-           background: var(--accent, #4a9eff);
+.ov-grip { position: absolute; width: 13px; height: 13px; margin: -7px 0 0 -7px;
+           border-radius: 50%; background: var(--accent, #4a9eff);
            box-shadow: 0 0 0 2px rgba(255,255,255,.9); }
+.ov-grip-nw, .ov-grip-se { cursor: nwse-resize; }
+.ov-grip-ne, .ov-grip-sw { cursor: nesw-resize; }
+.ov-grip-n, .ov-grip-s { cursor: ns-resize; }
+.ov-grip-w, .ov-grip-e { cursor: ew-resize; }
 </style>
 </head>
 <body>
@@ -3295,6 +3301,8 @@ function paintOverlays(p) {
   ghost.style.font = capFont({ size: Math.max(9, look.size * k), font: look.font });
   const gpad = Math.round(look.size * 0.45);
   ghost.style.maxWidth = Math.max(24, (fw - gpad * 4) * k) + 'px';
+  ghost.style.padding = `0 ${Math.max(2, gpad * k)}px`;
+  ghost.style.borderRadius = Math.max(2, look.size * 0.25 * k) + 'px';
   ghost.style.color = look.colour;
   ghost.style.background = rgba(look.box_colour, look.box_alpha);
   ghost.classList.toggle('sel', ovSel === 'caption');
@@ -3322,28 +3330,39 @@ function paintOverlays(p) {
       // the same room the burn gives it: the frame less its padding, scaled
       const opad = Math.round((o.size || 46) * 0.45);
       el.style.maxWidth = Math.max(24, (fw - opad * 4) * k) + 'px';
+      el.style.padding = `0 ${Math.max(2, opad * k)}px`;
+      el.style.borderRadius = Math.max(2, (o.size || 46) * 0.25 * k) + 'px';
     }
-    if (ovSel === i) {
-      // Corner handle: dragging it is how a size is chosen, because a number
-      // on a slider is a guess about a frame you are looking at.
-      const grip = document.createElement('span');
-      grip.className = 'ov-grip';
-      grip.dataset.grip = String(i);
-      el.appendChild(grip);
-    }
+    if (ovSel === i) addGrips(el, String(i));
     stage.appendChild(el);
   });
 
-  const ghostGrip = $('capGhost').querySelector('.ov-grip');
-  if (ovSel === 'caption' && !ghostGrip) {
-    const g = document.createElement('span');
-    g.className = 'ov-grip';
-    g.dataset.grip = 'caption';
-    $('capGhost').appendChild(g);
-  } else if (ovSel !== 'caption' && ghostGrip) {
-    ghostGrip.remove();
-  }
+  $('capGhost').querySelectorAll('.ov-grip').forEach(g => g.remove());
+  if (ovSel === 'caption') addGrips($('capGhost'), 'caption');
   renderOvList(p);
+}
+
+/* A handle at every corner and on every side. Which one is pulled makes no
+   difference to the result -- the size follows how far the pointer is from
+   the item's own centre -- but having only the bottom right corner means
+   reaching for it, and on something already near the bottom right of the
+   frame there is nowhere to reach from. */
+const GRIP_SPOTS = [
+  ['nw', 0, 0], ['n', 50, 0], ['ne', 100, 0],
+  ['w', 0, 50], ['e', 100, 50],
+  ['sw', 0, 100], ['s', 50, 100], ['se', 100, 100],
+];
+
+function addGrips(el, which) {
+  el.querySelectorAll('.ov-grip').forEach(g => g.remove());
+  for (const [name, x, y] of GRIP_SPOTS) {
+    const g = document.createElement('span');
+    g.className = 'ov-grip ov-grip-' + name;
+    g.dataset.grip = which;
+    g.style.left = x + '%';
+    g.style.top = y + '%';
+    el.appendChild(g);
+  }
 }
 
 function renderOvList(p) {
