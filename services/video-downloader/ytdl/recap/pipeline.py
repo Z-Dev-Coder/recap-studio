@@ -632,13 +632,14 @@ def run_voice(
     model: str = "",
     on_progress=None,
     cancel=None,
+    timesteps: int = 0,
 ) -> None:
     """Narrate every language the project asks for."""
     wanted = project.voice_langs or [project.voice_lang or "my"]
     for index, language in enumerate(wanted):
         _narrate_one(
             project, api_key, model, language,
-            on_progress=on_progress, cancel=cancel,
+            on_progress=on_progress, cancel=cancel, timesteps=timesteps,
             prefix=(f"{language} " if len(wanted) > 1 else ""),
         )
     # the language shown in the UI follows the last one rendered
@@ -654,6 +655,7 @@ def _narrate_one(
     on_progress=None,
     cancel=None,
     prefix: str = "",
+    timesteps: int = 0,
 ) -> None:
     """
     Speak the recap, one clip per line.
@@ -744,6 +746,7 @@ def _narrate_one(
         local_model=project.local_model or "",
         reference_audio=reference,
         reference_text=project.voice_reference_text,
+        timesteps=timesteps,
     )
     if not made:
         raise StepError("no narration audio was produced")

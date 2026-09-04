@@ -217,6 +217,11 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
             pipeline.run_voice(
                 project,
                 api_key=key,
+                # Ten diffusion steps is VoxCPM's default and the whole cost on
+                # a card like this one: measured, ten took 24s for a 13.8s line
+                # and six took 12s. Fewer is a rougher render, so it is chosen
+                # rather than assumed.
+                timesteps=int(settings.get("voice_timesteps") or 0),
                 model=settings.get("tts_model", "") or tts_mod.DEFAULT_MODEL,
                 on_progress=voiced,
                 cancel=stop,
@@ -399,6 +404,10 @@ class SettingsRequest(BaseModel):
     gemini_model: str | None = None
     tts_model: str | None = None
     whisper_model: str | None = None
+    # Diffusion steps for the local voice. Pydantic drops what it has never
+    # heard of, so an undeclared setting is silently thrown away -- which has
+    # already happened once in this file.
+    voice_timesteps: int | None = None
     use_scrape: bool | None = None
     use_vision: bool | None = None
 

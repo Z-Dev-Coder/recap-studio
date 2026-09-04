@@ -285,6 +285,7 @@ def narrate(
     engine: str = "gemini",
     reference_audio=None,
     reference_text: str = "",
+    timesteps: int = 0,
     local_model: str = "",
     only: set | None = None,
     force: bool = False,
@@ -369,6 +370,7 @@ def narrate(
                 cancel=cancel,
                 max_seconds=clip_seconds,
                 voice_anchor=anchor,
+                timesteps=timesteps,
             )
         else:
             # keep under the per-minute ceiling instead of colliding with it

@@ -1439,6 +1439,19 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
           <option value="most">Most runs &mdash; about 125 a day</option>
         </select>
       </div>
+      <div class="field" style="max-width:220px">
+        <label class="f">Local voice quality</label>
+        <select id="voiceSteps">
+          <option value="10">Full - 10 steps (as shipped)</option>
+          <option value="8">Slightly faster - 8 steps</option>
+          <option value="6">Twice as fast - 6 steps</option>
+        </select>
+        <div class="tiny" style="margin-top:4px">
+          Diffusion steps per line, and the whole cost on this machine.
+          Measured on a 13.8s line: 10 steps took 24s, 6 took 12s. Fewer is a
+          rougher render.
+        </div>
+      </div>
       <div class="field" style="max-width:140px">
         <label class="f">Whisper model</label>
         <select id="whisperModel">
@@ -1537,6 +1550,7 @@ $('saveSettings').onclick = async () => {
   const body = {
     gemini_model: $('geminiModel').value,
     whisper_model: $('whisperModel').value,
+    voice_timesteps: Number($('voiceSteps').value) || 10,
     use_scrape: $('useScrape').checked,
     use_vision: $('useVision').checked
   };
@@ -4628,6 +4642,7 @@ function listen() {
     const settings = await request('/api/recap/settings');
     $('geminiKey').value = settings.gemini_key || '';
     $('whisperModel').value = settings.whisper_model || 'small';
+    $('voiceSteps').value = String(settings.voice_timesteps || 10);
     $('qualityMode').value = settings.quality || 'balanced';
     $('groqKey').value = settings.groq_key || '';
     paintQuality();

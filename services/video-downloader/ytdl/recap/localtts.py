@@ -378,6 +378,7 @@ def speak(
     cancel=None,
     max_seconds: float = 0.0,
     voice_anchor: Path | None = None,
+    timesteps: int = 0,
     **_ignored,
 ) -> bytes:
     """
@@ -396,7 +397,13 @@ def speak(
         raise Cancelled()
 
     model = load(model_id)
+    # How many diffusion steps each chunk gets. VoxCPM ships with ten, and on
+    # this class of card that is the whole cost: measured on a 13.8s line,
+    # ten steps took 24s and six took 12s, for audio of much the same length.
+    # Fewer steps is a rougher render, so it is offered rather than imposed.
     kwargs = {"text": text}
+    if timesteps:
+        kwargs["inference_timesteps"] = max(4, min(20, int(timesteps)))
     if reference_audio and Path(reference_audio).exists():
         kwargs["prompt_wav_path"] = str(reference_audio)
         if reference_text.strip():
