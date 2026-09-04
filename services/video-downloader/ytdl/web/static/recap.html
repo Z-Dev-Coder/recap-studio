@@ -375,6 +375,17 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
              border: 1px solid var(--line); background: var(--surface);
              cursor: pointer; font-size: 11px; line-height: 1; }
 .cand-play:hover { border-color: var(--accent, #4a9eff); }
+
+/* One line of the narration: play, the words, what can be done to it. */
+.line-row { display: flex; align-items: flex-start; gap: 9px; padding: 8px 4px;
+            border-top: 1px solid var(--line); }
+.line-text { flex: 1; font-size: 12.5px; line-height: 1.45; min-width: 0;
+             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+             overflow: hidden; }
+.line-no { display: inline-block; min-width: 20px; color: var(--muted);
+           font-variant-numeric: tabular-nums; }
+.line-acts { display: flex; gap: 4px; align-items: center; flex: none; }
+.line-acts .sm { padding: 3px 7px; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -2351,19 +2362,33 @@ async function loadVoiceLines(p) {
     state.lines = d.lines || [];
   } catch (e) { state.lines = []; }
 
+  /* A line that has not been spoken yet has nothing to play, download or
+     redo, so those buttons are absent -- which read as a broken row rather
+     than an empty one. It says so now.
+
+     The text is clamped by CSS rather than sliced: slicing Burmese by code
+     unit can cut a syllable in half and leave a stranded vowel sign, which is
+     the same fault the captions had. */
   $('voiceLines').innerHTML = state.lines.map(l => `
-    <div class="row" style="padding:6px 0;border-top:1px solid var(--line)">
-      <span class="grow tiny" title="${escapeHtml(l.text)}">
-        ${l.index + 1}. ${escapeHtml(l.text.slice(0, 46))}${l.text.length > 46 ? '...' : ''}
-      </span>
-      ${l.custom ? '<span class="pill hi">yours</span>' : (l.file ? '<span class="pill">voiced</span>' : '')}
-      ${l.file ? `<button class="sm ghost" data-hear="${l.index}">&#9654;</button>` : ''}
-      ${l.file && !l.custom ? `<button class="sm ghost" data-redo="${l.index}"
-             title="Speak this line again, leaving the rest alone">&#8635;</button>` : ''}
-      ${l.file ? `<button class="sm ghost" data-save="${l.index}"
-             title="Download this clip">&#8681;</button>` : ''}
-      <button class="sm ghost" data-up="${l.index}" title="Upload your own recording">&#8593;</button>
-      ${l.custom ? `<button class="sm ghost danger" data-rm="${l.index}" title="Back to the generated voice">&times;</button>` : ''}
+    <div class="line-row">
+      ${l.file
+        ? `<button class="cand-play" data-hear="${l.index}" title="Play this line">&#9654;</button>`
+        : '<span class="cand-play" style="opacity:.35;cursor:default">&#9654;</span>'}
+      <div class="line-text" title="${escapeHtml(l.text)}">
+        <span class="line-no">${l.index + 1}</span>${escapeHtml(l.text)}
+        ${!l.file ? '<div class="tiny" style="opacity:.6">not spoken yet</div>' : ''}
+      </div>
+      <div class="line-acts">
+        ${l.custom ? '<span class="pill hi">yours</span>' : ''}
+        ${l.file && !l.custom ? `<button class="sm ghost" data-redo="${l.index}"
+               title="Speak this line again, leaving the rest alone">&#8635;</button>` : ''}
+        ${l.file ? `<button class="sm ghost" data-save="${l.index}"
+               title="Download this clip">&#8681;</button>` : ''}
+        <button class="sm ghost" data-up="${l.index}"
+                title="Upload your own recording">&#8593;</button>
+        ${l.custom ? `<button class="sm ghost danger" data-rm="${l.index}"
+               title="Back to the generated voice">&times;</button>` : ''}
+      </div>
     </div>`).join('') || '<div class="tiny">Build the cut and the script first.</div>';
 
   [...$('voiceLines').querySelectorAll('button')].forEach(b => {
