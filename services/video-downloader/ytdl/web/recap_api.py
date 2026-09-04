@@ -1803,9 +1803,9 @@ def _audition(project, out, first: int, count: int, text: str, lang: str) -> Non
         try:
             # no reference and no anchor: each call is a different speaker,
             # which is the whole point here
-            audio = localtts.speak(
+            audio = localtts_mod.speak(
                 text,
-                model_id=project.local_model or localtts.DEFAULT_MODEL,
+                model_id=project.local_model or localtts_mod.DEFAULT_MODEL,
                 cancel=cancel_event(pid),
             )
         except Cancelled:
