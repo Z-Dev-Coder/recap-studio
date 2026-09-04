@@ -176,6 +176,37 @@ def load(model_id: str = DEFAULT_MODEL):
     return _model
 
 
+def release() -> bool:
+    """
+    Give the GPU back.
+
+    The model is kept between lines on purpose -- loading it costs eighty
+    seconds and a narration is dozens of lines. But it holds 5.9GB of a 6GB
+    card, and it holds it long after the work is done, so the next thing that
+    wants the GPU gets "CUDA out of memory" on a machine that looks idle.
+    Whoever finishes a run drops it.
+
+    Returns whether there was anything to drop, so a caller can say so.
+    """
+    global _model, _model_id
+    with _model_lock:
+        if _model is None:
+            return False
+        _model = None
+        _model_id = ""
+    try:
+        import gc
+
+        import torch
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+    except Exception:      # noqa: BLE001 - freeing memory must not fail a run
+        pass
+    return True
+
+
 def _to_wav(audio, rate: int) -> bytes:
     """Model output straight to a WAV, for a single ungrouped clip."""
     return wav_header(_pcm(audio), rate)

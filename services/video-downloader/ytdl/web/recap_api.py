@@ -238,11 +238,20 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
         else:
             raise ValueError(f"unknown step: {step}")
 
+        # The local voice model holds 5.9GB of a 6GB card and keeps holding it
+        # after the narration is finished, so the next thing that wants the
+        # GPU -- an audition, a second project -- fails on a machine that
+        # looks idle. Whoever used it gives it back.
+        if step == "voice":
+            localtts_mod.release()
+
         # a step that explained something while running keeps saying it
         note = project.steps.get(step)
         keep = (note.message or "") if note else ""
         project.mark(step, "done", message=keep if step == "video" else "")
     except Cancelled:
+        if step == "voice":
+            localtts_mod.release()
         # stopping is a choice, not a failure: no red, nothing to fix
         project.mark(step, "idle", message="stopped")
     except Exception as exc:      # noqa: BLE001 - every failure is shown as text
@@ -1781,6 +1790,10 @@ def voice_candidates(pid: str, count: int = 4, lang: str = "", slot: int = -1) -
         try:
             _audition(project, out, first, count, text, lang)
         finally:
+            # The card is 6GB and the model is 5.9GB of it. Holding that after
+            # the work is done is what makes the next press fail on a machine
+            # that is doing nothing.
+            localtts_mod.release()
             _release(pid)
             project.save()
             push(project)

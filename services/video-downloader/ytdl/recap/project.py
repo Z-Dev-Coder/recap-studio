@@ -310,7 +310,15 @@ class Project:
     @classmethod
     def load(cls, folder: Path) -> "Project":
         data = json.loads((folder / "project.json").read_text(encoding="utf-8"))
+        # A step saved as "running" is a lie the moment the service restarts:
+        # nothing survives it. Left alone it shows a spinner and a progress bar
+        # that never move, on work that stopped when the process did.
         saved = data.get("steps") or {}
+        for row in saved.values():
+            if isinstance(row, dict) and row.get("status") == "running":
+                row["status"] = "idle"
+                row["message"] = "interrupted -- run it again"
+                row["progress"] = 0.0
         steps = {}
         for name in STEPS:
             row = saved.get(name) or {}
