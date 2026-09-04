@@ -3281,11 +3281,11 @@ function paintOverlays(p) {
   if (capPos.dragging) return;
   const stage = $('capStage');
   const look = capLook(p);
-  const [fw] = thumbShape(p);
+  const [fw] = videoFrame(p);
   /* The stage has to BE the frame, not contain it. Letterboxed, a position
      of 50% across is the middle of the black bars rather than the middle of
      the picture, so everything was placed against the wrong rectangle. */
-  const [, fh] = thumbShape(p);
+  const [, fh] = videoFrame(p);
   stage.style.aspectRatio = `${fw} / ${fh}`;
   stage.style.maxWidth = fh > fw ? '260px' : '100%';
 
@@ -3536,13 +3536,13 @@ $('capStage').addEventListener('pointermove', ev => {
       if (p) { p.caption_look = { ...capLook(p), size }; }
       paintCapLook(p);
       const look = capLook(p);
-      const [fw] = thumbShape(p);
+      const [fw] = videoFrame(p);
       const k = ($('capStage').getBoundingClientRect().width || fw) / fw;
       $('capGhost').style.fontSize = Math.max(9, look.size * k) + 'px';
     } else {
       const node = ovNode(ovResize.which);
       const p = current();
-      const [fw] = thumbShape(p);
+      const [fw] = videoFrame(p);
       const k = ($('capStage').getBoundingClientRect().width || fw) / fw;
       if (node) {
         const img = node.querySelector('img');
@@ -3720,7 +3720,7 @@ $('drawCaptions').onclick = async () => {
     if (!res.ok) throw new Error((await res.json()).detail || 'no subtitles yet');
     const srt = await res.text();
 
-    const [w, h] = thumbShape(p);                    // the cut's own frame
+    const [w, h] = videoFrame(p);                    // the cut's own frame
     const chosen = capLook(p);
     const style = {
       size: chosen.size, font: chosen.font, colour: chosen.colour,
@@ -4359,6 +4359,23 @@ const THUMB_SHAPES = {
   '1:1':  [1080, 1080],
   '4:5':  [1080, 1350],
 };
+
+/* The frame everything on the video is drawn for.
+
+   thumbShape() below is the THUMBNAIL's shape, chosen by a picker on another
+   tab, and its 16:9 is 1280x720. A 16:9 cut is 1920x1080. Drawing a caption
+   for a 1280-wide frame and compositing it onto a 1920-wide video makes it
+   two thirds the size it was meant to be -- correct in the editor, small in
+   the output, which is exactly what was reported. Use what the cut actually
+   is, and fall back to the shape only before there is one. */
+function videoFrame(p) {
+  if (p && p.cut_width > 0 && p.cut_height > 0) return [p.cut_width, p.cut_height];
+  const byShape = { reels: '9:16', square: '1:1', portrait: '4:5' };
+  const key = byShape[p && p.shape] || (p && p.mode === 'reels' ? '9:16' : '16:9');
+  const [w, h] = THUMB_SHAPES[key];
+  // the shapes above are thumbnail sizes; a 16:9 cut is rendered at 1920
+  return key === '16:9' ? [1920, 1080] : [w, h];
+}
 
 function thumbShape(p) {
   const chosen = $('thumbAspect').value;

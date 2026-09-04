@@ -128,6 +128,13 @@ class Project:
     # the page must not be holding a request open waiting for them.
     voice_candidates: list = field(default_factory=list)
 
+    # The finished cut's own pixel size. Everything drawn onto the video --
+    # captions, a logo, overlay text -- is drawn at this size and composited
+    # at native size, so guessing it wrong makes every one of them the wrong
+    # size in the output while looking right in the editor.
+    cut_width: int = 0
+    cut_height: int = 0
+
     caption_look: dict = field(default_factory=dict)
 
     # Channel logo and any free text laid over the picture -- the things that
@@ -261,6 +268,8 @@ class Project:
             "caption_file": self.caption_file,
             "footage_pace": self.footage_pace,
             "voice_candidates": self.voice_candidates,
+            "cut_width": self.cut_width,
+            "cut_height": self.cut_height,
             "caption_look": self.caption_look,
             "overlays": self.overlays,
             "caption_x": self.caption_x,
@@ -370,6 +379,8 @@ class Project:
             caption_file=data.get("caption_file", "") or "",
             footage_pace=float(data.get("footage_pace", 1.0) or 1.0),
             voice_candidates=data.get("voice_candidates") or [],
+            cut_width=int(data.get("cut_width", 0) or 0),
+            cut_height=int(data.get("cut_height", 0) or 0),
             caption_look=data.get("caption_look") or {},
             overlays=data.get("overlays") or [],
             caption_x=float(data.get("caption_x", 0.5) or 0.5),

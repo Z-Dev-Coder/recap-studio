@@ -314,6 +314,8 @@ def build(
             "timeline": timeline,
             "mode": mode,
             "uncut": True,
+            "width": probe(dest).width,
+            "height": probe(dest).height,
         }
 
     # A line gets `pace` times as much footage as it has time to play it in,
@@ -373,12 +375,16 @@ def build(
     except OSError:
         pass
 
+    made = probe(dest)
     return {
         "path": str(dest),
         "duration": round(playhead, 2),
         "clips": len(parts),
         "timeline": timeline,
         "mode": mode,
+        # What the cut actually came out as, rather than what was asked for.
+        "width": made.width,
+        "height": made.height,
     }
 
 

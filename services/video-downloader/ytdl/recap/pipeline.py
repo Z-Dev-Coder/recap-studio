@@ -541,6 +541,8 @@ def run_video(project: Project, on_progress=None, cancel=None) -> None:
         raise StepError(str(exc)) from exc
 
     project.timeline = result["timeline"]
+    project.cut_width = int(result.get("width") or 0)
+    project.cut_height = int(result.get("height") or 0)
     write_subtitles(project)
 
     # Fitting to the voice can land far short of the length that was asked for,

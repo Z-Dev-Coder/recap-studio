@@ -84,7 +84,7 @@ def test_a_livelier_pace_takes_more_footage_and_compresses_it(monkeypatch):
         dest.write_bytes(b"")
         return dest
     monkeypatch.setattr(vid, "cut", fake_cut)
-    monkeypatch.setattr(vid, "probe", lambda p: type("P", (), {"duration": 6.0})())
+    monkeypatch.setattr(vid, "probe", lambda p: type("P", (), {"duration": 6.0, "width": 1920, "height": 1080})())
     monkeypatch.setattr(vid, "concat", lambda parts, dest, cancel=None: dest)
 
     import pathlib, tempfile
@@ -112,7 +112,7 @@ def test_the_plain_cut_is_still_the_default(monkeypatch):
         dest.write_bytes(b"")
         return dest
     monkeypatch.setattr(vid, "cut", fake_cut)
-    monkeypatch.setattr(vid, "probe", lambda p: type("P", (), {"duration": 6.0})())
+    monkeypatch.setattr(vid, "probe", lambda p: type("P", (), {"duration": 6.0, "width": 1920, "height": 1080})())
     monkeypatch.setattr(vid, "concat", lambda parts, dest, cancel=None: dest)
 
     import pathlib, tempfile
