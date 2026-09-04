@@ -358,9 +358,13 @@ details.more .card > h3 { display: none; }
    row however wide it grew, so a long overlay ran off both edges of the
    frame and its glyphs piled up -- while the burn wraps it to two lines. The
    preview has to agree with what will be produced. */
+/* Width is set in script, to exactly the width the burn wraps at. A CSS
+   percentage is a different number from the one drawCaptionImage uses, so the
+   preview wrapped text the burn keeps on one line -- which is a preview that
+   lies about the thing it exists to show. */
 .ov-item { position: absolute; transform: translate(-50%, -50%);
            cursor: grab; line-height: 1.35; text-align: center;
-           max-width: 92%; overflow-wrap: anywhere;
+           overflow-wrap: anywhere;
            padding: 2px 6px; border-radius: 4px; }
 .ov-item.sel { outline: 2px dashed var(--accent, #4a9eff); outline-offset: 3px; }
 .ov-item img { display: block; }
@@ -3283,7 +3287,9 @@ function paintOverlays(p) {
   });
 
   const ghost = $('capGhost');
-  ghost.style.font = `700 ${Math.max(9, look.size * k)}px "${look.font}", sans-serif`;
+  ghost.style.font = capFont({ size: Math.max(9, look.size * k), font: look.font });
+  const gpad = Math.round(look.size * 0.45);
+  ghost.style.maxWidth = Math.max(24, (fw - gpad * 4) * k) + 'px';
   ghost.style.color = look.colour;
   ghost.style.background = rgba(look.box_colour, look.box_alpha);
   ghost.classList.toggle('sel', ovSel === 'caption');
@@ -3303,8 +3309,14 @@ function paintOverlays(p) {
       el.appendChild(img);
     } else {
       el.textContent = o.text || 'text';
-      el.style.font = `700 ${Math.max(9, (o.size || 46) * k)}px "${o.font || 'Inter'}", sans-serif`;
+      // the same font stack the burn uses, or the two measure differently and
+      // wrap in different places
+      el.style.font = capFont({ size: Math.max(9, (o.size || 46) * k),
+                                font: o.font || 'Inter' });
       el.style.color = o.colour || '#fff';
+      // the same room the burn gives it: the frame less its padding, scaled
+      const opad = Math.round((o.size || 46) * 0.45);
+      el.style.maxWidth = Math.max(24, (fw - opad * 4) * k) + 'px';
     }
     if (ovSel === i) {
       // Corner handle: dragging it is how a size is chosen, because a number
