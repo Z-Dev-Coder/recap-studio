@@ -388,6 +388,13 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
            font-variant-numeric: tabular-nums; }
 .line-acts { display: flex; gap: 4px; align-items: center; flex: none; }
 .line-acts .sm { padding: 3px 7px; line-height: 1.5; }
+
+/* The corner you pull to resize. Only on what is selected, so the stage is
+   not covered in handles. */
+.ov-grip { position: absolute; right: -7px; bottom: -7px; width: 14px;
+           height: 14px; border-radius: 50%; cursor: nwse-resize;
+           background: var(--accent, #4a9eff);
+           box-shadow: 0 0 0 2px rgba(255,255,255,.9); }
 </style>
 </head>
 <body>
@@ -3287,8 +3294,26 @@ function paintOverlays(p) {
       el.style.font = `700 ${Math.max(9, (o.size || 46) * k)}px "${o.font || 'Inter'}", sans-serif`;
       el.style.color = o.colour || '#fff';
     }
+    if (ovSel === i) {
+      // Corner handle: dragging it is how a size is chosen, because a number
+      // on a slider is a guess about a frame you are looking at.
+      const grip = document.createElement('span');
+      grip.className = 'ov-grip';
+      grip.dataset.grip = String(i);
+      el.appendChild(grip);
+    }
     stage.appendChild(el);
   });
+
+  const ghostGrip = $('capGhost').querySelector('.ov-grip');
+  if (ovSel === 'caption' && !ghostGrip) {
+    const g = document.createElement('span');
+    g.className = 'ov-grip';
+    g.dataset.grip = 'caption';
+    $('capGhost').appendChild(g);
+  } else if (ovSel !== 'caption' && ghostGrip) {
+    ghostGrip.remove();
+  }
   renderOvList(p);
 }
 
@@ -3421,7 +3446,8 @@ $('hearPace').onclick = () => {
    causes -- so the pointer ended up driving a node that had already been
    replaced, while the one on screen sat still. That is what "cannot drag"
    was: the handler ran perfectly, on the wrong element. */
-let ovDrag = null;               // { which, x, y } while a drag is in flight
+let ovDrag = null;               // { which, x, y } while a move is in flight
+let ovResize = null;             // { which, from, reach } while resizing
 
 function ovNode(which) {
   return which === 'caption' ? $('capGhost')
@@ -3434,6 +3460,24 @@ $('capStage').addEventListener('pointerdown', ev => {
   const p = current(); if (!p) return;
   ev.preventDefault();
 
+  // A pointer on the corner handle resizes instead of moving. The size is
+  // taken from how far the corner is dragged from the item's own centre, so
+  // it grows and shrinks under the hand rather than by a number.
+  const grip = ev.target.closest('.ov-grip');
+  if (grip) {
+    const which = grip.dataset.grip;
+    const now = which === 'caption'
+      ? capLook(p).size
+      : (overlays(p)[Number(which)] || {}).size || 46;
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const reach = Math.hypot(ev.clientX - cx, ev.clientY - cy) || 1;
+    capPos.dragging = true;
+    ovResize = { which, from: now, reach, cx, cy };
+    try { $('capStage').setPointerCapture(ev.pointerId); } catch (e) { /* fine */ }
+    return;
+  }
+
   const which = el.dataset.ov;
   ovSel = which === 'caption' ? 'caption' : Number(which);
   capPos.dragging = true;
@@ -3444,6 +3488,34 @@ $('capStage').addEventListener('pointerdown', ev => {
 });
 
 $('capStage').addEventListener('pointermove', ev => {
+  if (ovResize) {
+    const reach = Math.hypot(ev.clientX - ovResize.cx, ev.clientY - ovResize.cy);
+    const size = Math.round(Math.max(10, Math.min(200,
+      ovResize.from * (reach / ovResize.reach))));
+    if (ovResize.which === 'caption') {
+      $('capSize').value = size;
+      const p = current();
+      if (p) { p.caption_look = { ...capLook(p), size }; }
+      paintCapLook(p);
+      const look = capLook(p);
+      const [fw] = thumbShape(p);
+      const k = ($('capStage').getBoundingClientRect().width || fw) / fw;
+      $('capGhost').style.fontSize = Math.max(9, look.size * k) + 'px';
+    } else {
+      const node = ovNode(ovResize.which);
+      const p = current();
+      const [fw] = thumbShape(p);
+      const k = ($('capStage').getBoundingClientRect().width || fw) / fw;
+      if (node) {
+        const img = node.querySelector('img');
+        if (img) img.style.width = Math.max(12, size * k) + 'px';
+        else node.style.fontSize = Math.max(9, size * k) + 'px';
+      }
+      ovResize.size = size;
+    }
+    ovResize.size = size;
+    return;
+  }
   if (!ovDrag) return;
   const box = $('capStage').getBoundingClientRect();
   // A stage with no size divides by zero, and NaN travels: it reaches the
@@ -3459,6 +3531,16 @@ $('capStage').addEventListener('pointermove', ev => {
 });
 
 function ovDrop() {
+  if (ovResize) {
+    const { which, size } = ovResize;
+    ovResize = null;
+    capPos.dragging = false;
+    if (size == null) return;
+    if (which === 'caption') { saveCapLook(); return; }
+    ovSel = Number(which);
+    editSelected({ size });
+    return;
+  }
   if (!ovDrag) return;
   const { which, x, y } = ovDrag;
   ovDrag = null;
@@ -3645,7 +3727,7 @@ $('drawCaptions').onclick = async () => {
 
     btn.textContent = `burning ${images.length}...`;
     const r = await post(`/api/recap/projects/${p.id}/captions/images`,
-                         { images, margin: Math.round(size * 2.2),
+                         { images, margin: Math.round(chosen.size * 2.2),
                            x: capPos.x, y: capPos.y });
     /* The burn runs on the service now, so this returns as soon as the
        pictures are handed over. The bar in this panel is what says when it
