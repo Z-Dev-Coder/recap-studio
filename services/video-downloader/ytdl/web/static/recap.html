@@ -2077,6 +2077,7 @@ function renderProject() {
     renderFrames(p);
   }
   renderVoice(p);
+  renderAuditions(p);
   renderWork(p);
   renderGuide(p);
   followVoiceProgress(p);
@@ -2642,36 +2643,37 @@ $('forgetVoice').onclick = async () => {
 $('auditionVoices').onclick = async () => {
   const p = current(); if (!p) return;
   const btn = $('auditionVoices');
-  const want = 4;
   btn.disabled = true;
   candidates = [];
   chosenVoice = -1;
   renderCandidates(p);
-
+  $('auditionNote').textContent =
+    'starting -- the first voice also loads the model, so give it a minute';
   try {
-    for (let i = 0; i < want; i++) {
-      $('auditionNote').textContent = i === 0
-        ? 'generating the first voice - this one loads the model, give it a minute'
-        : `generating voice ${i + 1} of ${want}...`;
-      const d = await post(
-        `/api/recap/projects/${p.id}/voice/candidates` +
-        `?count=1&slot=${i}&lang=${p.voice_lang || 'my'}`, {});
-      const row = (d.candidates || [])[0];
-      if (!row) break;
-      candidates.push(row);
-      // adopt the first straight away, so a voice is always actually chosen
-      if (i === 0) { await useCandidate(p, row.index, true); loadSavedVoice(); }
-      else renderCandidates(p);
-    }
-    $('auditionNote').textContent = candidates.length
-      ? 'voice 1 is in use - play the others and switch if you prefer one'
-      : 'nothing was generated';
+    /* The service speaks them on its own thread and each one arrives over the
+       event stream. Waiting on the request instead is what made this look
+       broken: one cold voice measured 249 seconds, and no browser waits that
+       long. */
+    await post(`/api/recap/projects/${p.id}/voice/candidates` +
+               `?count=4&lang=${p.voice_lang || 'my'}`, {});
   } catch (e) {
     showError($('stepErr'), e.message);
-    $('auditionNote').textContent = candidates.length
-      ? `stopped after ${candidates.length}` : '';
+    $('auditionNote').textContent = '';
   } finally { btn.disabled = false; }
 };
+
+/* Voices as the service produces them. */
+function renderAuditions(p) {
+  const rows = (p && p.voice_candidates) || [];
+  if (rows.length === candidates.length) return;
+  candidates = rows;
+  renderCandidates(p);
+  const step = (p.steps || {}).voice || {};
+  if (step.status !== 'running' && rows.length) {
+    $('auditionNote').textContent =
+      'play them and press Use this on the one you want';
+  }
+}
 
 /* ------------------------------------------------------ a script of your own */
 function paintOwnMode() {

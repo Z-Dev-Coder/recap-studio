@@ -1766,9 +1766,40 @@ def voice_candidates(pid: str, count: int = 4, lang: str = "", slot: int = -1) -
         for stale in list(out.glob("cand_*.wav")) + list(out.glob("cand_*.txt")):
             stale.unlink(missing_ok=True)
 
+    # Speaking a voice takes the better part of a minute, and the first pays
+    # for loading a 4.6GB model on top -- measured cold at 249s for one line.
+    # Holding an HTTP request open for that is how the audition "did not
+    # work": the browser gave up long before the work did. It runs on a
+    # worker thread now and reports itself over the event stream.
+    if not _claim(pid, "voice"):
+        raise HTTPException(409, "something is already running on this project")
+
+    if slot < 0:
+        project.voice_candidates = []
+
+    def audition() -> None:
+        try:
+            _audition(project, out, first, count, text, lang)
+        finally:
+            _release(pid)
+            project.save()
+            push(project)
+
+    threading.Thread(target=audition, daemon=True).start()
+    return {"ok": True, "lang": lang, "text": text, "started": True}
+
+
+def _audition(project, out, first: int, count: int, text: str, lang: str) -> None:
+    """Speak the sample line a few times, reporting each voice as it lands."""
+    pid = project.id
     rows = []
     for offset in range(count):
         i = first + offset
+        project.mark("voice", "running", progress=offset / max(1, count),
+                     message=(f"auditioning voice {offset + 1} of {count}"
+                              + (" -- the first also loads the model"
+                                 if offset == 0 and first == 0 else "")))
+        push(project)
         try:
             # no reference and no anchor: each call is a different speaker,
             # which is the whole point here
@@ -1777,10 +1808,15 @@ def voice_candidates(pid: str, count: int = 4, lang: str = "", slot: int = -1) -
                 model_id=project.local_model or localtts.DEFAULT_MODEL,
                 cancel=cancel_event(pid),
             )
+        except Cancelled:
+            project.mark("voice", "idle", message="stopped")
+            return
         except Exception as exc:      # noqa: BLE001
-            if not rows:
-                raise HTTPException(400, f"could not generate a voice: {exc}") from exc
-            break                     # keep whatever was managed
+            project.mark("voice", "error" if not rows else "done",
+                         error="" if rows else f"could not generate a voice: {exc}",
+                         message=(f"{len(rows)} voice(s) before it stopped: {exc}"
+                                  if rows else ""))
+            return
         wav = out / f"cand_{i}.wav"
         wav.write_bytes(audio)
         (out / f"cand_{i}.txt").write_text(text, encoding="utf-8")
@@ -1799,8 +1835,16 @@ def voice_candidates(pid: str, count: int = 4, lang: str = "", slot: int = -1) -
             "lang": lang,
             "suspect": not sound,
         })
+        # Each one appears the moment it exists rather than after all of them
+        project.voice_candidates = [
+            *[c for c in (project.voice_candidates or []) if c.get("index") != i],
+            *rows[-1:],
+        ]
+        project.save()
+        push(project)
 
-    return {"ok": True, "lang": lang, "text": text, "candidates": rows}
+    project.mark("voice", "done",
+                 message=f"{len(rows)} voice(s) to choose from")
 
 
 @router.post("/projects/{pid}/voice/candidates/select")

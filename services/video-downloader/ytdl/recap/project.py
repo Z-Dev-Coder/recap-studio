@@ -122,6 +122,12 @@ class Project:
     # How the burned-in captions look. One style cannot suit every video: a
     # bright cartoon needs a solid plate behind the words, a dark documentary
     # does not. Kept per project because it is a decision about this footage.
+    # Voices auditioned for this project, as they are produced. Kept on the
+    # project so they arrive over the event stream: a voice takes the better
+    # part of a minute to speak and the first pays for loading the model, so
+    # the page must not be holding a request open waiting for them.
+    voice_candidates: list = field(default_factory=list)
+
     caption_look: dict = field(default_factory=dict)
 
     # Channel logo and any free text laid over the picture -- the things that
@@ -254,6 +260,7 @@ class Project:
             "line_gap": self.line_gap,
             "caption_file": self.caption_file,
             "footage_pace": self.footage_pace,
+            "voice_candidates": self.voice_candidates,
             "caption_look": self.caption_look,
             "overlays": self.overlays,
             "caption_x": self.caption_x,
@@ -354,6 +361,7 @@ class Project:
             line_gap=float(data.get("line_gap", 0.55) if data.get("line_gap") is not None else 0.55),
             caption_file=data.get("caption_file", "") or "",
             footage_pace=float(data.get("footage_pace", 1.0) or 1.0),
+            voice_candidates=data.get("voice_candidates") or [],
             caption_look=data.get("caption_look") or {},
             overlays=data.get("overlays") or [],
             caption_x=float(data.get("caption_x", 0.5) or 0.5),
