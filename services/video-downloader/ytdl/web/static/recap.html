@@ -296,9 +296,8 @@ details.more .card > h3 { display: none; }
 }
 
 /* Placing the captions: the cut with a draggable stand-in on top. */
-.cap-stage { position: relative; margin-top: 10px; border-radius: 8px;
-             overflow: hidden; background: #000; max-height: 300px;
-             display: flex; justify-content: center; touch-action: none; }
+.cap-stage { position: relative; margin: 10px auto 0; border-radius: 8px;
+             overflow: hidden; background: #000; touch-action: none; }
 .cap-stage video { max-height: 300px; max-width: 100%; display: block; }
 .cap-ghost {
   position: absolute; transform: translate(-50%, -50%); cursor: grab;
@@ -345,7 +344,10 @@ details.more .card > h3 { display: none; }
 .ov-stage { position: relative; margin: 0 auto; border-radius: 8px;
             overflow: hidden; background: #000; touch-action: none;
             user-select: none; max-height: 420px; }
-.ov-stage video { width: 100%; height: 100%; object-fit: contain;
+/* cover, not contain: the stage already has the frame's shape, so the video
+   fills it exactly as the finished cut will rather than sitting letterboxed
+   inside a differently-shaped box. */
+.ov-stage video { width: 100%; height: 100%; object-fit: cover;
                   display: block; background: #000; }
 .ov-item { position: absolute; transform: translate(-50%, -50%);
            cursor: grab; white-space: pre; line-height: 1.35;
@@ -3239,12 +3241,22 @@ function stageScale() {
 }
 
 function paintOverlays(p) {
+  /* The service pushes a snapshot on every tick, and this rebuilds the
+     elements. Rebuilding the one under the pointer destroys the drag the
+     instant it starts, which is exactly what "cannot drag" was. */
+  if (capPos.dragging) return;
   const stage = $('capStage');
   const look = capLook(p);
   const [fw] = thumbShape(p);
+  /* The stage has to BE the frame, not contain it. Letterboxed, a position
+     of 50% across is the middle of the black bars rather than the middle of
+     the picture, so everything was placed against the wrong rectangle. */
+  const [, fh] = thumbShape(p);
+  stage.style.aspectRatio = `${fw} / ${fh}`;
+  stage.style.maxWidth = fh > fw ? '260px' : '100%';
+
   const box = stage.getBoundingClientRect();
-  // the stage is a scaled copy of the finished frame, so a size in finished
-  // pixels has to be scaled the same way or the preview lies
+  // a size in finished pixels, scaled the way the stage is
   const k = (box.width || fw) / fw;
 
   [...stage.querySelectorAll('.ov-item[data-ov]')].forEach(el => {
@@ -3401,37 +3413,67 @@ $('hearPace').onclick = () => {
 };
 
 /* Dragging anything on the stage, the caption block included. */
+/* Dragging anything on the stage.
+
+   The moves are listened for on the STAGE, not on the item, and the item is
+   looked up again on every move. Holding a reference to the element does not
+   survive a repaint -- and a repaint is exactly what selecting something
+   causes -- so the pointer ended up driving a node that had already been
+   replaced, while the one on screen sat still. That is what "cannot drag"
+   was: the handler ran perfectly, on the wrong element. */
+let ovDrag = null;               // { which, x, y } while a drag is in flight
+
+function ovNode(which) {
+  return which === 'caption' ? $('capGhost')
+                             : $('capStage').querySelector(`.ov-item[data-ov="${which}"]`);
+}
+
 $('capStage').addEventListener('pointerdown', ev => {
   const el = ev.target.closest('.ov-item');
   if (!el) return;
-  ev.preventDefault();
   const p = current(); if (!p) return;
+  ev.preventDefault();
+
   const which = el.dataset.ov;
   ovSel = which === 'caption' ? 'caption' : Number(which);
   capPos.dragging = true;
-  el.setPointerCapture(ev.pointerId);
-  paintOverlays(p);
+  ovDrag = { which, x: null, y: null };
+  try { $('capStage').setPointerCapture(ev.pointerId); } catch (e) { /* fine */ }
+  paintOverlays(p);              // shows the selection; guarded against the drag
   showOvEditor(p);
-
-  const move = e => {
-    const box = $('capStage').getBoundingClientRect();
-    const x = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
-    const y = Math.min(1, Math.max(0, (e.clientY - box.top) / box.height));
-    if (which === 'caption') { capPos.x = x; capPos.y = y; paintCapPos(); }
-    else {
-      el.style.left = x * 100 + '%';
-      el.style.top = y * 100 + '%';
-      el.dataset.x = x; el.dataset.y = y;
-    }
-  };
-  el.onpointermove = move;
-  el.onpointerup = () => {
-    el.onpointermove = null; el.onpointerup = null;
-    capPos.dragging = false;
-    if (which === 'caption') saveCapPos();
-    else editSelected({ x: Number(el.dataset.x), y: Number(el.dataset.y) });
-  };
 });
+
+$('capStage').addEventListener('pointermove', ev => {
+  if (!ovDrag) return;
+  const box = $('capStage').getBoundingClientRect();
+  // A stage with no size divides by zero, and NaN travels: it reaches the
+  // style as "NaN%", which the browser ignores, and then the project, where
+  // it is saved as a position no renderer can use.
+  if (!(box.width > 0 && box.height > 0)) return;
+  const x = Math.min(1, Math.max(0, (ev.clientX - box.left) / box.width));
+  const y = Math.min(1, Math.max(0, (ev.clientY - box.top) / box.height));
+  ovDrag.x = x; ovDrag.y = y;
+  if (ovDrag.which === 'caption') { capPos.x = x; capPos.y = y; paintCapPos(); return; }
+  const node = ovNode(ovDrag.which);
+  if (node) { node.style.left = x * 100 + '%'; node.style.top = y * 100 + '%'; }
+});
+
+function ovDrop() {
+  if (!ovDrag) return;
+  const { which, x, y } = ovDrag;
+  ovDrag = null;
+  capPos.dragging = false;
+  if (which === 'caption') { saveCapPos(); return; }
+  if (x === null || Number.isNaN(x) || Number.isNaN(y)) return;   // a click, not a drag
+  ovSel = Number(which);
+  editSelected({ x, y });
+}
+
+$('capStage').addEventListener('pointerup', ovDrop);
+$('capStage').addEventListener('pointercancel', ovDrop);
+/* Releasing outside the stage must still end the drag, or the next move
+   anywhere keeps dragging. */
+window.addEventListener('pointerup', ovDrop);
 
 $('ovAddText').onclick = () => {
   const p = current(); if (!p) return;
