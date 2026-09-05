@@ -335,6 +335,11 @@ def run_chain(pid: str, steps: list[str], options: dict) -> None:
 class CreateRequest(BaseModel):
     url: str = ""
     source_file: str = ""      # a path on this machine, instead of a link
+    # No video at all: a script to speak and nothing else. The narration only
+    # ever needed the script, so requiring a download to reach it was a rule
+    # about the usual case standing in front of a legitimate one.
+    script_only: bool = False
+    title: str = ""
     mode: str = "reels"
     language: str = "en"
     content_type: str = "recap"
@@ -590,7 +595,7 @@ def projects() -> list[dict]:
 def create(req: CreateRequest) -> dict:
     url = req.url.strip()
     source_file = req.source_file.strip()
-    if not url and not source_file:
+    if not url and not source_file and not req.script_only:
         raise HTTPException(400, "give a video URL or pick a file")
     if req.content_type and not content.is_valid(req.content_type):
         raise HTTPException(
@@ -601,7 +606,17 @@ def create(req: CreateRequest) -> dict:
     if source_file and not Path(source_file).exists():
         raise HTTPException(400, f"no such file: {source_file}")
 
-    project = store.create(url or Path(source_file).stem)
+    project = store.create(url or (Path(source_file).stem if source_file
+                                   else (req.title.strip() or "Narration")))
+    if req.script_only:
+        # There is nothing to download and nothing to hear, and saying so is
+        # kinder than three steps that look like they failed.
+        project.title = req.title.strip() or "Narration"
+        project.url = ""
+        for name, note in (("source", "no video -- this is a script to speak"),
+                           ("transcript", "not needed"),
+                           ("script", "paste your script on the Script tab")):
+            project.mark(name, "done", message=note)
     if source_file:
         project.source_file = source_file
         project.title = Path(source_file).stem

@@ -1416,6 +1416,15 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
       </div>
     </div>
     <label class="note" style="display:block;margin-top:16px">
+      <input type="checkbox" id="scriptOnly"> No video &mdash; I just want to speak a script
+    </label>
+    <div class="tiny" style="margin-top:4px">
+      Makes a project with nothing to download. Paste your Burmese on the
+      Script tab and generate the narration; every clip can be downloaded
+      from the Voice tab.
+    </div>
+
+    <label class="note" style="display:block;margin-top:16px">
       <input type="checkbox" id="autorun"> Run every step now without stopping
     </label>
     <div class="tiny" style="margin-top:4px">
@@ -1787,22 +1796,27 @@ $('wsLangSeg').onclick = e => {
 
 $('create').onclick = async () => {
   const url = $('url').value.trim();
+  const bare = $('scriptOnly').checked;
   showError($('createErr'), '');
-  if (!url && !state.pickedFile) {
+  if (!url && !state.pickedFile && !bare) {
     return showError($('createErr'), 'Paste a video link, or choose a file.');
   }
   $('create').disabled = true;
   try {
     const p = await post('/api/recap/projects', {
-      url, source_file: state.pickedFile || '',
+      url, source_file: bare ? '' : (state.pickedFile || ''),
+      script_only: bare,
+      title: bare ? (url || 'Narration') : '',
       mode: state.mode, language: state.lang,
       content_type: $('contentTypeSel').value || 'recap',
-      autorun: $('autorun').checked
+      autorun: bare ? false : $('autorun').checked
     });
-    // without autorun, fetch what is needed to decide the settings and stop
-    if (!$('autorun').checked) {
+    // without autorun, fetch what is needed to decide the settings and stop.
+    // A script-only project has nothing to fetch.
+    if (!bare && !$('autorun').checked) {
       post(`/api/recap/projects/${p.id}/steps/source`, {}).catch(() => {});
     }
+    if (bare) showTab('script');
     state.current = p.id;
     state.wsLang = state.lang;
     [...$('wsLangSeg').children].forEach(x => x.classList.toggle('on', x.dataset.lang === state.lang));
