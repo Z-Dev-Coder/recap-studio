@@ -888,6 +888,7 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
                   <div class="field" style="max-width:150px">
                     <label class="f">These lines are</label>
                     <select id="ownLang">
+                      <option value="auto">detected from the text</option>
                       <option value="my">&#4119;&#4156;&#4116;&#4121;&#4140; Burmese</option>
                       <option value="en">English</option>
                     </select>
@@ -2878,7 +2879,7 @@ $('ownApply').onclick = async () => {
     $('ownBox').classList.add('hide');
     $('ownToggle').textContent = 'Write some';
     // show the language it was actually written in, not whatever was selected
-    const wrote = $('ownLang').value;
+    const wrote = r.lang || $('ownLang').value;
     if (state.wsLang !== wrote) {
       state.wsLang = wrote;
       [...$('wsLangSeg').children].forEach(

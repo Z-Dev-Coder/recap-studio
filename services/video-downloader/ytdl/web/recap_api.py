@@ -40,6 +40,7 @@ from ..recap import content
 from ..recap.scrape import available as playwright_available
 from ..recap.scrape import install_hint as playwright_hint
 from ..recap import script as script_mod
+from ..recap.script import LANGUAGES
 from ..recap.transcript import Cue, to_srt, whisper_available
 from ..recap import localtts as localtts_mod
 from ..recap import tts as tts_mod
@@ -778,7 +779,10 @@ def manual_script(pid: str, req: ManualScriptRequest) -> dict:
     if not project:
         raise HTTPException(404, "no such project")
 
-    lang = req.lang if req.lang in ("en", "my") else "my"
+    # Read off the script rather than asked for. A paste that says which
+    # language it is in is a question with the answer in front of it.
+    lang = (req.lang if req.lang in ("en", "my")
+            else script_mod.language_of(req.text))
     duration = project.duration or 0.0
     written = script_mod.parse_manual(req.text, duration, lang,
                                       skip_start=project.skip_start,
@@ -808,10 +812,18 @@ def manual_script(pid: str, req: ManualScriptRequest) -> dict:
     # the old cut and narration belong to a script that no longer exists
     project.timeline = []
     project.narration = []
+    # The voice speaks what was written, so the language the script turned out
+    # to be in is the language to narrate -- one fewer thing to set twice.
+    project.voice_lang = lang
+    if lang not in (project.voice_langs or []):
+        project.voice_langs = [lang]
+
     project.mark("script", "done", message=(
-        "{} lines added - {} in the script".format(len(written), len(beats))
+        "{} lines added - {} in the script ({})".format(
+            len(written), len(beats), LANGUAGES.get(lang, lang))
         if req.mode != "replace" else
-        "your own script ({} lines)".format(len(beats))))
+        "your own script ({} lines, {})".format(
+            len(beats), LANGUAGES.get(lang, lang))))
     for step in ("voice", "video", "final"):
         project.mark(step, "idle", message="script replaced - run again")
     pipeline.write_subtitles(project)

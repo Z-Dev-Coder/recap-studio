@@ -821,7 +821,29 @@ def generate(
 
 # ------------------------------------------------------- a script of your own
 
-def parse_manual(text: str, duration: float, lang: str = "my",
+# Myanmar's own block, plus the extended block for the minority languages
+# written in the same script. Anything outside both is not Burmese.
+_MY_RANGE = ((0x1000, 0x109F), (0xAA60, 0xAA7F), (0xA9E0, 0xA9FF))
+
+
+def language_of(text: str) -> str:
+    """
+    Which language a script is written in, from the script itself.
+
+    Asked because being made to declare it -- for every paste, on every
+    project -- is a question whose answer is sitting in the text. Burmese and
+    English do not share an alphabet, so this is a matter of looking rather
+    than guessing: any Myanmar letter at all settles it, since English never
+    contains one and Burmese frequently contains Latin punctuation.
+    """
+    for ch in text or "":
+        code = ord(ch)
+        if any(lo <= code <= hi for lo, hi in _MY_RANGE):
+            return "my"
+    return "en"
+
+
+def parse_manual(text: str, duration: float, lang: str = "auto",
                  skip_start: float = 0.0, skip_end: float = 0.0) -> list[Beat]:
     """
     Turn a script the user wrote themselves into beats.
@@ -838,7 +860,7 @@ def parse_manual(text: str, duration: float, lang: str = "my",
     The chosen language is where the text goes; the other side is left empty
     rather than machine-translated into it.
     """
-    lang = lang if lang in ("en", "my") else "my"
+    lang = lang if lang in ("en", "my") else language_of(text)
     rows = _manual_srt(text)
     if rows is None:
         blocks = [b.strip() for b in re.split(r"\n\s*\n", text) if b.strip()]
