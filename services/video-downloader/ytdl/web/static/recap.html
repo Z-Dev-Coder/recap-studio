@@ -636,6 +636,56 @@ button, .proj, .tabs button, summary, .ov-chip, .cand-play { cursor: pointer; }
   background-color: var(--faint); }
 *::-webkit-scrollbar-track { background: transparent; }
 
+/* ---------------------------------------- one dominant action per screen
+
+   Visual hierarchy only works if there is one thing at the top of it. The
+   page had fourteen buttons marked primary; on a busy screen three or four
+   were visible at once and none of them read as "the thing to press".
+
+   The guide card names the next step, so its button keeps the accent. Every
+   other primary becomes a quieter filled button: still clearly the main
+   action of its own card, but not competing with the one the app is
+   recommending. */
+button.primary:not(#guideRun):not(#create) {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--line) 90%, transparent);
+  box-shadow: none;
+}
+button.primary:not(#guideRun):not(#create):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-soft) 70%, var(--surface-3));
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent-hi);
+}
+
+/* The one action the app is actually recommending. */
+#guideRun {
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(16,19,26,.10),
+              0 6px 20px -8px color-mix(in srgb, var(--accent) 60%, transparent),
+              inset 0 1px 0 rgba(255,255,255,.16);
+}
+
+/* ------------------------------------------------ progressive disclosure */
+
+.menu-wrap { position: relative; display: inline-flex; }
+.menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+  min-width: 210px; padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: var(--shadow-lg);
+}
+.menu button {
+  width: 100%; justify-content: flex-start; text-align: left;
+  border: 0; background: transparent; padding: 8px 10px;
+}
+.menu button:hover:not(:disabled) { background: var(--surface-2); }
+.menu button.danger:hover:not(:disabled) { background: var(--err-soft); }
+#moreBtn { font-size: 16px; line-height: 1; padding: 6px 11px; }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
@@ -685,12 +735,18 @@ button, .proj, .tabs button, summary, .ov-chip, .cand-play { cursor: pointer; }
         <button data-m="reels">Reel</button>
         <button data-m="long">Long</button>
       </div>
-      <button class="sm" id="makeVariant"
-              title="Cut this same video a second way, sharing the download and the transcript">Also make a reel</button>
       <button class="sm" id="runAll">Run all</button>
       <button class="sm danger hide" id="stopBtn">&#9632; Stop</button>
-      <button class="ghost sm" id="openFolder" title="Open the project folder">Folder</button>
-      <button class="ghost sm danger" id="deleteProj" title="Delete project">Delete</button>
+      <div class="menu-wrap">
+        <button class="ghost sm" id="moreBtn" aria-haspopup="true"
+                aria-expanded="false" title="Everything else">&#8943;</button>
+        <div class="menu hide" id="moreMenu">
+          <button class="sm" id="makeVariant"
+                  title="Cut this same video a second way, sharing the download and the transcript">Also make a reel</button>
+          <button class="ghost sm" id="openFolder" title="Open the project folder">Open the folder</button>
+          <button class="ghost sm danger" id="deleteProj" title="Delete project">Delete this project</button>
+        </div>
+      </div>
     </div>
 
     <div class="card hide" id="resultBar"
@@ -2885,6 +2941,22 @@ $('makeVariant').onclick = async () => {
   } catch (e) { showError($('stepErr'), e.message); }
   finally { b.disabled = false; b.textContent = was; }
 };
+
+/* The overflow menu. Opening it is the only choice the header asks for
+   until something inside is actually wanted. */
+$('moreBtn').onclick = ev => {
+  ev.stopPropagation();
+  const open = $('moreMenu').classList.toggle('hide');
+  $('moreBtn').setAttribute('aria-expanded', String(!open));
+};
+document.addEventListener('click', () => {
+  $('moreMenu').classList.add('hide');
+  $('moreBtn').setAttribute('aria-expanded', 'false');
+});
+$('moreMenu').onclick = ev => ev.stopPropagation();
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') $('moreMenu').classList.add('hide');
+});
 
 $('runAll').onclick = async () => {
   const p = current(); if (!p) return;
