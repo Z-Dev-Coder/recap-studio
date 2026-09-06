@@ -25,17 +25,18 @@ def test_the_template_is_where_the_code_looks_for_it():
     assert (recap_api.PROMPTS / "recap_burmese.md").exists()
 
 
-def test_the_template_asks_for_every_field_the_endpoint_fills():
-    text = (recap_api.PROMPTS / "recap_burmese.md").read_text(encoding="utf-8")
-    for field in ("DURATION", "TARGET", "CONTENT_TYPE", "PLATFORM",
-                  "LANGUAGE", "STYLE", "SPECIAL_STYLE", "NAMES", "TIMELINE"):
-        assert "[[" + field + "]]" in text, f"the template never uses {field}"
-
-
-def test_nothing_is_left_unfilled():
-    """A placeholder the endpoint forgets would be pasted into the chat raw."""
+def test_every_placeholder_in_the_template_is_one_the_endpoint_fills():
+    """
+    The failure that matters is a placeholder pasted into the chat raw. The
+    reverse -- the endpoint offering a value the template no longer uses --
+    is harmless, and happens whenever a new version of the prompt drops a
+    field.
+    """
     import re
     text = (recap_api.PROMPTS / "recap_burmese.md").read_text(encoding="utf-8")
-    known = {"DURATION", "TARGET", "CONTENT_TYPE", "PLATFORM", "LANGUAGE",
-             "STYLE", "SPECIAL_STYLE", "NAMES", "TIMELINE"}
-    assert set(re.findall(r"\[\[([A-Z_]+)\]\]", text)) == known
+    used = set(re.findall(r"\[\[([A-Z_]+)\]\]", text))
+    filled = {"DURATION", "TARGET", "CONTENT_TYPE", "PLATFORM", "LANGUAGE",
+              "STYLE", "SPECIAL_STYLE", "NAMES", "SOURCE_TITLE", "TIMELINE"}
+    assert used <= filled, f"the template uses {used - filled}, which nothing fills"
+
+

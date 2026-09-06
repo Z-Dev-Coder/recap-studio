@@ -902,6 +902,7 @@ def script_prompt(pid: str, target: float = 0.0, names: str = "",
         ("SPECIAL_STYLE", special.strip() or "(none)"),
         ("NAMES", names.strip()
          or "(not given - use whatever the timeline calls them)"),
+        ("SOURCE_TITLE", (project.title or "(not given)").strip()),
         ("TIMELINE", (NEWLINE * 2).join(moments)),
     ):
         filled = filled.replace("[[" + key + "]]", value)
