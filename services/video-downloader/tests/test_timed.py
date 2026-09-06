@@ -66,19 +66,28 @@ def test_an_untimed_script_still_is():
     assert again[0].start == 0.0 and again[-1].start > 200
 
 
-def test_a_trim_does_not_move_a_line_someone_timed_by_hand():
+def test_a_trim_moves_a_timed_line_rather_than_pinning_it():
     """
-    Two lines timed inside a trimmed opening both clamped to the trim, so the
-    same footage played twice and neither matched its words. The trim governs
-    where the planner may look, not where a person may point.
+    Two lines timed inside a trimmed opening once clamped to the same frame,
+    so the picture played twice; ignoring the trim instead left clips coming
+    from the title sequence the trim existed to remove. A line inside a
+    skipped end is laid after the one before it: out of the trim, and still
+    its own moment.
     """
     beats = [
         {"start": 10.0, "end": 15.0, "timed": True},
         {"start": 15.5, "end": 20.0, "timed": True},
     ]
     plan = plan_fitted(beats, [4.0, 5.0], duration=490, first=29.2, last=483)
-    assert [round(a, 1) for a, _ in plan] == [10.0, 15.5]
+    assert all(a >= 29.2 for a, _ in plan)   # nothing from the trimmed opening
     assert plan[0][0] != plan[1][0]          # never the same footage twice
+    assert plan[0][1] <= plan[1][0]          # and never overlapping
+
+
+def test_a_timed_line_outside_the_trim_keeps_its_own_moment():
+    beats = [{"start": 120.0, "end": 128.0, "timed": True}]
+    (a, b), = plan_fitted(beats, [6.0], duration=609, first=47.2, last=598)
+    assert round(a, 1) == 120.0
 
 
 def test_a_planned_beat_still_respects_the_trim():
