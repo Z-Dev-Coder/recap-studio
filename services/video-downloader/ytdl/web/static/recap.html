@@ -4943,7 +4943,17 @@ function videoFrame(p) {
 function thumbShape(p) {
   const chosen = $('thumbAspect').value;
   if (chosen !== 'auto') return THUMB_SHAPES[chosen] || THUMB_SHAPES['16:9'];
-  // "match the video" follows the cut's own shape
+  // "match the video" follows the cut itself when there is one. The settings
+  // it was made from can be changed afterwards; the file cannot.
+  if (p && p.cut_width > 0 && p.cut_height > 0) {
+    const r = p.cut_width / p.cut_height;
+    let best = '16:9', gap = Infinity;
+    for (const k in THUMB_SHAPES) {
+      const d = Math.abs(r - THUMB_SHAPES[k][0] / THUMB_SHAPES[k][1]);
+      if (d < gap) { gap = d; best = k; }
+    }
+    return THUMB_SHAPES[best];
+  }
   const byShape = { reels: '9:16', square: '1:1', portrait: '4:5' };
   const key = byShape[p && p.shape] || (p && p.mode === 'reels' ? '9:16' : '16:9');
   return THUMB_SHAPES[key];

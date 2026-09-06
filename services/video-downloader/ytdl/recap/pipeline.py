@@ -546,6 +546,13 @@ def run_video(project: Project, on_progress=None, cancel=None) -> None:
     project.cut_height = int(result.get("height") or 0)
     write_subtitles(project)
 
+    # The candidate frames came out of the previous cut, at whatever shape and
+    # moments that one had. A saved thumbnail.png is a decision and stays.
+    if project.thumbnail_candidates:
+        project.thumbnail_candidates = []
+        project.mark("thumbnail", "idle",
+                     message="the cut changed - find frames again")
+
     # Fitting to the voice can land far short of the length that was asked for,
     # and silently returning a one-minute video to someone who asked for five
     # looks like a bug rather than a consequence. Say which it is.
@@ -613,12 +620,38 @@ def _reburn_captions(project: Project, cancel=None) -> None:
 
 # --------------------------------------------------------------- 5. thumbnail
 
+def thumbnail_frames_from(project: Project) -> tuple[Path, list[dict]]:
+    """
+    The video the thumbnail is cut from, and the beats in that video's time.
+
+    The recap cut, whenever there is one. A 9:16 recap fronted by a 16:9 frame
+    lifted from the source is the wrong picture in the wrong shape: it shows
+    the sides the recap cropped away, and it cannot fill a vertical thumbnail
+    without being cropped a second time. The cut is also what the viewer will
+    actually watch, which the source is not.
+
+    The beats move with it. Their start/end are source seconds, so read against
+    the cut they would point at whatever happens to be playing at that time --
+    which is why the timeline records where each beat landed in the cut.
+    """
+    if project.recap_path.exists() and project.timeline:
+        moved = [
+            {**b, "start": float(b["recap_start"]), "end": float(b["recap_end"])}
+            for b in project.timeline
+            if b.get("recap_start") is not None and b.get("recap_end") is not None
+        ]
+        if moved:
+            return project.recap_path, moved
+    return project.source_path, project.beats
+
+
 def run_thumbnail(project: Project, count: int = 16, cancel=None) -> None:
     """Extract and rank candidate frames for the thumbnail editor."""
-    if not project.source_path.exists():
+    video, beats = thumbnail_frames_from(project)
+    if not video.exists():
         raise StepError("the source video is missing")
     found = thumb_mod.candidates(
-        project.source_path, project.frames_dir, count=count, beats=project.beats,
+        video, project.frames_dir, count=count, beats=beats,
         cancel=cancel,
     )
     if not found:
