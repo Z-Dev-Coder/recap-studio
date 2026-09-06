@@ -136,6 +136,9 @@ class Project:
     # a sixty-second reel beside a long recap. It holds the id it came from
     # so the two can be shown together rather than as unrelated projects.
     made_from: str = ""
+    # Asked for at creation: make the other cut too, as soon as there is
+    # something to share. Cleared once the pair exists, so it happens once.
+    wants_pair: bool = False
 
     cut_width: int = 0
     cut_height: int = 0
@@ -274,6 +277,7 @@ class Project:
             "footage_pace": self.footage_pace,
             "voice_candidates": self.voice_candidates,
             "made_from": self.made_from,
+            "wants_pair": self.wants_pair,
             "cut_width": self.cut_width,
             "cut_height": self.cut_height,
             "caption_look": self.caption_look,
@@ -386,6 +390,7 @@ class Project:
             footage_pace=float(data.get("footage_pace", 1.0) or 1.0),
             voice_candidates=data.get("voice_candidates") or [],
             made_from=data.get("made_from", "") or "",
+            wants_pair=bool(data.get("wants_pair", False)),
             cut_width=int(data.get("cut_width", 0) or 0),
             cut_height=int(data.get("cut_height", 0) or 0),
             caption_look=data.get("caption_look") or {},

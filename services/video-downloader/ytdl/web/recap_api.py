@@ -281,6 +281,22 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
         if step == "voice":
             localtts_mod.release()
 
+        # The other cut, if one was asked for when the project was made. It
+        # waits for the transcript because that is the last of the two
+        # expensive things it borrows -- before then there would be nothing to
+        # hand it and it would have to read the video again itself.
+        if (step == "transcript" and project.wants_pair
+                and project.source_path.exists()):
+            project.wants_pair = False
+            try:
+                made = _variant(project, "reels" if project.mode == "long" else "long")
+                project.mark("transcript", "running", message=(
+                    project.steps["transcript"].message
+                    + f" -- and made \"{made['title'][:40]}\" from the same source"))
+            except Exception as exc:      # noqa: BLE001 - a pair is a bonus
+                project.mark("transcript", "running", message=(
+                    f"the second cut could not be made: {exc}"))
+
         # a step that explained something while running keeps saying it
         note = project.steps.get(step)
         keep = (note.message or "") if note else ""
@@ -336,6 +352,10 @@ def run_chain(pid: str, steps: list[str], options: dict) -> None:
 
 class CreateRequest(BaseModel):
     url: str = ""
+    # Make both cuts of this video: a 60-second reel and a long recap. The
+    # second is created once the download and the transcript exist, since
+    # those are what it borrows.
+    both: bool = False
     source_file: str = ""      # a path on this machine, instead of a link
     # No video at all: a script to speak and nothing else. The narration only
     # ever needed the script, so requiring a download to reach it was a rule
@@ -624,6 +644,7 @@ def create(req: CreateRequest) -> dict:
         project.title = Path(source_file).stem
         project.url = ""
     project.mode = req.mode if req.mode in ("reels", "long") else "reels"
+    project.wants_pair = bool(req.both)
     project.language = req.language if req.language in ("en", "my") else "en"
     project.content_type = content.normalise(req.content_type)
 
@@ -1761,7 +1782,13 @@ def make_variant(pid: str, req: VariantRequest) -> dict:
         raise HTTPException(404, "no such project")
     if not parent.source_path.exists():
         raise HTTPException(400, "download the video first")
+    return _variant(parent, req.mode, req.shape, req.target_seconds)
 
+
+def _variant(parent, mode: str = "reels", shape: str = "",
+             target_seconds: float = 0.0) -> dict:
+    """Make the second cut. Shared by the button and by the automatic pair."""
+    req = VariantRequest(mode=mode, shape=shape, target_seconds=target_seconds)
     mode = req.mode if req.mode in ("reels", "long") else "reels"
     label = "reel" if mode == "reels" else "long"
     child = store.create(parent.url, f"{parent.title} ({label})")

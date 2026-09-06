@@ -1436,6 +1436,16 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
       </div>
     </div>
     <label class="note" style="display:block;margin-top:16px">
+      <input type="checkbox" id="makeBoth" checked> Make both a long recap and a 60-second reel
+    </label>
+    <div class="tiny" style="margin-top:4px">
+      Two projects from one video. The second is made as soon as the download
+      and the transcript exist, and borrows both &mdash; so it costs no second
+      download and no second reading of the video. Each keeps its own script,
+      narration and cut.
+    </div>
+
+    <label class="note" style="display:block;margin-top:16px">
       <input type="checkbox" id="scriptOnly"> No video &mdash; I just want to speak a script
     </label>
     <div class="tiny" style="margin-top:4px">
@@ -1826,6 +1836,7 @@ $('create').onclick = async () => {
     const p = await post('/api/recap/projects', {
       url, source_file: bare ? '' : (state.pickedFile || ''),
       script_only: bare,
+      both: bare ? false : $('makeBoth').checked,
       title: bare ? (url || 'Narration') : '',
       mode: state.mode, language: state.lang,
       content_type: $('contentTypeSel').value || 'recap',
