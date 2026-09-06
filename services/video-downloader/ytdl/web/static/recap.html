@@ -1374,11 +1374,11 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
                   <input type="number" id="promptTarget" min="0.5" step="0.5"
                          placeholder="minutes">
                 </div>
-                <div class="field grow" style="min-width:200px">
-                  <label class="f">Character names (optional)</label>
-                  <input type="text" id="promptNames"
-                         placeholder="Superman, Lois Lane">
-                </div>
+                <span class="tiny" style="padding-bottom:8px">
+                  minutes of narration &mdash; everything else the prompt needs is
+                  already known
+                </span>
+                <div class="grow"></div>
                 <span class="tiny" id="promptNote"></span>
               </div>
             </div>
@@ -3940,10 +3940,12 @@ $('copyPrompt').onclick = async () => {
   const p = current(); if (!p) return;
   const b = $('copyPrompt');
   const mins = Number($('promptTarget').value) || 0;
-  const names = $('promptNames').value.trim();
   $('promptNote').textContent = 'building...';
   try {
-    const q = new URLSearchParams({ target: String(mins * 60), names });
+    /* Names are left to the prompt: the timeline already calls the characters
+       something, and asking for them again is a field to fill on every video
+       for an answer that is usually in front of the model anyway. */
+    const q = new URLSearchParams({ target: String(mins * 60) });
     const r = await request(`/api/recap/projects/${p.id}/prompt?${q}`);
     if (await copyText(r.prompt, () => saidCopied(b, 'copied'))) {
       $('promptNote').textContent =
