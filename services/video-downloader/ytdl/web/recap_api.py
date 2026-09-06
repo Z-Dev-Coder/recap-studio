@@ -834,6 +834,8 @@ def manual_script(pid: str, req: ManualScriptRequest) -> dict:
             "lang": lang, "mode": req.mode}
 
 
+NEWLINE = chr(10)
+
 PROMPTS = Path(__file__).resolve().parent.parent / "recap" / "prompts"
 
 
@@ -847,16 +849,16 @@ def _clock(seconds: float) -> str:
 
 @router.get("/projects/{pid}/prompt")
 def script_prompt(pid: str, target: float = 0.0, names: str = "",
-                  platform: str = "YouTube",
-                  style: str = "Natural, conversational, engaging") -> dict:
+                  platform: str = "YouTube", special: str = "",
+                  style: str = "Natural, conversational, entertaining") -> dict:
     """
     The whole prompt for writing this project's script, ready to paste.
 
     The transcript, the video's length, the wanted length and the content type
     are all already known here. Copying the template, then the transcript,
-    then typing the same four answers again for every video is work the
-    machine can do once -- and it is work that goes wrong quietly, because a
-    stale duration in the prompt produces a script of the wrong length and
+    then typing the same answers again for every video is work the machine can
+    do once -- and it is work that goes wrong quietly, because a stale
+    duration left in the prompt produces a script of the wrong length and
     nothing says so.
     """
     project = store.get(pid)
@@ -872,31 +874,41 @@ def script_prompt(pid: str, target: float = 0.0, names: str = "",
         raise HTTPException(500, f"the prompt template is missing: {template}")
 
     # The transcript as the timeline the prompt asks for: a span and what
-    # happens in it, which is the shape the template's example uses.
-    lines = []
+    # happens in it, which is the shape the template's own examples use.
+    moments = []
     for row in rows:
         try:
-            start, end = float(row.get("start", 0)), float(row.get("end", 0))
+            start = float(row.get("start", 0))
+            end = float(row.get("end", 0))
         except (TypeError, ValueError):
             continue
         text = " ".join(str(row.get("text") or "").split())
         if text:
-            span = _clock(start) + " - " + _clock(end)
-            lines.append(span + "\n" + text + "\n")
+            moments.append(_clock(start) + "-" + _clock(end) + NEWLINE + text)
 
     wanted = target or project.target_seconds or (project.duration or 0) / 2
-    filled = template.read_text(encoding="utf-8").format(
-        duration=_clock(project.duration or 0),
-        target=_clock(wanted),
-        content_type=(project.content_type or "recap").replace("_", " ").title(),
-        platform=platform,
-        language="Burmese",
-        style=style,
-        names=names.strip() or "(not given -- use what the timeline calls them)",
-        timeline="\n".join(lines),
-    )
-    return {"ok": True, "prompt": filled, "moments": len(lines),
+
+    # Simple replacement rather than str.format: the template is a document
+    # someone edits, and one stray brace in its prose would raise KeyError and
+    # take the whole button down.
+    filled = template.read_text(encoding="utf-8")
+    for key, value in (
+        ("DURATION", _clock(project.duration or 0)),
+        ("TARGET", _clock(wanted)),
+        ("CONTENT_TYPE", (project.content_type or "recap").replace("_", " ").title()),
+        ("PLATFORM", platform),
+        ("LANGUAGE", "Burmese"),
+        ("STYLE", style),
+        ("SPECIAL_STYLE", special.strip() or "(none)"),
+        ("NAMES", names.strip()
+         or "(not given - use whatever the timeline calls them)"),
+        ("TIMELINE", (NEWLINE * 2).join(moments)),
+    ):
+        filled = filled.replace("[[" + key + "]]", value)
+
+    return {"ok": True, "prompt": filled, "moments": len(moments),
             "duration": _clock(project.duration or 0), "target": _clock(wanted)}
+
 
 
 @router.get("/projects/{pid}/script/length")

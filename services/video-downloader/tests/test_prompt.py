@@ -27,13 +27,15 @@ def test_the_template_is_where_the_code_looks_for_it():
 
 def test_the_template_asks_for_every_field_the_endpoint_fills():
     text = (recap_api.PROMPTS / "recap_burmese.md").read_text(encoding="utf-8")
-    for field in ("{duration}", "{target}", "{content_type}", "{platform}",
-                  "{language}", "{style}", "{names}", "{timeline}"):
-        assert field in text, f"the template never uses {field}"
+    for field in ("DURATION", "TARGET", "CONTENT_TYPE", "PLATFORM",
+                  "LANGUAGE", "STYLE", "SPECIAL_STYLE", "NAMES", "TIMELINE"):
+        assert "[[" + field + "]]" in text, f"the template never uses {field}"
 
 
-def test_the_template_has_no_stray_braces_that_would_break_filling_it():
-    """A stray { in the prose raises KeyError the moment it is formatted."""
+def test_nothing_is_left_unfilled():
+    """A placeholder the endpoint forgets would be pasted into the chat raw."""
+    import re
     text = (recap_api.PROMPTS / "recap_burmese.md").read_text(encoding="utf-8")
-    text.format(duration="", target="", content_type="", platform="",
-                language="", style="", names="", timeline="")
+    known = {"DURATION", "TARGET", "CONTENT_TYPE", "PLATFORM", "LANGUAGE",
+             "STYLE", "SPECIAL_STYLE", "NAMES", "TIMELINE"}
+    assert set(re.findall(r"\[\[([A-Z_]+)\]\]", text)) == known
