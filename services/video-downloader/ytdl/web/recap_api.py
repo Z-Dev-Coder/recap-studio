@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import json
 import queue
+import os
 import shutil
 import threading
 import time
@@ -1733,6 +1734,95 @@ def apply_saved_look(project) -> None:
     if SAVED_LOGO.exists():
         project.logo_path.write_bytes(SAVED_LOGO.read_bytes())
     project.save()
+
+
+class VariantRequest(BaseModel):
+    mode: str = "reels"           # the second cut is usually the short one
+    shape: str = ""
+    target_seconds: float = 0.0
+
+
+@router.post("/projects/{pid}/variant")
+def make_variant(pid: str, req: VariantRequest) -> dict:
+    """
+    Cut the same source a second way: a reel beside the long recap.
+
+    One project holds one script, one narration and one cut, which is right --
+    a sixty-second reel and a ten-minute recap are different scripts, voiced
+    separately and cut separately. What they share is everything expensive:
+    the download and the reading of the video. So the second one is a project
+    of its own that borrows both.
+
+    The source file is hard-linked where the filesystem allows it, so two
+    projects over a 45MB video cost 45MB rather than 90.
+    """
+    parent = store.get(pid)
+    if not parent:
+        raise HTTPException(404, "no such project")
+    if not parent.source_path.exists():
+        raise HTTPException(400, "download the video first")
+
+    mode = req.mode if req.mode in ("reels", "long") else "reels"
+    label = "reel" if mode == "reels" else "long"
+    child = store.create(parent.url, f"{parent.title} ({label})")
+
+    child.made_from = parent.id
+    child.title = f"{parent.title} ({label})"
+    child.url = parent.url
+    child.source_file = parent.source_file
+    child.duration = parent.duration
+    child.mode = mode
+    child.shape = req.shape or ("reels" if mode == "reels" else parent.shape)
+    child.target_seconds = req.target_seconds or (60.0 if mode == "reels" else 0.0)
+    child.content_type = parent.content_type
+    child.language = parent.language
+    child.voice_lang = parent.voice_lang
+    child.voice_langs = list(parent.voice_langs or [])
+    child.narration_speed = parent.narration_speed
+    child.line_gap = parent.line_gap
+
+    # The reading of the video is the expensive part and it describes the same
+    # footage, so it is shared rather than paid for twice.
+    child.transcript = list(parent.transcript or [])
+    child.transcript_language = parent.transcript_language
+
+    # And the channel's own look, so a reel matches the long cut it came from.
+    child.overlays = [dict(o) for o in (parent.overlays or [])]
+    child.caption_look = dict(parent.caption_look or {})
+    child.caption_x, child.caption_y = parent.caption_x, parent.caption_y
+    child.caption_style = parent.caption_style
+    child.burn_captions = parent.burn_captions
+    child.skip_start, child.skip_end = parent.skip_start, parent.skip_end
+
+    # A 45MB source copied per variant is 45MB of nothing. Hard-link it where
+    # the filesystem allows, and fall back to copying where it does not.
+    try:
+        os.link(parent.source_path, child.source_path)
+        shared = "linked"
+    except (OSError, NotImplementedError):
+        shutil.copy2(parent.source_path, child.source_path)
+        shared = "copied"
+
+    if parent.logo_path.exists():
+        child.logo_path.write_bytes(parent.logo_path.read_bytes())
+
+    ref = parent.voice_dir / "reference.wav"
+    if ref.exists():
+        child.voice_dir.mkdir(parents=True, exist_ok=True)
+        (child.voice_dir / "reference.wav").write_bytes(ref.read_bytes())
+        child.voice_reference = "reference.wav"
+        child.voice_reference_text = parent.voice_reference_text
+
+    for name, note in (("source", "shared with " + parent.title[:40]),
+                       ("transcript", f"{len(child.transcript)} moments, shared")):
+        child.mark(name, "done", message=note)
+    child.mark("script", "idle", message="paste the script for this cut")
+
+    child.save()
+    push(child)
+    return {"ok": True, "id": child.id, "title": child.title,
+            "mode": child.mode, "source": shared,
+            "transcript": len(child.transcript)}
 
 
 @router.post("/projects/{pid}/logo")

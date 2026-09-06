@@ -466,6 +466,8 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
         <button data-m="reels">Reel</button>
         <button data-m="long">Long</button>
       </div>
+      <button class="sm" id="makeVariant"
+              title="Cut this same video a second way, sharing the download and the transcript">Also make a reel</button>
       <button class="sm" id="runAll">Run all</button>
       <button class="sm danger hide" id="stopBtn">&#9632; Stop</button>
       <button class="ghost sm" id="openFolder" title="Open the project folder">Folder</button>
@@ -1992,7 +1994,7 @@ function renderList() {
       <span class="pdot ${cls}"></span>
       <span class="grow">
         <span class="proj-t">${escapeHtml(p.title || p.url)}</span>
-        <span class="proj-m">${p.mode === 'reels' ? 'Reel' : 'Long'} · ${fmt(p.duration)} · ${escapeHtml(label)}</span>
+        <span class="proj-m">${p.made_from ? '&#8618; ' : ''}${p.mode === 'reels' ? 'Reel' : 'Long'} · ${fmt(p.duration)} · ${escapeHtml(label)}</span>
       </span></button>`;
   }).join('');
   $('noProjects').classList.toggle('hide', state.projects.length > 0);
@@ -2193,6 +2195,10 @@ function renderProject() {
   $('stopBtn').classList.toggle('hide', !busy);
   $('runAll').classList.toggle('hide', busy);
   [...$('modeSwitch').children].forEach(b => b.classList.toggle('on', b.dataset.m === p.mode));
+  // the button offers whichever cut this project is not
+  $('makeVariant').textContent =
+    p.mode === 'reels' ? 'Also make a long cut' : 'Also make a reel';
+  $('makeVariant').classList.toggle('hide', !p.has_source);
 }
 
 /* The ordered walkthrough. Pasting a link used to start everything at once,
@@ -2610,6 +2616,32 @@ async function runStep(step, body) {
   try { await post(`/api/recap/projects/${p.id}/steps/${step}`, body || {}); }
   catch (e) { showError($('stepErr'), e.message); }
 }
+/* A second cut of the same video.
+
+   One project holds one script, one narration and one cut, which is right: a
+   sixty-second reel and a ten-minute recap are different scripts, voiced and
+   cut separately. What they share is everything expensive -- the download and
+   the reading of the video -- so the second one borrows both rather than
+   paying for them again. */
+$('makeVariant').onclick = async () => {
+  const p = current(); if (!p) return;
+  const b = $('makeVariant');
+  const wants = p.mode === 'reels' ? 'long' : 'reels';
+  b.disabled = true;
+  const was = b.textContent;
+  b.textContent = 'making...';
+  try {
+    const r = await post(`/api/recap/projects/${p.id}/variant`, { mode: wants });
+    state.projects = await request('/api/recap/projects');
+    state.current = r.id;
+    renderList(); renderProject(); showTab('script');
+    $('scriptNote').textContent =
+      `${r.title} - the source is ${r.source} and ${r.transcript} moments of ` +
+      `transcript came with it. Paste the script for this cut.`;
+  } catch (e) { showError($('stepErr'), e.message); }
+  finally { b.disabled = false; b.textContent = was; }
+};
+
 $('runAll').onclick = async () => {
   const p = current(); if (!p) return;
   try { await post(`/api/recap/projects/${p.id}/run`, {}); }

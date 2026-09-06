@@ -132,6 +132,11 @@ class Project:
     # captions, a logo, overlay text -- is drawn at this size and composited
     # at native size, so guessing it wrong makes every one of them the wrong
     # size in the output while looking right in the editor.
+    # A project made from another one, to cut the same source a second way --
+    # a sixty-second reel beside a long recap. It holds the id it came from
+    # so the two can be shown together rather than as unrelated projects.
+    made_from: str = ""
+
     cut_width: int = 0
     cut_height: int = 0
 
@@ -268,6 +273,7 @@ class Project:
             "caption_file": self.caption_file,
             "footage_pace": self.footage_pace,
             "voice_candidates": self.voice_candidates,
+            "made_from": self.made_from,
             "cut_width": self.cut_width,
             "cut_height": self.cut_height,
             "caption_look": self.caption_look,
@@ -379,6 +385,7 @@ class Project:
             caption_file=data.get("caption_file", "") or "",
             footage_pace=float(data.get("footage_pace", 1.0) or 1.0),
             voice_candidates=data.get("voice_candidates") or [],
+            made_from=data.get("made_from", "") or "",
             cut_width=int(data.get("cut_width", 0) or 0),
             cut_height=int(data.get("cut_height", 0) or 0),
             caption_look=data.get("caption_look") or {},
