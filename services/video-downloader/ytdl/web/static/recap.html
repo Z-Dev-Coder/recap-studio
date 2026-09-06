@@ -420,6 +420,225 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
 .ov-grip-ne, .ov-grip-sw { cursor: nesw-resize; }
 .ov-grip-n, .ov-grip-s { cursor: ns-resize; }
 .ov-grip-w, .ov-grip-e { cursor: ew-resize; }
+
+/* ==========================================================================
+   A newer surface over the same app.
+
+   Everything below is styling only -- no id, no handler and no element is
+   touched, because the parts that would break are the ones that took longest
+   to get right: Burmese shaped through a canvas, the overlay drag, the live
+   updates. Those keep working precisely because this pass does not go near
+   them.
+
+   The old rules stay above; these come last and win on cascade order, so any
+   one of them can be deleted to get the old look back.
+   ========================================================================== */
+
+:root {
+  /* A wider spacing scale. The old one was 16px for everything, which is why
+     the page reads as dense rather than calm. */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+
+  --r: 14px; --r-sm: 10px; --r-xs: 8px;
+
+  /* Depth in two steps rather than one, so a card and a dialog do not sit at
+     the same height. */
+  --shadow-sm: 0 1px 2px rgba(16,19,26,.04), 0 1px 1px rgba(16,19,26,.03);
+  --shadow: 0 2px 4px rgba(16,19,26,.04), 0 12px 32px -12px rgba(16,19,26,.18);
+  --shadow-lg: 0 4px 8px rgba(16,19,26,.06), 0 24px 60px -20px rgba(16,19,26,.30);
+
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+:root[data-theme="dark"], :root:not([data-theme="light"]) {
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.5);
+  --shadow: 0 2px 6px rgba(0,0,0,.5), 0 16px 40px -16px rgba(0,0,0,.8);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,.6), 0 32px 80px -24px rgba(0,0,0,.9);
+}
+
+body {
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------- type */
+
+h1, h2, h3 { letter-spacing: -0.02em; }
+.card > h3 {
+  font-size: 11px; letter-spacing: .08em; font-weight: 600;
+  color: var(--faint); margin-bottom: var(--sp-4);
+}
+.top h2 { font-size: 16px; font-weight: 640; }
+label.f {
+  font-size: 11px; font-weight: 550; letter-spacing: .01em;
+  color: var(--faint); margin-bottom: 6px;
+}
+.tiny { font-size: 12px; line-height: 1.6; color: var(--muted); }
+.note { font-size: 13px; font-weight: 600; }
+
+/* --------------------------------------------------------------- cards */
+
+.card {
+  border-radius: var(--r);
+  padding: var(--sp-5);
+  margin-bottom: var(--sp-4);
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+
+details.more {
+  border-radius: var(--r);
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+details.more > summary {
+  padding: 14px var(--sp-5);
+  font-weight: 600;
+  transition: background .12s ease;
+}
+details.more > summary:hover { background: var(--surface-2); }
+details.more > *:not(summary) { padding-inline: var(--sp-5); }
+
+/* ------------------------------------------------------------- buttons */
+
+button {
+  border-radius: 9px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+  transition: background .13s ease, border-color .13s ease,
+              box-shadow .13s ease, transform .06s ease;
+}
+button:active:not(:disabled) { transform: translateY(0.5px); }
+button:focus-visible { outline: none; box-shadow: var(--ring); }
+
+button.primary, .primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(16,19,26,.10),
+              inset 0 1px 0 rgba(255,255,255,.14);
+}
+button.primary:hover:not(:disabled) { background: var(--accent-hi); }
+button.ghost {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--line) 80%, transparent);
+}
+button.ghost:hover:not(:disabled) { background: var(--surface-2); }
+button.sm { padding: 6px 12px; font-size: 12.5px; border-radius: 8px; }
+button:disabled { opacity: .45; }
+
+/* -------------------------------------------------------------- inputs */
+
+input[type=text], input[type=number], input[type=url], select, textarea {
+  border-radius: 9px;
+  border-color: color-mix(in srgb, var(--line) 85%, transparent);
+  transition: border-color .13s ease, box-shadow .13s ease;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+input[type=range] { accent-color: var(--accent); }
+
+/* ---------------------------------------------------- the project list */
+
+.proj {
+  border-radius: 11px;
+  padding: 11px 12px;
+  margin-bottom: 3px;
+  transition: background .12s ease;
+}
+.proj:hover { background: var(--surface-2); }
+.proj.on {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+.proj-t { font-weight: 570; }
+
+/* ----------------------------------------------------------- the stages */
+
+.tabs button {
+  border-radius: 10px;
+  padding: 9px 12px;
+  transition: background .12s ease;
+}
+.tabs button:hover { background: var(--surface-2); }
+.tabs button.on {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.tabs button b { font-weight: 570; }
+
+/* Status lights read as state at a glance rather than as decoration. */
+.dot, .pdot { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent); }
+
+/* ------------------------------------------------------------- the top */
+
+.top {
+  backdrop-filter: saturate(140%) blur(8px);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+/* ----------------------------------------------------------- the guide */
+
+#guide {
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  border-width: 1px;
+  background: linear-gradient(180deg,
+              color-mix(in srgb, var(--accent-soft) 60%, var(--surface)),
+              var(--surface));
+}
+
+/* ------------------------------------------------------------ progress */
+
+.work {
+  border-radius: 11px;
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: linear-gradient(180deg,
+              color-mix(in srgb, var(--accent-soft) 70%, var(--surface)),
+              var(--surface));
+}
+.work-track { height: 5px; border-radius: 999px; }
+.work-fill { border-radius: 999px; }
+
+/* -------------------------------------------------------------- dialog */
+
+.veil { backdrop-filter: blur(3px); }
+.modal { border-radius: 18px; box-shadow: var(--shadow-lg); padding: var(--sp-5); }
+
+/* --------------------------------------------------------------- misc */
+
+.pill {
+  border-radius: 999px; padding: 2px 9px; font-size: 11px;
+  font-weight: 560; letter-spacing: .01em;
+}
+.banner { border-radius: 11px; padding: 11px 14px; }
+video { border-radius: var(--r-sm); }
+
+/* A pointer over anything that responds to one. */
+button, .proj, .tabs button, summary, .ov-chip, .cand-play { cursor: pointer; }
+
+/* Scrollbars that do not look like 2009. */
+* { scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--surface-3); border-radius: 999px;
+  border: 3px solid transparent; background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background-clip: content-box;
+  background-color: var(--faint); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
 </style>
 </head>
 <body>
