@@ -2601,8 +2601,12 @@ function renderProject() {
   $('transcriptNote').textContent = (p.transcript || []).length
     ? `${p.transcript.length} lines${p.transcript_language ? ' · ' + p.transcript_language : ''}` : 'none yet';
 
+  // The timestamp belongs in the key: a second run writes the same filenames,
+  // so without it the list looks unchanged and the strip is never repainted --
+  // the old frames stay on screen no matter what was extracted.
   const framesKey = (p.thumbnail_candidates || []).map(c => c.file).join(',')
-                    + '|' + (state.frame || '');
+                    + '|' + (state.frame || '')
+                    + '|' + ((p.steps.thumbnail || {}).updated || 0);
   if (framesKey !== state.framesKey) {
     state.framesKey = framesKey;
     renderFrames(p);
@@ -4888,11 +4892,21 @@ $('dlTranscript').onclick = async () => {
    Composed on a canvas here rather than server-side: Chromium shapes Burmese
    correctly and the Pillow build on this machine has no Raqm, so Myanmar text
    drawn in Python comes out with its glyphs in the wrong order. */
+/* Every run writes frame_00.jpg, frame_01.jpg ... over the last run's files.
+   Same URL, new picture: the browser keeps showing what it already has. That
+   is how a landscape frame survived the change that made the frames vertical
+   -- the file on disk was right and the page was serving its own cache. The
+   step's own timestamp makes each run a different URL. */
+function frameSrc(p, file) {
+  return `/api/recap/projects/${p.id}/file?name=${encodeURIComponent(file)}`
+       + `&t=${Math.round((p.steps.thumbnail || {}).updated || 0)}`;
+}
+
 function renderFrames(p) {
   $('frames').innerHTML = (p.thumbnail_candidates || []).map(c => `
     <div class="frame ${state.frame === c.file ? 'on' : ''}" data-file="${escapeHtml(c.file)}"
          title="${fmt(c.time)}${c.why ? ' · ' + escapeHtml(c.why) : ''}">
-      <img src="/api/recap/projects/${p.id}/file?name=${encodeURIComponent(c.file)}" alt="">
+      <img src="${frameSrc(p, c.file)}" alt="">
       ${c.beat_score ? `<b>${Math.round(c.beat_score)}</b>` : ''}
     </div>`).join('');
   [...$('frames').children].forEach(el => el.onclick = () => {
@@ -4902,7 +4916,7 @@ function renderFrames(p) {
   });
   if (!state.frame && (p.thumbnail_candidates || []).length) {
     state.frame = p.thumbnail_candidates[0].file;      // already the best-ranked
-    drawThumb(`/api/recap/projects/${p.id}/file?name=${encodeURIComponent(state.frame)}`);
+    drawThumb(frameSrc(p, state.frame));
   }
 }
 
