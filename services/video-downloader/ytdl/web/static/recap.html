@@ -1349,6 +1349,8 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
                   <option value="my">SRT &middot; &#4119;&#4156;&#4116;&#4121;&#4140; Burmese</option>
                   <option value="en">SRT &middot; English</option>
                 </select>
+                <button class="sm primary" id="copyPrompt"
+                        title="The whole writing prompt, with this video's transcript and length already in it">Copy the writing prompt</button>
                 <button class="sm" id="copyTranscript">Copy</button>
                 <button class="sm" id="dlTranscript">Download</button>
               </div>
@@ -1364,6 +1366,20 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
                   </div>
                 </div>
                 <button class="sm" id="watchVideo">Read what is shown</button>
+              </div>
+              <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap;
+                   padding-top:10px;border-top:1px solid var(--line)">
+                <div class="field" style="max-width:130px">
+                  <label class="f">Recap should run</label>
+                  <input type="number" id="promptTarget" min="0.5" step="0.5"
+                         placeholder="minutes">
+                </div>
+                <div class="field grow" style="min-width:200px">
+                  <label class="f">Character names (optional)</label>
+                  <input type="text" id="promptNames"
+                         placeholder="Superman, Lois Lane">
+                </div>
+                <span class="tiny" id="promptNote"></span>
               </div>
             </div>
           </section>
@@ -3910,6 +3926,35 @@ const saidCopied = (btn, word) => {
   const was = btn.textContent;
   btn.textContent = word;
   setTimeout(() => { btn.textContent = was; }, 1400);
+};
+
+/* The whole prompt, assembled.
+
+   Everything it asks for is already known here: the transcript, the video's
+   length, the length wanted, the kind of thing it is. Copying a template,
+   then the transcript, then typing the same four answers again for every
+   video is work the machine can do -- and work that goes wrong quietly, since
+   a stale duration in the prompt produces a script of the wrong length and
+   nothing says so. */
+$('copyPrompt').onclick = async () => {
+  const p = current(); if (!p) return;
+  const b = $('copyPrompt');
+  const mins = Number($('promptTarget').value) || 0;
+  const names = $('promptNames').value.trim();
+  $('promptNote').textContent = 'building...';
+  try {
+    const q = new URLSearchParams({ target: String(mins * 60), names });
+    const r = await request(`/api/recap/projects/${p.id}/prompt?${q}`);
+    if (await copyText(r.prompt, () => saidCopied(b, 'copied'))) {
+      $('promptNote').textContent =
+        `${r.moments} moments, ${r.duration} of video, asking for ${r.target} of narration`;
+      return;
+    }
+    $('promptNote').textContent = 'the clipboard is blocked -- try the Copy button';
+  } catch (e) {
+    $('promptNote').textContent = '';
+    showError($('transcriptNote') ? $('capErr') : $('stepErr'), e.message);
+  }
 };
 
 $('copyTranscript').onclick = async () => {

@@ -834,6 +834,71 @@ def manual_script(pid: str, req: ManualScriptRequest) -> dict:
             "lang": lang, "mode": req.mode}
 
 
+PROMPTS = Path(__file__).resolve().parent.parent / "recap" / "prompts"
+
+
+def _clock(seconds: float) -> str:
+    """Seconds as MM:SS or H:MM:SS, which is how a person writes a duration."""
+    seconds = max(0, int(round(seconds or 0)))
+    h, rest = divmod(seconds, 3600)
+    m, s = divmod(rest, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+
+
+@router.get("/projects/{pid}/prompt")
+def script_prompt(pid: str, target: float = 0.0, names: str = "",
+                  platform: str = "YouTube",
+                  style: str = "Natural, conversational, engaging") -> dict:
+    """
+    The whole prompt for writing this project's script, ready to paste.
+
+    The transcript, the video's length, the wanted length and the content type
+    are all already known here. Copying the template, then the transcript,
+    then typing the same four answers again for every video is work the
+    machine can do once -- and it is work that goes wrong quietly, because a
+    stale duration in the prompt produces a script of the wrong length and
+    nothing says so.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+
+    rows = project.transcript or []
+    if not rows:
+        raise HTTPException(400, "there is no transcript to describe yet")
+
+    template = PROMPTS / "recap_burmese.md"
+    if not template.exists():
+        raise HTTPException(500, f"the prompt template is missing: {template}")
+
+    # The transcript as the timeline the prompt asks for: a span and what
+    # happens in it, which is the shape the template's example uses.
+    lines = []
+    for row in rows:
+        try:
+            start, end = float(row.get("start", 0)), float(row.get("end", 0))
+        except (TypeError, ValueError):
+            continue
+        text = " ".join(str(row.get("text") or "").split())
+        if text:
+            span = _clock(start) + " - " + _clock(end)
+            lines.append(span + "\n" + text + "\n")
+
+    wanted = target or project.target_seconds or (project.duration or 0) / 2
+    filled = template.read_text(encoding="utf-8").format(
+        duration=_clock(project.duration or 0),
+        target=_clock(wanted),
+        content_type=(project.content_type or "recap").replace("_", " ").title(),
+        platform=platform,
+        language="Burmese",
+        style=style,
+        names=names.strip() or "(not given -- use what the timeline calls them)",
+        timeline="\n".join(lines),
+    )
+    return {"ok": True, "prompt": filled, "moments": len(lines),
+            "duration": _clock(project.duration or 0), "target": _clock(wanted)}
+
+
 @router.get("/projects/{pid}/script/length")
 def script_length(pid: str, lang: str = "") -> dict:
     """
