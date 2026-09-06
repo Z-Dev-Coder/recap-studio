@@ -609,6 +609,43 @@ def mux_narration(
     return dest
 
 
+def set_cover(video: Path, picture: Path, cancel=None) -> bool:
+    """
+    Put the thumbnail inside the video file, as its cover art.
+
+    A thumbnail sitting beside a video in a folder is a thumbnail somebody has
+    to remember to upload. Carried in the file it survives being moved, copied
+    and handed to someone else, and Windows and most players show it straight
+    away -- so what you see in the folder is the thumbnail you chose rather
+    than a frame the player picked.
+
+    Both streams are copied, so this costs a remux rather than an encode:
+    seconds on a file that took minutes to render.
+    """
+    if not video.exists() or not picture.exists():
+        return False
+
+    out = video.with_name(video.stem + "_cover.mp4")
+    try:
+        _run([
+            _tool("ffmpeg"), "-y", "-i", str(video), "-i", str(picture),
+            "-map", "0", "-map", "1",
+            "-c", "copy", "-c:v:1", "mjpeg",
+            # what makes a video stream a cover rather than a second picture
+            "-disposition:v:1", "attached_pic",
+            "-movflags", "+faststart", str(out),
+        ], cancel=cancel)
+    except MediaError:
+        out.unlink(missing_ok=True)
+        return False       # a missing cover is not a reason to lose the render
+
+    if not out.exists() or out.stat().st_size < 1000:
+        out.unlink(missing_ok=True)
+        return False
+    out.replace(video)
+    return True
+
+
 def to_wav(src: Path, dest: Path, rate: int = 24000, cancel=None) -> Path:
     """
     Convert any audio a user uploads into the mono WAV the mixer expects.

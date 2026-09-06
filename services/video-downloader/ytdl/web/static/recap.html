@@ -1153,6 +1153,18 @@ input[type=color] { width: 42px; height: 32px; padding: 2px; border-radius: 6px;
                 <span id="finalDownloads" style="display:inline-flex;gap:8px"></span>
                 <span id="finalSwitch" style="display:inline-flex;gap:6px"></span>
               </div>
+              <div class="row" id="finalThumbRow"
+                   style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+                <img id="finalThumb" alt="" style="width:132px;border-radius:6px;
+                     background:#000;display:none">
+                <div class="grow">
+                  <div style="font-size:13px">Thumbnail</div>
+                  <div class="tiny" id="finalThumbNote" style="margin-top:2px"></div>
+                </div>
+                <button class="sm" id="goThumb">Open the editor</button>
+                <button class="sm ghost hide" id="dlThumb">Download</button>
+              </div>
+
               <div class="tiny" style="margin-top:8px">
                 Nothing here is rendered until you ask. Regenerating a line, changing
                 the mix or re-cutting all need another render &mdash; but never
@@ -2194,6 +2206,7 @@ function renderProject() {
     renderFrames(p);
   }
   renderVoice(p);
+  renderFinalThumb(p);
   renderAuditions(p);
   renderWork(p);
   renderGuide(p);
@@ -3926,6 +3939,32 @@ $('closePreview').onclick = () => {
   v.load();                     // let go of the file rather than buffering it
   $('previewBox').classList.add('hide');
   $('finalVideo').classList.remove('hide');
+};
+
+/* The thumbnail belongs with the finished video, not on a tab of its own:
+   it is the other half of what gets uploaded. It is also written into the
+   file as cover art when the final renders, so what is seen in the folder is
+   the picture that was chosen. */
+function renderFinalThumb(p) {
+  const img = $('finalThumb');
+  const has = !!p.has_thumbnail;
+  img.style.display = has ? 'block' : 'none';
+  if (has) {
+    const src = `/api/recap/projects/${p.id}/file?name=thumbnail.png` +
+                `&t=${Math.round((p.steps.thumbnail || {}).updated || 0)}`;
+    if (img.dataset.src !== src) { img.dataset.src = src; img.src = src; }
+  }
+  $('dlThumb').classList.toggle('hide', !has);
+  $('finalThumbNote').textContent = has
+    ? 'saved, and written into the video as its cover'
+    : 'none saved yet - pick a frame and add the text on the Thumbnail tab';
+}
+
+$('goThumb').onclick = () => showTab('thumb');
+$('dlThumb').onclick = () => {
+  const p = current(); if (!p) return;
+  dl(`/api/recap/projects/${p.id}/file?name=thumbnail.png`,
+     `${(p.title || 'thumbnail').slice(0, 40)}.png`);
 };
 
 $('renderFinal').onclick = () => {

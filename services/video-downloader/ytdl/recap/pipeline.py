@@ -29,6 +29,7 @@ from .media import (
     have_ffmpeg,
     mux_narration,
     probe,
+    set_cover,
 )
 from .gemini import Gemini
 from .project import Project
@@ -823,6 +824,14 @@ def run_final(project: Project, on_progress=None, cancel=None) -> None:
             )
         except MediaError as exc:
             raise StepError(str(exc)) from exc
+        # The thumbnail goes into the file itself, so what is uploaded and
+        # what is seen in the folder are the same picture.
+        if project.thumbnail_path.exists():
+            try:
+                set_cover(project.final_path, project.thumbnail_path, cancel=cancel)
+            except Exception:      # noqa: BLE001 - a cover is not the video
+                pass
+
         if on_progress:
             on_progress(langs.index(lang) + 1, len(langs))
 
