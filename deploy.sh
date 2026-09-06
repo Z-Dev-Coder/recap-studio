@@ -22,6 +22,12 @@ cp -a "$REPO/$SVC/ytdl" "$DEST/$SVC/ytdl"
 find "$DEST/$SVC/ytdl" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
 cp -a "$REPO/$SVC/requirements.txt" "$DEST/$SVC/" 2>/dev/null || true
 
+# The launcher, so the browser route works from the installed copy too and
+# not only from the repo.
+for f in "RecapStudio.cmd" "Make desktop shortcut.cmd"; do
+  cp -a "$REPO/$SVC/$f" "$DEST/$SVC/$f" 2>/dev/null || true
+done
+
 for f in main.js preload.js package.json; do
   [ -f "$REPO/$f" ] && cp -a "$REPO/$f" "$DEST/$f"
 done
