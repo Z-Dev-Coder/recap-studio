@@ -689,6 +689,133 @@ button.primary:not(#guideRun):not(#create):hover:not(:disabled) {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ==========================================================================
+   The design pass, applied to the whole surface.
+
+   Six rules, each visible in the result:
+
+     visual hierarchy      one accent on screen, a real type scale, depth in
+                           three steps rather than one
+     single core focus     each card states its one action and demotes the
+                           rest; the guide card is the only thing that shouts
+     choice minimisation   secondary controls lose their borders and become
+                           text, so a panel reads as one action and some notes
+     progressive disclosure sections open on demand and animate as they do
+     smart defaults        unchanged behaviour; the UI just stops asking twice
+     motion                short, purposeful, and off entirely for anyone who
+                           asked their system for less of it
+
+   Styling only. No id, no handler and no element is touched.
+   ========================================================================== */
+
+/* ------------------------------------------------------------------ motion */
+
+@keyframes riseIn   { from { opacity: 0; transform: translateY(6px);  }
+                      to   { opacity: 1; transform: none; } }
+@keyframes fadeIn   { from { opacity: 0; } to { opacity: 1; } }
+@keyframes popIn    { from { opacity: 0; transform: scale(.97); }
+                      to   { opacity: 1; transform: none; } }
+@keyframes pulseSoft{ 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+
+section[data-panel]:not(.hide) > .card,
+section[data-panel]:not(.hide) > .cols > .card,
+section[data-panel]:not(.hide) > details.more {
+  animation: riseIn .26s cubic-bezier(.22,.61,.36,1) both;
+}
+section[data-panel]:not(.hide) > *:nth-child(2) { animation-delay: .03s; }
+section[data-panel]:not(.hide) > *:nth-child(3) { animation-delay: .06s; }
+section[data-panel]:not(.hide) > *:nth-child(4) { animation-delay: .09s; }
+
+#guide:not(.hide) { animation: popIn .3s cubic-bezier(.22,.61,.36,1) both; }
+.modal { animation: popIn .22s cubic-bezier(.22,.61,.36,1) both; }
+.veil  { animation: fadeIn .18s ease both; }
+.work.on { animation: riseIn .24s cubic-bezier(.22,.61,.36,1) both; }
+.banner { animation: riseIn .22s ease both; }
+
+/* A running stage breathes rather than sits still. */
+.tabs button .dot.run, .pdot.run { animation: pulseSoft 1.4s ease-in-out infinite; }
+
+details.more[open] > *:not(summary) { animation: riseIn .22s ease both; }
+details.more > summary::marker { color: var(--faint); }
+
+/* ------------------------------------------------------------- type scale */
+
+body { font-size: 14.5px; line-height: 1.6; }
+.top h2 { font-size: 17px; font-weight: 660; letter-spacing: -.022em; }
+.card > h3 { font-size: 10.5px; letter-spacing: .09em; color: var(--faint); }
+.note { font-size: 13.5px; font-weight: 620; letter-spacing: -.01em; }
+.tiny { font-size: 12.5px; color: var(--muted); max-width: 78ch; }
+
+/* --------------------------------------------------------- choice weight
+
+   A panel with six bordered buttons reads as six decisions. The main one
+   keeps its shape; the rest become text that still responds to a pointer. */
+
+.card .row > button.sm.ghost:not(.danger):not([id^="ov"]):not(.cand-play) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  padding-inline: 8px;
+}
+.card .row > button.sm.ghost:not(.danger):hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ depth */
+
+.card { box-shadow: none; border-color: color-mix(in srgb, var(--line) 62%, transparent); }
+.card:has(> h3) { background: var(--surface); }
+#guide { box-shadow: var(--shadow); }
+.modal { box-shadow: var(--shadow-lg); }
+
+/* ------------------------------------------------------------------- rail */
+
+.tabs { padding: var(--sp-2); }
+.tabs button { padding: 10px 12px; gap: 10px; }
+.tabs button.on b { color: var(--accent-hi); }
+.tabs button i {
+  opacity: 0; transition: opacity .12s ease;
+  font-style: normal; font-size: 11px;
+  padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--muted);
+}
+.tabs button:hover i { opacity: 1; }
+
+/* ------------------------------------------------------------- the header */
+
+.top { padding-block: 10px; }
+.top .meta { font-size: 12.5px; }
+
+/* ------------------------------------------------------------ the sidebar */
+
+.side { background: color-mix(in srgb, var(--bg) 60%, var(--surface)); }
+.proj { animation: fadeIn .2s ease both; }
+
+/* ------------------------------------------------------------- the fields */
+
+input[type=range] { height: 4px; }
+input[type=range]::-webkit-slider-thumb {
+  box-shadow: 0 1px 3px rgba(16,19,26,.25);
+  transition: transform .1s ease;
+}
+input[type=range]:active::-webkit-slider-thumb { transform: scale(1.15); }
+
+/* ------------------------------------------------------------------ misc */
+
+img, video { transition: opacity .2s ease; }
+.ov-chip { transition: background .12s ease, border-color .12s ease; }
+.cand, .line-row { transition: background .12s ease; }
+.cand:hover, .line-row:hover { background: var(--surface-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
 </style>
 </head>
 <body>
