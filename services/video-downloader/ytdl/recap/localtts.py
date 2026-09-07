@@ -263,6 +263,12 @@ FRAMES_PER_SECOND = 12.5
 # Measured across real generated narration: 11.8-17.9, median 14.5.
 MY_CHARS_PER_SECOND = 14.5
 
+# How much shorter than its own words a chunk may come out before it is taken
+# as an early stop rather than a brisk reading. The fastest reading measured is
+# 17.9 characters a second against a 14.5 baseline, which is 0.81 of the
+# expected length -- so anything under three quarters is not speed.
+SHORT_CHUNK = 0.75
+
 
 def _plausible_reference(clip: Path, text: str, slack: float = 2.2) -> bool:
     """
@@ -501,6 +507,27 @@ def speak(
                 f"(text was {len(chunk)} characters)"
             ) from exc
         piece = trim_silence(_pcm(audio), rate)
+
+        # VoxCPM sometimes stops before it has said everything, and the clip
+        # simply ends mid-thought -- measured here as 25.1s of audio for a
+        # line whose words need 27, the missing part being the closing clause.
+        # Nothing in the model reports this, so it is caught by measuring:
+        # audio far shorter than the text can produce is a stop, not fast
+        # speech. One retry, and the longer of the two is kept, because a
+        # second attempt can come back shorter still.
+        want = len(chunk) / MY_CHARS_PER_SECOND
+        got = len(piece) / 2 / float(rate or 1)
+        if want >= 2.0 and got < want * SHORT_CHUNK:
+            if cancel is not None and cancel.is_set():
+                from .media import Cancelled
+                raise Cancelled()
+            try:
+                again = trim_silence(_pcm(model.generate(**kwargs)), rate)
+            except Exception:      # noqa: BLE001 - the first attempt still stands
+                again = b""
+            if len(again) > len(piece):
+                piece = again
+
         spoken.append(piece)
 
         # the first thing spoken becomes the voice everything after it copies
