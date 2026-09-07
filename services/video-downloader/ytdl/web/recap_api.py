@@ -15,6 +15,7 @@ import queue
 import os
 import shutil
 import threading
+import zipfile
 import time
 from pathlib import Path
 
@@ -36,7 +37,7 @@ def gemini_light() -> str:
     return gemini_light_default
 from ..recap import media as media_mod
 from ..recap.media import Cancelled, MediaError, have_ffmpeg, to_wav
-from ..recap.project import STEPS, Store
+from ..recap.project import STEPS, Store, slugify
 from ..recap import content
 from ..recap.scrape import available as playwright_available
 from ..recap.scrape import install_hint as playwright_hint
@@ -2858,6 +2859,60 @@ def srt(pid: str, lang: str = "en", timing: str = "recap") -> PlainTextResponse:
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
         media_type="application/x-subrip",
     )
+
+
+@router.get("/projects/{pid}/voice.zip")
+def voice_bundle(pid: str, lang: str = ""):
+    """
+    Every spoken line in one file, for editing somewhere else.
+
+    Downloading forty lines one at a time is not a workflow, and the lines
+    alone are not enough either: dropped into an editor they are forty
+    unlabelled clips with nothing saying which moment each belongs to. The
+    zip carries the running order, where each line sits in the recap, how
+    long it is and what it says, so the timeline can be rebuilt by hand.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+
+    want = lang or project.voice_lang or "my"
+    rows = [m for m in (project.narration or [])
+            if str(m.get("file", "")).endswith(f"_{want}.wav")]
+    rows = rows or list(project.narration or [])
+    rows = [m for m in rows if (project.voice_dir / str(m.get("file"))).exists()]
+    if not rows:
+        raise HTTPException(400, "there is no narration to download yet")
+    rows.sort(key=lambda m: (float(m.get("at") or 0), int(m.get("index", 0))))
+
+    # Numbered in playing order, so a file manager sorts them the way the
+    # recap runs. The original name is kept in the index.
+    lines = ["file	starts at	seconds	line"]
+    for n, m in enumerate(rows, start=1):
+        lines.append("{}	{}	{:.2f}	{}".format(
+            f"{n:03d}_{m.get('file')}",
+            _clock(float(m.get("at") or 0)),
+            float(m.get("seconds") or 0),
+            " ".join(str(m.get("text") or "").split()),
+        ))
+
+    stem = slugify(project.title or "narration")[:40] or "narration"
+    bundle = project.dir / f"{stem}_voice_{want}.zip"
+    try:
+        with zipfile.ZipFile(bundle, "w", zipfile.ZIP_STORED) as z:
+            # STORED, not DEFLATED: WAV audio does not compress usefully and
+            # the encode would be the slowest part of the download.
+            for n, m in enumerate(rows, start=1):
+                src = project.voice_dir / str(m.get("file"))
+                z.write(src, f"{n:03d}_{m.get('file')}")
+            z.writestr("lines.txt", NEWLINE.join(lines))
+            srt = project.dir / f"recap_script_{want}.srt"
+            if srt.exists():
+                z.write(srt, srt.name)
+    except OSError as exc:
+        raise HTTPException(500, f"the bundle could not be written: {exc}") from None
+
+    return FileResponse(bundle, filename=bundle.name, media_type="application/zip")
 
 
 @router.get("/projects/{pid}/file")

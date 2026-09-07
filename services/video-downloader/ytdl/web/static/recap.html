@@ -1365,6 +1365,8 @@ img, video { transition: opacity .2s ease; }
                 <button class="sm ghost danger" id="clearVoice"
                         title="Delete the clips so the next run speaks every line again">Start over</button>
                 <button class="sm" id="refreshLength">Check length</button>
+                <button class="sm hide" id="dlVoice"
+                        title="Every line as a wav, numbered in playing order, with an index of where each one sits">Download all lines</button>
                 <div class="grow"></div>
                 <span class="tiny">Free tier speaks ~3 lines a minute.</span>
               </div>
@@ -2831,6 +2833,7 @@ function pointAt(v, src, { force = false } = {}) {
 
 /* ------------------------------------------------------------------ voice */
 function renderVoice(p) {
+  $('dlVoice').classList.toggle('hide', !(p.narration || []).length);
   const v = $('finalVideo');
   /* Busted by the step that writes the file. It used to be the voice step,
      which ticks once per spoken line, so the finished video reloaded dozens
@@ -5067,7 +5070,18 @@ const dl = (url, name) => {
 };
 $('dlVideo').onclick = () => {
   const p = current(); if (!p || !p.has_recap) return;
-  dl(`/api/recap/projects/${p.id}/file?name=recap_${p.mode}.mp4`, `recap_${p.mode}.mp4`);
+  // the captioned copy when there is one: that is the cut as it will be seen
+  const name = p.has_captioned ? `recap_${p.mode}_captioned.mp4` : `recap_${p.mode}.mp4`;
+  dl(`/api/recap/projects/${p.id}/file?name=${name}`, name);
+};
+
+/* Forty lines downloaded one at a time is not a workflow, and forty
+   unlabelled clips in an editor are not either -- the zip carries the order,
+   the position of each line in the recap and what it says. */
+$('dlVoice').onclick = () => {
+  const p = current(); if (!p) return;
+  const lang = p.voice_lang || 'my';
+  dl(`/api/recap/projects/${p.id}/voice.zip?lang=${lang}`, `voice_${lang}.zip`);
 };
 /* An <a download> pointed at an endpoint that answers 400 saves nothing and
    says nothing, so a refused subtitle file looked exactly like a dead button.
