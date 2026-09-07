@@ -3141,8 +3141,27 @@ async function loadVoiceLines(p) {
       </div>
     </div>`).join('') || '<div class="tiny">Build the cut and the script first.</div>';
 
-  [...$('voiceLines').querySelectorAll('button')].forEach(b => {
-    b.onclick = async () => {
+  wireVoiceLines();
+}
+
+/* One listener on the list, not one per button.
+
+   Binding each button meant its handler died with the element, and the row is
+   rewritten in several places -- closing an editor restores the row it
+   replaced, a save puts it back, a redraw rebuilds the lot. A restored row
+   therefore came back looking normal with nothing behind its buttons: the
+   play button was there and clicking edit did nothing. Delegation survives
+   every one of those rewrites. */
+let voiceLinesWired = false;
+function wireVoiceLines() {
+  if (voiceLinesWired) return;
+  voiceLinesWired = true;
+  $('voiceLines').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button');
+    if (!b || !$('voiceLines').contains(b)) return;
+    // the editor wires its own Save and Cancel
+    if (b.dataset.act) return;
+    {
       const proj = current();
       if (b.dataset.edit !== undefined) {
         openLineEditor(proj, Number(b.dataset.edit), b.closest('.line-row'));
@@ -3177,7 +3196,7 @@ async function loadVoiceLines(p) {
           `/api/recap/projects/${proj.id}/file?name=${encodeURIComponent('voice/' + l.file)}`));
         state.audio.play();
       }
-    };
+    }
   });
 }
 
