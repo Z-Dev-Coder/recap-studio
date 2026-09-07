@@ -3058,8 +3058,10 @@ function openLineEditor(p, index, rowEl) {
     } finally {
       // Whatever happened, the row goes back to being a row: an editor left
       // open over a line that has already been saved is a second chance to
-      // save the same thing.
+      // save the same thing. Restored here as well as reloaded, because a
+      // reload skips while any OTHER row is still being edited.
       rowEl.dataset.editing = '';
+      rowEl.innerHTML = was;
       loadVoiceLines(p);
     }
   };
@@ -3089,7 +3091,20 @@ async function respeak(p, index) {
   } finally { clearInterval(tick); }
 }
 
+/* Set when a redraw was skipped because something was being edited, so the
+   list catches up the moment the editor closes. */
+let linesStale = false;
+
 async function loadVoiceLines(p) {
+  /* The list is rebuilt whenever the voice step reports progress -- which is
+     every line of a run, and now every respeak as well. Rebuilding throws
+     away any open editor, including one on a different row that is being
+     typed into. Editing wins: the list can wait. */
+  if ($('voiceLines').querySelector('.line-row[data-editing="1"]')) {
+    linesStale = true;
+    return;
+  }
+  linesStale = false;
   try {
     const d = await request(`/api/recap/projects/${p.id}/voice/lines?lang=${p.voice_lang}`);
     state.lines = d.lines || [];
