@@ -784,6 +784,9 @@ def _narrate_one(
         reference_audio=reference,
         reference_text=project.voice_reference_text,
         timesteps=timesteps,
+        # The cut is rebuilt around these clips when fitting is on, so their
+        # provisional spans must not decide how much of a line gets spoken.
+        cap_to_clip=not project.fit_to_voice,
     )
     if not made:
         raise StepError("no narration audio was produced")

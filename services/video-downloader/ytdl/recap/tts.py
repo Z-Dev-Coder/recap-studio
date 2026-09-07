@@ -289,6 +289,7 @@ def narrate(
     local_model: str = "",
     only: set | None = None,
     force: bool = False,
+    cap_to_clip: bool = True,
 ) -> list[dict]:
     """
     Speak every line of the recap, one clip per beat.
@@ -357,6 +358,15 @@ def narrate(
                 0.0,
                 float(row.get("recap_end") or 0) - float(row.get("recap_start") or 0),
             )
+            # When the cut will be fitted to the narration afterwards, the
+            # clip length is not a constraint -- it is a guess made before
+            # anybody knew how long the line takes to say, and it is about to
+            # be replaced by the answer. Capping to it truncated the speech
+            # instead: a line of 398 characters needs 27 seconds and its beat
+            # said 12, so each chunk was cut off less than half way. The
+            # runaway guard is the text's own length, which still applies.
+            if not cap_to_clip:
+                clip_seconds = 0.0
             # One voice for the whole narration: without a reference clip
             # VoxCPM picks a new voice per call, so line two sounded like a
             # different person from line one. The first line written becomes
