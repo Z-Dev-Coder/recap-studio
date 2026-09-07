@@ -2864,6 +2864,19 @@ def srt(pid: str, lang: str = "en", timing: str = "recap") -> PlainTextResponse:
         source_srt(rows, lang) if timing == "original"
         else recap_srt(rows, lang)
     )
+    # A script written in one language asked for in the other produced an
+    # empty file and a successful download: the button looked like it worked
+    # and saved nothing. Say which languages this script is actually in.
+    if not body.strip():
+        have = sorted({k for row in rows for k in ("en", "my")
+                       if str(row.get(k) or "").strip()})
+        names = {"en": "English", "my": "Burmese"}
+        raise HTTPException(400, (
+            "this script has no {} lines to make subtitles from{}".format(
+                names.get(lang, lang),
+                " -- it is in {}".format(
+                    " and ".join(names.get(h, h) for h in have)) if have else "")
+        ))
     name = f"recap_{lang}_{timing}.srt"
     return PlainTextResponse(
         body,

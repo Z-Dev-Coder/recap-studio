@@ -5095,11 +5095,23 @@ $('dlVoice').onclick = () => {
 /* An <a download> pointed at an endpoint that answers 400 saves nothing and
    says nothing, so a refused subtitle file looked exactly like a dead button.
    Fetch it instead: a real file still downloads, and a refusal is shown. */
+/* Which language this script is actually in.
+
+   These buttons used to ask for state.wsLang -- the toggle above the writing
+   box, which starts on English. A Burmese script therefore produced an empty
+   file and a successful download: the button looked like it worked and saved
+   nothing. The beats know what they hold. */
+function scriptLang(p) {
+  const has = k => (p.beats || []).some(b => String(b[k] || '').trim());
+  if (has(state.wsLang)) return state.wsLang;
+  return has('my') ? 'my' : has('en') ? 'en' : state.wsLang;
+}
+
 async function downloadSrt(timing, name) {
   const p = current(); if (!p) return;
   try {
     const r = await fetch(
-      `/api/recap/projects/${p.id}/srt?lang=${state.wsLang}&timing=${timing}`);
+      `/api/recap/projects/${p.id}/srt?lang=${scriptLang(p)}&timing=${timing}`);
     if (!r.ok) {
       let detail = `subtitles could not be built (${r.status})`;
       try { detail = (await r.json()).detail || detail; } catch (e) { /* not json */ }
@@ -5111,10 +5123,14 @@ async function downloadSrt(timing, name) {
   } catch (e) { showError($('stepErr'), e.message); }
 }
 
-$('dlSrtRecap').onclick = () =>
-  downloadSrt('recap', `recap_${state.wsLang}.srt`);
-$('dlSrtSource').onclick = () =>
-  downloadSrt('original', `recap_${state.wsLang}_original.srt`);
+$('dlSrtRecap').onclick = () => {
+  const p = current(); if (!p) return;
+  downloadSrt('recap', `recap_${scriptLang(p)}.srt`);
+};
+$('dlSrtSource').onclick = () => {
+  const p = current(); if (!p) return;
+  downloadSrt('original', `recap_${scriptLang(p)}_original.srt`);
+};
 $('dlTranscript').onclick = async () => {
   const p = current(); if (!p) return;
   const lang = $('transcriptSrtLang').value;
