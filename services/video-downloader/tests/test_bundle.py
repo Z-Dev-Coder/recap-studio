@@ -54,13 +54,25 @@ def test_the_bundle_holds_every_line_and_an_index(project):
     assert "the first thing said" in index
 
 
-def test_the_files_are_numbered_in_playing_order(project):
-    """A file manager sorts by name, so the names must run the way the recap does."""
+def test_the_files_are_named_for_where_the_line_belongs(project):
+    """
+    A folder of line_000_my.wav says nothing about where anything goes. The
+    leading number sorts the folder the way the recap runs; the time is where
+    to drop the clip on the timeline.
+    """
     out = recap_api.voice_bundle("t")
     with zipfile.ZipFile(out.path) as z:
         wavs = sorted(n for n in z.namelist() if n.endswith(".wav"))
-    assert wavs[0].startswith("001_line_001"), "the line at 2s comes first"
-    assert wavs[1].startswith("002_line_000")
+    assert wavs == ["001_00m02s000_3.0s.wav", "002_00m08s000_4.0s.wav"]
+
+
+def test_the_time_in_the_name_is_not_rounded_part_by_part(project):
+    """75.5s formatted a piece at a time came out as 01m16s500."""
+    project.narration = [{"file": "line_000_my.wav", "at": 75.5, "seconds": 6.0,
+                          "index": 0, "text": "a line"}]
+    out = recap_api.voice_bundle("t")
+    with zipfile.ZipFile(out.path) as z:
+        assert "001_01m15s500_6.0s.wav" in z.namelist()
 
 
 def test_nothing_to_download_is_said_rather_than_an_empty_zip(project):

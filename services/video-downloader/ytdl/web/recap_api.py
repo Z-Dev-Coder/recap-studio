@@ -2896,12 +2896,28 @@ def voice_bundle(pid: str, lang: str = ""):
         raise HTTPException(400, "there is no narration to download yet")
     rows.sort(key=lambda m: (float(m.get("at") or 0), int(m.get("index", 0))))
 
-    # Numbered in playing order, so a file manager sorts them the way the
-    # recap runs. The original name is kept in the index.
+    def clip_name(n: int, row: dict) -> str:
+        """
+        Numbered in playing order, and named for where the line belongs.
+
+        A folder of line_000_my.wav says nothing about where anything goes, so
+        the position has to be looked up for every clip. The name carries it:
+        the leading number sorts the folder the way the recap runs, and the
+        time is where to drop the clip on the timeline. Minutes and seconds
+        rather than a colon, which Windows will not have in a filename.
+        """
+        # Split from whole milliseconds. Formatting the parts straight from
+        # the float rounds each one on its own: 75.5s came out as 01m16s500,
+        # a second and a half past where the line actually belongs.
+        ms = max(0, round(float(row.get("at") or 0) * 1000))
+        return "{:03d}_{:02d}m{:02d}s{:03d}_{:.1f}s.wav".format(
+            n, ms // 60000, ms // 1000 % 60, ms % 1000,
+            float(row.get("seconds") or 0))
+
     lines = ["file	starts at	seconds	line"]
     for n, m in enumerate(rows, start=1):
         lines.append("{}	{}	{:.2f}	{}".format(
-            f"{n:03d}_{m.get('file')}",
+            clip_name(n, m),
             _clock(float(m.get("at") or 0)),
             float(m.get("seconds") or 0),
             " ".join(str(m.get("text") or "").split()),
@@ -2915,7 +2931,7 @@ def voice_bundle(pid: str, lang: str = ""):
             # the encode would be the slowest part of the download.
             for n, m in enumerate(rows, start=1):
                 src = project.voice_dir / str(m.get("file"))
-                z.write(src, f"{n:03d}_{m.get('file')}")
+                z.write(src, clip_name(n, m))
             z.writestr("lines.txt", NEWLINE.join(lines))
             srt = project.dir / f"recap_script_{want}.srt"
             if srt.exists():
