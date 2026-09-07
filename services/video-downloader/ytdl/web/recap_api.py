@@ -335,6 +335,25 @@ def start(pid: str, step: str, options: dict) -> None:
     ).start()
 
 
+def script_is_by_hand(project) -> bool:
+    """
+    Whether this project's script came from the user rather than a model.
+
+    The flag alone was not enough. It was added after these projects existed,
+    so every script pasted before it says nothing -- and a flag can be lost by
+    an older copy of the app writing the file back without it.
+
+    The beats say so themselves: from_text() stamps every line it parses with
+    "timed by hand" or "written by hand", and the generator never produces
+    either. One such line is enough, because in add mode hand-written lines
+    sit among generated ones and regenerating would destroy exactly those.
+    """
+    if getattr(project, "script_by_hand", False):
+        return True
+    return any(str(b.get("why") or "").endswith("by hand")
+               for b in (project.beats or []))
+
+
 def chain_steps(project, steps: list[str]) -> list[str]:
     """
     The steps a chain should actually walk for THIS project.
@@ -346,7 +365,7 @@ def chain_steps(project, steps: list[str]) -> list[str]:
     reads the transcript, so re-fetching it is minutes spent to overwrite
     nothing.
     """
-    if not (getattr(project, "script_by_hand", False) and project.beats):
+    if not (project.beats and script_is_by_hand(project)):
         return list(steps)
     return [s for s in steps if s not in ("transcript", "script")]
 

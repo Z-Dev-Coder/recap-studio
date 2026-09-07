@@ -35,3 +35,30 @@ def test_the_flag_alone_is_not_enough(tmp_path):
     p = _project(tmp_path, by_hand=True)
     p.beats = []
     assert chain_steps(p, list(STEPS)) == list(STEPS)
+
+
+def test_a_script_pasted_before_the_flag_existed_is_still_protected(tmp_path):
+    """
+    Projects on disk predate script_by_hand. What they do carry is the mark
+    from_text() puts on every line it parses, which the generator never writes.
+    """
+    p = Project(id="t", dir=tmp_path)
+    p.beats = [{"index": 0, "start": 1.0, "end": 5.0, "my": "a line",
+                "why": "timed by hand"}]
+    p.script_by_hand = False
+
+    assert "script" not in chain_steps(p, list(STEPS))
+
+
+def test_one_hand_written_line_among_generated_ones_is_enough(tmp_path):
+    """Add mode mixes them, and regenerating would destroy exactly those."""
+    p = Project(id="t", dir=tmp_path)
+    p.beats = [{"why": "the recap turns here"},
+               {"why": "written by hand"}]
+    assert "script" not in chain_steps(p, list(STEPS))
+
+
+def test_a_generated_script_is_not_mistaken_for_one(tmp_path):
+    p = Project(id="t", dir=tmp_path)
+    p.beats = [{"why": "this is where the story turns"}, {"why": ""}, {}]
+    assert chain_steps(p, list(STEPS)) == list(STEPS)
