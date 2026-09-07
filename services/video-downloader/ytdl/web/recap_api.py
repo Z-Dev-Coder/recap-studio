@@ -782,6 +782,21 @@ def edit(pid: str, req: EditRequest) -> dict:
     if {"voice_lang", "voice_name", "voice_style"} & set(patch):
         project.mark("voice", "idle", message="voice changed - regenerate")
 
+    # The transcript of the reference clip is half of the good cloning mode,
+    # and it is nearly always typed AFTER the clip is uploaded -- the upload
+    # reads the box at the moment the file is picked, so the saved copy was
+    # left with an empty text file again and again. When this project is using
+    # the saved clip, the saved text follows what is typed here.
+    if "voice_reference_text" in patch:
+        here = project.voice_dir / "reference.wav"
+        try:
+            if (SAVED_VOICE.exists() and here.exists()
+                    and SAVED_VOICE.read_bytes() == here.read_bytes()):
+                SAVED_VOICE_TEXT.write_text(
+                    (patch["voice_reference_text"] or "").strip(), encoding="utf-8")
+        except OSError:
+            pass          # the project still has its own copy of the text
+
     # The cover frame is added while the final is rendered, so an existing
     # file does not have it -- and one rendered WITH it still carries it.
     if "cover_lead" in patch and project.final_path.exists():
@@ -2252,6 +2267,38 @@ def saved_voice_info() -> dict:
     except Exception:      # noqa: BLE001
         pass
     return {"saved": True, "seconds": round(seconds, 1), "text": said}
+
+
+@router.post("/projects/{pid}/voice/saved")
+def use_saved_voice(pid: str) -> dict:
+    """
+    Put the channel's saved voice into THIS project.
+
+    The saved voice was only ever handed to projects created after it was
+    chosen. Every project that already existed kept whatever it had, so the
+    same clip had to be uploaded again for each one -- and each upload was
+    another chance to leave the transcript blank. This is the missing verb:
+    the voice is a channel decision, so any project can be told to take it.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    clip, said = saved_voice()
+    if not clip:
+        raise HTTPException(400, "no voice has been saved yet")
+
+    project.voice_dir.mkdir(parents=True, exist_ok=True)
+    target = project.voice_dir / "reference.wav"
+    try:
+        target.write_bytes(clip.read_bytes())
+    except OSError as exc:
+        raise HTTPException(500, f"the voice could not be copied in: {exc}") from None
+    project.voice_reference = target.name
+    project.voice_reference_text = said
+    project.mark("voice", "idle", message="channel voice applied - regenerate to use it")
+    project.save()
+    push(project)
+    return {"ok": True, "said": bool(said)}
 
 
 @router.delete("/voice/saved")

@@ -1472,6 +1472,8 @@ img, video { transition: opacity .2s ease; }
                   </div>
                   <div class="row">
                     <button class="sm" id="auditionVoices">Audition 4 voices</button>
+                    <button class="sm hide" id="useSavedVoice"
+                            title="Copy the channel's saved voice into this video">Use it here</button>
                     <button class="sm ghost hide" id="forgetVoice"
                             title="Stop using this voice for new videos">Forget it</button>
                     <span class="tiny" id="auditionNote"></span>
@@ -3253,12 +3255,29 @@ async function loadSavedVoice() {
   try {
     const d = await request('/api/recap/voice/saved');
     $('forgetVoice').classList.toggle('hide', !d.saved);
+    // A project made before the voice was chosen never received it, which is
+    // why the same clip kept being uploaded once per video.
+    $('useSavedVoice').classList.toggle('hide', !d.saved);
     $('savedVoiceNote').textContent = d.saved
-      ? `Using your chosen voice (${d.seconds}s) for this and every new video. ` +
-        `Audition again only to change it.`
-      : 'No voice chosen yet. Audition once and it is kept for every video after.';
+      ? `Your chosen voice (${d.seconds}s${d.text ? ', with its line' : ', no line typed'})` +
+        ` is used by every NEW video. For a video made before you chose it,` +
+        ` press "Use it here".`
+      : 'No voice chosen yet. Audition once, or upload your own below, and it is kept for every video after.';
   } catch (e) { $('savedVoiceNote').textContent = ''; }
 }
+
+$('useSavedVoice').onclick = async () => {
+  const p = current(); if (!p) return;
+  $('useSavedVoice').disabled = true;
+  try {
+    const r = await post(`/api/recap/projects/${p.id}/voice/saved`, {});
+    upsert(await request(`/api/recap/projects/${p.id}`));
+    $('auditionNote').textContent = r.said
+      ? 'channel voice applied - regenerate the voice'
+      : 'channel voice applied, but no line was saved with it - type what it says below';
+  } catch (e) { showError($('stepErr'), e.message); }
+  finally { $('useSavedVoice').disabled = false; }
+};
 
 $('forgetVoice').onclick = async () => {
   if (!confirm('Stop using this voice for new videos?')) return;
