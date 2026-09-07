@@ -2905,6 +2905,36 @@ def voice_bundle(pid: str, lang: str = ""):
             if str(m.get("file", "")).endswith(f"_{want}.wav")]
     rows = rows or list(project.narration or [])
     rows = [m for m in rows if (project.voice_dir / str(m.get("file"))).exists()]
+
+    # project.narration is written when a RUN finishes, so a run that was
+    # stopped -- or is still going -- leaves real clips it says nothing about.
+    # Those are worth having: they are the lines already paid for. Read them
+    # off the disk, taking each one's position from the beat it belongs to and
+    # its length from the file itself.
+    if len(rows) < project.voice_clips():
+        import wave as _wave
+
+        beats = {int(b.get("index", i)): b for i, b in enumerate(project.beats or [])}
+        known = {str(m.get("file")) for m in rows}
+        for clip in sorted(project.voice_dir.glob(f"line_*_{want}.wav")):
+            if clip.name in known:
+                continue
+            try:
+                index = int(clip.stem.split("_")[1])
+            except (IndexError, ValueError):
+                continue
+            seconds = 0.0
+            try:
+                with _wave.open(str(clip)) as w:
+                    seconds = w.getnframes() / float(w.getframerate() or 1)
+            except Exception:      # noqa: BLE001 - an unreadable clip is still a clip
+                pass
+            beat = beats.get(index, {})
+            rows.append({"file": clip.name, "index": index,
+                         "at": float(beat.get("start") or 0),
+                         "seconds": seconds,
+                         "text": str(beat.get(want) or beat.get("my") or "")})
+
     if not rows:
         raise HTTPException(400, "there is no narration to download yet")
     rows.sort(key=lambda m: (float(m.get("at") or 0), int(m.get("index", 0))))

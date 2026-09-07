@@ -296,6 +296,10 @@ class Project:
             "chain_pending": self.chain_pending,
             # what the UI and the chain both act on, so they cannot disagree
             "own_script": self.has_own_script(),
+            # Clips ON DISK, which is not the same as project.narration: that
+            # is written when a run finishes, so a run stopped half way leaves
+            # real audio the page believed did not exist.
+            "voice_clips": self.voice_clips(),
             # The cut exists, captions were asked for, and they are Burmese --
             # which only the page can draw. Said here so the page can act on
             # it instead of the user having to know.
@@ -353,6 +357,12 @@ class Project:
             "has_thumbnail": self.thumbnail_path.exists(),
         }
 
+    def voice_clips(self) -> int:
+        """How many spoken lines are on disk, finished run or not."""
+        if not self.voice_dir.exists():
+            return 0
+        return sum(1 for f in self.voice_dir.glob("line_*.wav"))
+
     def has_own_script(self) -> bool:
         """
         Whether the script came from the user rather than a model.
@@ -379,6 +389,7 @@ class Project:
         data["story"] = self.story
         data.pop("own_script", None)
         data.pop("needs_caption_burn", None)
+        data.pop("voice_clips", None)
         data.pop("has_source", None)
         data.pop("has_logo", None)
         data.pop("has_recap", None)

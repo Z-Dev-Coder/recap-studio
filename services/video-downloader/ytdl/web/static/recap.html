@@ -1267,8 +1267,13 @@ img, video { transition: opacity .2s ease; }
                 <button class="sm" id="reReadStory" title="Re-read the video into story notes, one call">Re-read</button>
                 <button class="sm" id="reWriteBurmese" title="Rewrite the Burmese from the existing notes, one call">Rewrite Burmese</button>
                 <button class="sm" id="reReviewBurmese" title="Check the Burmese again, one call">Re-check</button>
-                <button class="sm" id="dlSrtRecap">SRT &middot; recap timing</button>
-                <button class="sm" id="dlSrtSource">SRT &middot; original timing</button>
+                <!-- Named for what they do. "SRT - original timing" read as a
+                     setting rather than a download, and was looked for and not
+                     found. -->
+                <button class="sm" id="dlSrtSource"
+                        title="The script as subtitles, timed against the ORIGINAL video -- for editing elsewhere">Download SRT</button>
+                <button class="sm ghost" id="dlSrtRecap"
+                        title="The same lines timed against the recap cut, which has to be built first">Download SRT for the cut</button>
                 <span class="tiny">Edits save themselves. Timing changes apply on rebuild.</span>
               </div>
             </div>
@@ -2833,7 +2838,12 @@ function pointAt(v, src, { force = false } = {}) {
 
 /* ------------------------------------------------------------------ voice */
 function renderVoice(p) {
-  $('dlVoice').classList.toggle('hide', !(p.narration || []).length);
+  /* Clips on disk, not finished runs: a run stopped half way has produced
+     real audio, and hiding the button denied access to lines already made. */
+  const clips = p.voice_clips || (p.narration || []).length;
+  $('dlVoice').classList.toggle('hide', !clips);
+  $('dlVoice').textContent = clips && p.beats && clips < p.beats.length
+    ? `Download ${clips} lines so far` : 'Download all lines';
   const v = $('finalVideo');
   /* Busted by the step that writes the file. It used to be the voice step,
      which ticks once per spoken line, so the finished video reloaded dozens

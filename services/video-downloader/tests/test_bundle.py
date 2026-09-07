@@ -68,6 +68,7 @@ def test_the_files_are_named_for_where_the_line_belongs(project):
 
 def test_the_time_in_the_name_is_not_rounded_part_by_part(project):
     """75.5s formatted a piece at a time came out as 01m16s500."""
+    (project.voice_dir / "line_001_my.wav").unlink()
     project.narration = [{"file": "line_000_my.wav", "at": 75.5, "seconds": 6.0,
                           "index": 0, "text": "a line"}]
     out = recap_api.voice_bundle("t")
@@ -77,9 +78,33 @@ def test_the_time_in_the_name_is_not_rounded_part_by_part(project):
 
 def test_nothing_to_download_is_said_rather_than_an_empty_zip(project):
     project.narration = []
+    for clip in project.voice_dir.glob("line_*.wav"):
+        clip.unlink()
     with pytest.raises(recap_api.HTTPException) as exc:
         recap_api.voice_bundle("t")
     assert exc.value.status_code == 400
+
+
+def test_lines_from_a_run_that_was_stopped_can_still_be_taken(project):
+    """
+    project.narration is written when a RUN finishes. A run stopped half way
+    leaves real clips it says nothing about, and those are the lines already
+    paid for -- so they are read off the disk instead.
+    """
+    project.narration = []
+    project.beats = [
+        {"index": 0, "start": 8.0, "end": 14.0, "my": "the second thing said"},
+        {"index": 1, "start": 2.0, "end": 6.0, "my": "the first thing said"},
+    ]
+
+    out = recap_api.voice_bundle("t")
+    with zipfile.ZipFile(out.path) as z:
+        names = sorted(n for n in z.namelist() if n.endswith(".wav"))
+        index = z.read("lines.txt").decode("utf-8")
+
+    assert len(names) == 2
+    assert names[0].startswith("001_00m02s"), "position comes from the beat"
+    assert "the first thing said" in index, "and so does the text"
 
 
 def test_a_missing_clip_does_not_break_the_bundle(project):
