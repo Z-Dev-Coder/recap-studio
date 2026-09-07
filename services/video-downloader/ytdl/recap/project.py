@@ -143,6 +143,13 @@ class Project:
     cut_width: int = 0
     cut_height: int = 0
 
+    # Seconds of the thumbnail on the front of the finished video. Off by
+    # default: it is footage the viewer sees, not metadata. Social platforms
+    # ignore a file's cover art and offer frames from the video instead, so
+    # this is the only way the chosen picture can be picked as the cover on a
+    # phone, or fall back into the profile grid.
+    cover_lead: float = 0.0
+
     caption_look: dict = field(default_factory=dict)
 
     # Channel logo and any free text laid over the picture -- the things that
@@ -280,6 +287,7 @@ class Project:
             "wants_pair": self.wants_pair,
             "cut_width": self.cut_width,
             "cut_height": self.cut_height,
+            "cover_lead": self.cover_lead,
             "caption_look": self.caption_look,
             "overlays": self.overlays,
             "caption_x": self.caption_x,
@@ -393,6 +401,7 @@ class Project:
             wants_pair=bool(data.get("wants_pair", False)),
             cut_width=int(data.get("cut_width", 0) or 0),
             cut_height=int(data.get("cut_height", 0) or 0),
+            cover_lead=float(data.get("cover_lead", 0) or 0),
             caption_look=data.get("caption_look") or {},
             overlays=data.get("overlays") or [],
             caption_x=float(data.get("caption_x", 0.5) or 0.5),

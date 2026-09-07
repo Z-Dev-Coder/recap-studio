@@ -1566,6 +1566,22 @@ img, video { transition: opacity .2s ease; }
                 <button class="sm" id="goThumb">Open the editor</button>
                 <button class="sm ghost hide" id="dlThumb">Download</button>
               </div>
+              <div class="row" style="margin-top:8px">
+                <label class="f" style="display:flex;align-items:center;gap:8px">
+                  <input type="checkbox" id="coverLeadOn">
+                  Start the video with the thumbnail
+                </label>
+                <input type="range" id="coverLead" min="0.3" max="2" step="0.1"
+                       value="0.6" style="max-width:150px">
+                <span class="tiny" id="coverLeadVal"></span>
+              </div>
+              <div class="tiny" id="coverLeadNote" style="margin-top:4px">
+                Facebook, TikTok, Instagram and YouTube all ignore a file&rsquo;s
+                cover art &mdash; their cover pickers only offer frames from the
+                video. Putting the thumbnail on the front makes it one of those
+                frames, so it can be chosen on a phone and is what the profile
+                grid falls back to. Viewers see it, so keep it short.
+              </div>
 
               <div class="tiny" style="margin-top:8px">
                 Nothing here is rendered until you ask. Regenerating a line, changing
@@ -4377,10 +4393,38 @@ function renderFinalThumb(p) {
     if (img.dataset.src !== src) { img.dataset.src = src; img.src = src; }
   }
   $('dlThumb').classList.toggle('hide', !has);
-  $('finalThumbNote').textContent = has
-    ? 'saved, and written into the video as its cover'
-    : 'none saved yet - pick a frame and add the text on the Thumbnail tab';
+  const lead = Number(p.cover_lead || 0);
+  $('finalThumbNote').textContent = !has
+    ? 'none saved yet - pick a frame and add the text on the Thumbnail tab'
+    : lead > 0
+      ? `saved, on the front of the video for ${lead.toFixed(1)}s, and inside it as cover art`
+      : 'saved, and written into the video as its cover';
+
+  if (document.activeElement !== $('coverLead')) {
+    $('coverLeadOn').checked = lead > 0;
+    $('coverLead').value = lead > 0 ? lead : 0.6;
+  }
+  $('coverLead').disabled = !$('coverLeadOn').checked;
+  $('coverLeadVal').textContent = $('coverLeadOn').checked
+    ? Number($('coverLead').value).toFixed(1) + 's' : 'off';
 }
+
+/* Zero means off, so the checkbox and the slider write one number. Saved on
+   the project rather than as a render option: it belongs to the video, and
+   re-rendering later should not quietly drop it. */
+const saveCoverLead = autosaveLater(() => ({
+  cover_lead: $('coverLeadOn').checked ? Number($('coverLead').value) : 0
+}));
+$('coverLeadOn').onchange = () => {
+  $('coverLead').disabled = !$('coverLeadOn').checked;
+  $('coverLeadVal').textContent = $('coverLeadOn').checked
+    ? Number($('coverLead').value).toFixed(1) + 's' : 'off';
+  saveCoverLead();
+};
+$('coverLead').oninput = () => {
+  $('coverLeadVal').textContent = Number($('coverLead').value).toFixed(1) + 's';
+};
+$('coverLead').onchange = saveCoverLead;
 
 $('goThumb').onclick = () => showTab('thumb');
 $('dlThumb').onclick = () => {

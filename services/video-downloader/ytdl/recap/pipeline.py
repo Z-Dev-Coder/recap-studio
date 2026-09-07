@@ -29,6 +29,7 @@ from .media import (
     have_ffmpeg,
     mux_narration,
     probe,
+    prepend_still,
     set_cover,
 )
 from .gemini import Gemini
@@ -857,8 +858,18 @@ def run_final(project: Project, on_progress=None, cancel=None) -> None:
             )
         except MediaError as exc:
             raise StepError(str(exc)) from exc
-        # The thumbnail goes into the file itself, so what is uploaded and
-        # what is seen in the folder are the same picture.
+        # The thumbnail on the front of the video, where a platform's cover
+        # picker can actually reach it. Before the cover art, because that
+        # re-muxes the file this one rewrites.
+        if project.cover_lead > 0 and project.thumbnail_path.exists():
+            try:
+                prepend_still(project.final_path, project.thumbnail_path,
+                              seconds=project.cover_lead, cancel=cancel)
+            except Exception:      # noqa: BLE001 - a cover frame is not the video
+                pass
+
+        # And inside the file itself, so the folder shows the picture that was
+        # chosen rather than a frame a player picked.
         if project.thumbnail_path.exists():
             try:
                 set_cover(project.final_path, project.thumbnail_path, cancel=cancel)

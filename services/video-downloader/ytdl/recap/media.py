@@ -609,6 +609,67 @@ def mux_narration(
     return dest
 
 
+def prepend_still(video: Path, picture: Path, seconds: float = 0.6,
+                  cancel=None, on_progress=None) -> bool:
+    """
+    Put the thumbnail on the front of the video as real footage.
+
+    Cover art inside the file is ignored by every social platform, and by
+    Windows Explorer for mp4. What they do read is the picture itself: their
+    cover pickers offer frames FROM THE VIDEO, and the one they offer first is
+    the opening frame. A thumbnail that exists only as a separate file has to
+    be attached by hand in each uploader; one that is also the first frame can
+    be chosen on a phone, and is what the profile grid falls back to.
+
+    Short is the point -- half a second reads as a title card, two seconds
+    reads as a delay before the video starts.
+
+    The whole file is re-encoded. Building a matching intro and concatenating
+    with -c copy is the fast way and a fragile one: the intro has to agree
+    with the video on resolution, frame rate, pixel format, timebase, aspect
+    and profile, and when it does not the result is a file that plays wrong
+    rather than one that fails. One encode is slower and always correct.
+    """
+    if not video.exists() or not picture.exists():
+        return False
+    seconds = max(0.1, min(5.0, float(seconds or 0)))
+
+    shape = probe(video)
+    out = video.with_name(video.stem + "_lead.mp4")
+    try:
+        _run([
+            _tool("ffmpeg"), "-y",
+            "-loop", "1", "-t", f"{seconds:.3f}", "-i", str(picture),
+            "-i", str(video),
+            # The still is scaled and padded into the video's own frame, so a
+            # thumbnail saved at a different shape cannot stretch the picture.
+            "-filter_complex",
+            (f"[0:v]scale={shape.width}:{shape.height}:force_original_aspect_ratio=decrease,"
+             f"pad={shape.width}:{shape.height}:-1:-1:color=black,"
+             f"setsar=1,fps={shape.fps:.4f},format=yuv420p[lead];"
+             "[1:v]setsar=1,format=yuv420p[body];"
+             "[lead][body]concat=n=2:v=1:a=0[v];"
+             # silence under the still, so the narration is not dragged
+             # forward and the audio stays as long as the picture
+             f"anullsrc=r=48000:cl=stereo,atrim=0:{seconds:.3f}[q];"
+             "[q][1:a]concat=n=2:v=0:a=1[a]"),
+            "-map", "[v]", "-map", "[a]",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-c:a", "aac", "-b:a", "192k",
+            "-movflags", "+faststart", str(out),
+        ], cancel=cancel, on_progress=on_progress,
+            seconds=(shape.duration or 0.0) + seconds if on_progress else 0.0)
+    except MediaError:
+        out.unlink(missing_ok=True)
+        return False       # the video without its cover frame beats no video
+
+    if not out.exists() or out.stat().st_size < 1000:
+        out.unlink(missing_ok=True)
+        return False
+    out.replace(video)
+    return True
+
+
 def set_cover(video: Path, picture: Path, cancel=None) -> bool:
     """
     Put the thumbnail inside the video file, as its cover art.

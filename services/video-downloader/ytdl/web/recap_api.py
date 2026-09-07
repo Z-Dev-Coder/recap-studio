@@ -404,6 +404,7 @@ class EditRequest(BaseModel):
     caption_y: float | None = None
     skip_start: float | None = None
     skip_end: float | None = None
+    cover_lead: float | None = None
     caption_style: str | None = None
     caption_lang: str | None = None
     language: str | None = None
@@ -780,6 +781,12 @@ def edit(pid: str, req: EditRequest) -> dict:
 
     if {"voice_lang", "voice_name", "voice_style"} & set(patch):
         project.mark("voice", "idle", message="voice changed - regenerate")
+
+    # The cover frame is added while the final is rendered, so an existing
+    # file does not have it -- and one rendered WITH it still carries it.
+    if "cover_lead" in patch and project.final_path.exists():
+        project.mark("final", "idle",
+                     message="cover frame changed - render again")
 
     pipeline.write_text_assets(project)
     pipeline.write_subtitles(project)
