@@ -2993,6 +2993,17 @@ function followVoiceProgress(p) {
   if (step.status === 'running' || wasRunning) loadVoiceLines(p);
 }
 
+/* One line spoken again -- minutes of GPU time rather than the whole
+   narration, which is the point of doing it per line at all. */
+async function respeak(p, index) {
+  const r = await post(
+    `/api/recap/projects/${p.id}/voice/line/${index}/regenerate` +
+    `?lang=${p.voice_lang || 'my'}`, {});
+  $('lengthNote').textContent = `line ${index + 1} spoken again` +
+    (r.seconds ? ` - ${Number(r.seconds).toFixed(1)}s` : '');
+  return r;
+}
+
 async function loadVoiceLines(p) {
   try {
     const d = await request(`/api/recap/projects/${p.id}/voice/lines?lang=${p.voice_lang}`);
@@ -3017,7 +3028,9 @@ async function loadVoiceLines(p) {
       </div>
       <div class="line-acts">
         ${l.custom ? '<span class="pill hi">yours</span>' : ''}
-        ${l.file && !l.custom ? `<button class="sm ghost" data-redo="${l.index}"
+        <button class="sm ghost" data-edit="${l.index}"
+                title="Change what this line says, then speak it again">&#9998;</button>
+        ${!l.custom ? `<button class="sm ghost" data-redo="${l.index}"
                title="Speak this line again, leaving the rest alone">&#8635;</button>` : ''}
         ${l.file ? `<button class="sm ghost" data-save="${l.index}"
                title="Download this clip">&#8681;</button>` : ''}
@@ -3031,18 +3044,36 @@ async function loadVoiceLines(p) {
   [...$('voiceLines').querySelectorAll('button')].forEach(b => {
     b.onclick = async () => {
       const proj = current();
-      if (b.dataset.redo !== undefined) {
+      if (b.dataset.edit !== undefined) {
+        /* Hearing a line is when its wording turns out to be wrong -- a name
+           the engine cannot say, a sentence that runs too long. Editing it
+           here changes that line and nothing else: sending the whole script
+           back would clear the cut and the narration with it. */
+        const i = Number(b.dataset.edit);
+        const row = state.lines.find(x => x.index === i);
+        const said = prompt('What should line ' + (i + 1) + ' say?', row ? row.text : '');
+        if (said === null || !said.trim()) return;
+        b.disabled = true;
+        try {
+          const r = await post(
+            `/api/recap/projects/${proj.id}/voice/line/${i}/text`,
+            { text: said, lang: proj.voice_lang || 'my' });
+          showError($('stepErr'), '');
+          upsert(await request(`/api/recap/projects/${proj.id}`));
+          if (r.changed) {
+            $('lengthNote').textContent = `line ${i + 1} changed - speaking it again`;
+            await respeak(proj, i);
+          }
+          loadVoiceLines(proj);
+        } catch (e) { showError($('stepErr'), e.message); }
+        finally { b.disabled = false; }
+      } else if (b.dataset.redo !== undefined) {
         // one line, not thirteen: locally that is minutes of GPU time saved
         const was = b.innerHTML;
         b.disabled = true; b.textContent = '...';
         try {
-          const r = await post(
-            `/api/recap/projects/${proj.id}/voice/line/${b.dataset.redo}` +
-            `/regenerate?lang=${proj.voice_lang || 'my'}`, {});
+          await respeak(proj, Number(b.dataset.redo));
           showError($('stepErr'), '');
-          $('lengthNote').textContent =
-            `line ${Number(b.dataset.redo) + 1} spoken again` +
-            (r.seconds ? ` - ${Number(r.seconds).toFixed(1)}s` : '');
           loadVoiceLines(proj);
         } catch (e) { showError($('stepErr'), e.message); }
         finally { b.disabled = false; b.innerHTML = was; }

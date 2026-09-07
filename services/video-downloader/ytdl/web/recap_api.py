@@ -1637,6 +1637,54 @@ def clear_voice(pid: str, lang: str = "", keep_mine: bool = True) -> dict:
     return {"ok": True, "removed": removed}
 
 
+class LineTextRequest(BaseModel):
+    text: str
+    lang: str = ""
+
+
+@router.post("/projects/{pid}/voice/line/{index}/text")
+def edit_line_text(pid: str, index: int, req: LineTextRequest) -> dict:
+    """
+    Change what one line says, without touching the rest of the script.
+
+    Hearing a line is when its wording turns out to be wrong -- a name the
+    engine cannot say, a sentence that runs too long. Sending the whole script
+    back to fix one of them clears the cut and the narration with it, which
+    means respeaking every line to change a word in one.
+    """
+    project = store.get(pid)
+    if not project:
+        raise HTTPException(404, "no such project")
+    text = " ".join((req.text or "").split())
+    if not text:
+        raise HTTPException(400, "a line cannot be empty -- delete it instead")
+
+    lang = req.lang if req.lang in ("en", "my") else (project.voice_lang or "my")
+    beats = [dict(b) for b in (project.beats or [])]
+    hit = next((b for i, b in enumerate(beats) if int(b.get("index", i)) == index), None)
+    if hit is None:
+        raise HTTPException(404, f"there is no line {index}")
+    if str(hit.get(lang) or "") == text:
+        return {"ok": True, "changed": False}
+
+    hit[lang] = text
+    project.beats = beats
+    # The timeline is what gets spoken and what the captions are built from,
+    # so the new words have to reach it too -- otherwise the line is respoken
+    # from the old text and nothing appears to have changed.
+    for row in project.timeline or []:
+        if int(row.get("index", -1)) == index:
+            row[lang] = text
+    project.script_by_hand = True
+
+    pipeline.write_subtitles(project)
+    pipeline.write_text_assets(project)
+    project.mark("final", "idle", message="a line changed - render again")
+    project.save()
+    push(project)
+    return {"ok": True, "changed": True, "text": text}
+
+
 @router.post("/projects/{pid}/voice/line/{index}/regenerate")
 def regenerate_line(pid: str, index: int, lang: str = "") -> dict:
     """
@@ -1651,7 +1699,12 @@ def regenerate_line(pid: str, index: int, lang: str = "") -> dict:
     if not project:
         raise HTTPException(404, "no such project")
     if not project.timeline:
-        raise HTTPException(400, "there is no narration to redo yet")
+        # Speaking comes before cutting, so a line can be redone long before a
+        # timeline exists. Refusing here sent the user back to respeak all of
+        # them, which is the cost this endpoint exists to avoid.
+        project.timeline = pipeline.provisional_timeline(project)
+    if not project.timeline:
+        raise HTTPException(400, "there is no script to speak yet")
 
     lang = lang if lang in ("en", "my") else (project.voice_lang or "my")
     settings = load_settings()

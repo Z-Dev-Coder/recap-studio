@@ -684,6 +684,31 @@ def run_voice(
     project.save()
 
 
+def provisional_timeline(project: Project) -> list[dict]:
+    """
+    The beats laid end to end, standing in for a cut that does not exist yet.
+
+    Speaking comes before cutting, because the cut is fitted to how long the
+    lines turn out to be. Only the text and the span are read from this; the
+    real positions are worked out once the cut is built.
+    """
+    playhead = 0.0
+    rows = []
+    for i, b in enumerate(project.beats or []):
+        span = max(1.5, float(b.get("end", 0)) - float(b.get("start", 0)))
+        rows.append({
+            "index": int(b.get("index", i)),
+            "source_start": float(b.get("start", 0)),
+            "source_end": float(b.get("end", 0)),
+            "recap_start": round(playhead, 3),
+            "recap_end": round(playhead + span, 3),
+            "score": float(b.get("score", 5) or 5),
+            "en": b.get("en", ""), "my": b.get("my", ""),
+        })
+        playhead += span
+    return rows
+
+
 def _narrate_one(
     project: Project,
     api_key: str,
@@ -710,25 +735,8 @@ def _narrate_one(
     if not have_ffmpeg():
         raise StepError("ffmpeg was not found on PATH")
 
-    # The cut does not exist yet, so lay the beats out end to end as a stand-in
-    # for it. Only the text and the clip length are read from this; the real
-    # positions are worked out in the final step, once the cut is built.
     if not project.timeline:
-        playhead = 0.0
-        provisional = []
-        for i, b in enumerate(project.beats):
-            span = max(1.5, float(b.get("end", 0)) - float(b.get("start", 0)))
-            provisional.append({
-                "index": int(b.get("index", i)),
-                "source_start": float(b.get("start", 0)),
-                "source_end": float(b.get("end", 0)),
-                "recap_start": round(playhead, 3),
-                "recap_end": round(playhead + span, 3),
-                "score": float(b.get("score", 5) or 5),
-                "en": b.get("en", ""), "my": b.get("my", ""),
-            })
-            playhead += span
-        project.timeline = provisional
+        project.timeline = provisional_timeline(project)
 
     lang = language if language in ("en", "my") else "my"
     # final_path is keyed on the language, so each one lands in its own file
