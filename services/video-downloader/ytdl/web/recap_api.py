@@ -218,6 +218,7 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
                 stage_models=settings.get("stage_models") or {},
             )
         elif step == "script":
+            project.script_by_hand = False
             key = options.get("api_key") or settings.get("gemini_key", "")
             model = settings.get("gemini_model", "") or _auto_model(key)
             if model and model != settings.get("gemini_model"):
@@ -334,8 +335,27 @@ def start(pid: str, step: str, options: dict) -> None:
     ).start()
 
 
+def chain_steps(project, steps: list[str]) -> list[str]:
+    """
+    The steps a chain should actually walk for THIS project.
+
+    "Run all" regenerating the script is right when the script was generated
+    and wrong when it was written by hand -- it destroys the thing the user
+    came with, along with the narration and the cut made from it. The
+    transcript goes with it: once a script is written, nothing downstream
+    reads the transcript, so re-fetching it is minutes spent to overwrite
+    nothing.
+    """
+    if not (getattr(project, "script_by_hand", False) and project.beats):
+        return list(steps)
+    return [s for s in steps if s not in ("transcript", "script")]
+
+
 def run_chain(pid: str, steps: list[str], options: dict) -> None:
     """Walk several steps in order, stopping at the first failure."""
+    project = store.get(pid)
+    if project:
+        steps = chain_steps(project, steps)
     if not _claim(pid, "chain"):
         raise HTTPException(409, "this project already has a step running")
 
@@ -861,6 +881,7 @@ def manual_script(pid: str, req: ManualScriptRequest) -> dict:
 
     project.beats = [b.as_dict() for b in beats]
     project.coverage = round(script_mod.coverage(beats, project.duration or 0.0), 3)
+    project.script_by_hand = True
     # the old cut and narration belong to a script that no longer exists
     project.timeline = []
     project.narration = []
@@ -955,6 +976,13 @@ def script_prompt(pid: str, target: float = 0.0, names: str = "",
         ("NAMES", names.strip()
          or "(not given - use whatever the timeline calls them)"),
         ("SOURCE_TITLE", (project.title or "(not given)").strip()),
+        # The link to the original, so the model can recognise what it is
+        # looking at -- official names, the premise, how the characters are
+        # spelled. A project started from a local file has no link, and
+        # saying so is better than an empty line the model reads as an
+        # instruction to guess.
+        ("SOURCE_URL", (project.url or "").strip()
+         or "(not given - this project started from a local file)"),
         ("TIMELINE", (NEWLINE * 2).join(moments)),
     ):
         filled = filled.replace("[[" + key + "]]", value)

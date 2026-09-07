@@ -80,6 +80,11 @@ class Project:
     thumbnail_text: dict = field(default_factory=lambda: {"en": "", "my": ""})
     thumbnail_candidates: list[dict] = field(default_factory=list)
     coverage: float = 0.0
+
+    # The script was written or pasted by the user rather than generated.
+    # "Run all" must not walk over it: regenerating is the whole point of that
+    # button for a generated script, and the exact opposite for this one.
+    script_by_hand: bool = False
     video_type: str = ""          # podcast, tutorial, cartoon ... shapes the writing
     pacing: str = ""
     hook: dict = field(default_factory=lambda: {"en": "", "my": ""})
@@ -276,6 +281,7 @@ class Project:
             "thumbnail_text": self.thumbnail_text,
             "thumbnail_candidates": self.thumbnail_candidates,
             "coverage": self.coverage,
+            "script_by_hand": self.script_by_hand,
             "video_type": self.video_type,
             "pacing": self.pacing,
             "hook": self.hook,
@@ -390,6 +396,7 @@ class Project:
             thumbnail_text=data.get("thumbnail_text") or {"en": "", "my": ""},
             thumbnail_candidates=data.get("thumbnail_candidates") or [],
             coverage=float(data.get("coverage") or 0),
+            script_by_hand=bool(data.get("script_by_hand", False)),
             video_type=data.get("video_type", ""),
             pacing=data.get("pacing", ""),
             hook=data.get("hook") or {"en": "", "my": ""},

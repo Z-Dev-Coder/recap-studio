@@ -36,7 +36,38 @@ def test_every_placeholder_in_the_template_is_one_the_endpoint_fills():
     text = (recap_api.PROMPTS / "recap_burmese.md").read_text(encoding="utf-8")
     used = set(re.findall(r"\[\[([A-Z_]+)\]\]", text))
     filled = {"DURATION", "TARGET", "CONTENT_TYPE", "PLATFORM", "LANGUAGE",
-              "STYLE", "SPECIAL_STYLE", "NAMES", "SOURCE_TITLE", "TIMELINE"}
+              "STYLE", "SPECIAL_STYLE", "NAMES", "SOURCE_TITLE", "SOURCE_URL",
+              "TIMELINE"}
     assert used <= filled, f"the template uses {used - filled}, which nothing fills"
 
 
+
+
+def test_the_prompt_carries_the_link_to_the_original(tmp_path, monkeypatch):
+    """
+    The model is asked to recognise what it is looking at -- official names,
+    the premise, how the characters are spelled -- and the link is how.
+    """
+    from ytdl.recap.project import Project
+
+    p = Project(id="t", dir=tmp_path, url="https://www.youtube.com/watch?v=abc123")
+    p.duration = 600.0
+    p.transcript = [{"start": 1.0, "end": 4.0, "text": "a thing happens"}]
+    monkeypatch.setattr(recap_api.store, "get", lambda pid: p)
+
+    out = recap_api.script_prompt("t")
+    assert "https://www.youtube.com/watch?v=abc123" in out["prompt"]
+    assert "[[" not in out["prompt"], "no placeholder may reach the clipboard raw"
+
+
+def test_a_project_with_no_link_says_so_rather_than_leaving_a_blank(tmp_path, monkeypatch):
+    from ytdl.recap.project import Project
+
+    p = Project(id="t", dir=tmp_path, url="")
+    p.source_file = str(tmp_path / "some.mp4")
+    p.duration = 600.0
+    p.transcript = [{"start": 1.0, "end": 4.0, "text": "a thing happens"}]
+    monkeypatch.setattr(recap_api.store, "get", lambda pid: p)
+
+    out = recap_api.script_prompt("t")
+    assert "local file" in out["prompt"]
