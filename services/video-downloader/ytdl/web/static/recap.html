@@ -1370,7 +1370,7 @@ img, video { transition: opacity .2s ease; }
                 <button class="sm ghost danger" id="clearVoice"
                         title="Delete the clips so the next run speaks every line again">Start over</button>
                 <button class="sm" id="refreshLength">Check length</button>
-                <button class="sm hide" id="dlVoice"
+                <button class="sm" id="dlVoice"
                         title="Every line as a wav, numbered in playing order, with an index of where each one sits">Download all lines</button>
                 <div class="grow"></div>
                 <span class="tiny">Free tier speaks ~3 lines a minute.</span>
@@ -2838,12 +2838,18 @@ function pointAt(v, src, { force = false } = {}) {
 
 /* ------------------------------------------------------------------ voice */
 function renderVoice(p) {
-  /* Clips on disk, not finished runs: a run stopped half way has produced
-     real audio, and hiding the button denied access to lines already made. */
-  const clips = p.voice_clips || (p.narration || []).length;
-  $('dlVoice').classList.toggle('hide', !clips);
-  $('dlVoice').textContent = clips && p.beats && clips < p.beats.length
-    ? `Download ${clips} lines so far` : 'Download all lines';
+  /* Always on screen. It was hidden until there was something to download,
+     which reads as a missing feature rather than an empty one -- and the
+     count it hid behind comes from the service, so an older service made the
+     button vanish entirely. It says what it will give you, and if there is
+     nothing the download says so. */
+  const clips = p.voice_clips !== undefined
+    ? p.voice_clips : (p.narration || []).length;
+  const total = (p.beats || []).length;
+  $('dlVoice').textContent =
+    clips && total && clips < total ? `Download ${clips} of ${total} lines`
+    : clips ? `Download all ${clips} lines`
+    : 'Download all lines';
   const v = $('finalVideo');
   /* Busted by the step that writes the file. It used to be the voice step,
      which ticks once per spoken line, so the finished video reloaded dozens
@@ -5165,10 +5171,27 @@ $('dlVideo').onclick = () => {
 /* Forty lines downloaded one at a time is not a workflow, and forty
    unlabelled clips in an editor are not either -- the zip carries the order,
    the position of each line in the recap and what it says. */
-$('dlVoice').onclick = () => {
+$('dlVoice').onclick = async () => {
   const p = current(); if (!p) return;
   const lang = p.voice_lang || 'my';
-  dl(`/api/recap/projects/${p.id}/voice.zip?lang=${lang}`, `voice_${lang}.zip`);
+  const btn = $('dlVoice');
+  const was = btn.textContent;
+  btn.disabled = true; btn.textContent = 'packing...';
+  /* Fetched rather than linked. An <a download> pointed at an endpoint that
+     answers 400 saves nothing and says nothing, which is the same dead-button
+     problem the subtitle downloads had. */
+  try {
+    const r = await fetch(`/api/recap/projects/${p.id}/voice.zip?lang=${lang}`);
+    if (!r.ok) {
+      let detail = `the lines could not be packed (${r.status})`;
+      try { detail = (await r.json()).detail || detail; } catch (e) { /* not json */ }
+      throw new Error(detail);
+    }
+    const url = URL.createObjectURL(await r.blob());
+    dl(url, `voice_${lang}.zip`);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch (e) { showError($('stepErr'), e.message); }
+  finally { btn.disabled = false; btn.textContent = was; }
 };
 /* An <a download> pointed at an endpoint that answers 400 saves nothing and
    says nothing, so a refused subtitle file looked exactly like a dead button.
