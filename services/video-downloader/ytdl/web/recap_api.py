@@ -189,6 +189,13 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
     push(project)
 
     try:
+        if step == "voice":
+            # A project made before the voice was chosen, or one whose folder
+            # was copied in, still speaks in it. The step is the last moment
+            # this can be true, so it is checked here rather than trusted to
+            # have happened earlier.
+            adopt_saved_voice(project)
+
         if step == "source":
             pipeline.run_source(
                 project,
@@ -794,6 +801,7 @@ def edit(pid: str, req: EditRequest) -> dict:
                     and SAVED_VOICE.read_bytes() == here.read_bytes()):
                 SAVED_VOICE_TEXT.write_text(
                     (patch["voice_reference_text"] or "").strip(), encoding="utf-8")
+                spread_saved_voice()   # every project on this clip gets the line
         except OSError:
             pass          # the project still has its own copy of the text
 
@@ -1510,6 +1518,7 @@ def upload_voice_reference(pid: str, req: VoiceReferenceRequest) -> dict:
     try:
         SAVED_VOICE.write_bytes(target.read_bytes())
         SAVED_VOICE_TEXT.write_text(req.text.strip(), encoding="utf-8")
+        spread_saved_voice()      # "my voice" means every video, not this one
     except OSError:
         pass
     project.mark("voice", "idle", message="voice sample added - regenerate to use it")
@@ -2245,6 +2254,7 @@ def pick_voice_candidate(pid: str, index: int) -> dict:
     try:
         SAVED_VOICE.write_bytes(src.read_bytes())
         SAVED_VOICE_TEXT.write_text(project.voice_reference_text, encoding="utf-8")
+        spread_saved_voice()
     except OSError:
         pass          # a voice that cannot be saved still works for this video
     project.mark("voice", "idle", message="voice chosen - regenerate to use it")
@@ -2267,6 +2277,71 @@ def saved_voice_info() -> dict:
     except Exception:      # noqa: BLE001
         pass
     return {"saved": True, "seconds": round(seconds, 1), "text": said}
+
+
+def adopt_saved_voice(project, force: bool = False) -> bool:
+    """
+    Give this project the channel's voice.
+
+    The voice is a property of the channel, not of one video: it was chosen
+    once and every recap is supposed to be spoken in it. Adoption used to
+    happen only at project creation, so the same clip had to be uploaded once
+    per video -- which is not a workflow, it is the same job done repeatedly.
+
+    `force` overrides a project's own reference. Without it, a project keeps a
+    clip it was given by hand, and a project whose owner deliberately went back
+    to the model's own voice keeps that too.
+    """
+    clip, said = saved_voice()
+    if not clip:
+        return False
+
+    target = project.voice_dir / "reference.wav"
+    try:
+        same = target.exists() and target.read_bytes() == clip.read_bytes()
+    except OSError:
+        same = False
+
+    # A project already speaking in this clip still takes the LINE, which is
+    # typed after the upload and so arrives later than the audio it describes.
+    # Without that, a project adopted before the line was written is stuck in
+    # the weaker cloning mode for ever.
+    if not force and not same and (project.voice_reference or project.voice_cleared):
+        return False
+
+    try:
+        project.voice_dir.mkdir(parents=True, exist_ok=True)
+        if not same:
+            target.write_bytes(clip.read_bytes())
+    except OSError:
+        return False
+    changed = (project.voice_reference != target.name
+               or project.voice_reference_text != said)
+    project.voice_reference = target.name
+    project.voice_reference_text = said
+    project.voice_cleared = False
+    if changed:
+        project.save()
+    return changed
+
+
+def spread_saved_voice() -> int:
+    """
+    Hand the newly chosen voice to every project that has not chosen its own.
+
+    Choosing a voice means "use this everywhere". Doing it only for projects
+    created afterwards left the ones already on screen speaking in something
+    else, which is exactly the surprise this avoids.
+    """
+    touched = 0
+    for project in store.projects():
+        try:
+            if adopt_saved_voice(project):
+                touched += 1
+                push(project)
+        except Exception:      # noqa: BLE001 - one bad project must not stop the rest
+            continue
+    return touched
 
 
 @router.post("/projects/{pid}/voice/saved")
@@ -2295,6 +2370,7 @@ def use_saved_voice(pid: str) -> dict:
         raise HTTPException(500, f"the voice could not be copied in: {exc}") from None
     project.voice_reference = target.name
     project.voice_reference_text = said
+    project.voice_cleared = False
     project.mark("voice", "idle", message="channel voice applied - regenerate to use it")
     project.save()
     push(project)
@@ -2318,6 +2394,7 @@ def clear_voice_reference(pid: str) -> dict:
     (project.voice_dir / "reference.wav").unlink(missing_ok=True)
     project.voice_reference = ""
     project.voice_reference_text = ""
+    project.voice_cleared = True
     project.mark("voice", "idle", message="voice sample removed - regenerate")
     project.save()
     push(project)

@@ -168,6 +168,11 @@ class Project:
     # What the video turned out to be about: characters, events, causes.
     # Internal working notes for the writing stages, never shown to the user.
     story: dict = field(default_factory=dict)
+    # Set when the user deliberately went back to the model's own voice. The
+    # channel voice is otherwise adopted by every project, and without this
+    # that adoption would keep undoing their choice.
+    voice_cleared: bool = False
+
     voice_reference: str = ""       # a clip to clone, for the local engine
     voice_reference_text: str = ""
     voice_lang: str = "my"          # the language shown in the UI
@@ -297,6 +302,7 @@ class Project:
             "trim_start": self.trim_start,
             "trim_end": self.trim_end,
             "voice_reference": self.voice_reference,
+            "voice_cleared": self.voice_cleared,
             "voice_reference_text": self.voice_reference_text,
             "voice_lang": self.voice_lang,
             "voice_langs": self.voice_langs,
@@ -412,6 +418,7 @@ class Project:
             trim_end=float(data.get("trim_end", 0) or 0),
             story=data.get("story") or {},
             voice_reference=data.get("voice_reference", ""),
+            voice_cleared=bool(data.get("voice_cleared", False)),
             voice_reference_text=data.get("voice_reference_text", ""),
             voice_lang=data.get("voice_lang", "my"),
             voice_langs=data.get("voice_langs") or [],

@@ -3259,10 +3259,9 @@ async function loadSavedVoice() {
     // why the same clip kept being uploaded once per video.
     $('useSavedVoice').classList.toggle('hide', !d.saved);
     $('savedVoiceNote').textContent = d.saved
-      ? `Your chosen voice (${d.seconds}s${d.text ? ', with its line' : ', no line typed'})` +
-        ` is used by every NEW video. For a video made before you chose it,` +
-        ` press "Use it here".`
-      : 'No voice chosen yet. Audition once, or upload your own below, and it is kept for every video after.';
+      ? `Your voice (${d.seconds}s) is used by every video` +
+        (d.text ? ', with the line it says.' : '. No line typed yet - add it below.')
+      : 'No voice chosen yet. Audition once, or upload your own below, and every video uses it.';
   } catch (e) { $('savedVoiceNote').textContent = ''; }
 }
 
