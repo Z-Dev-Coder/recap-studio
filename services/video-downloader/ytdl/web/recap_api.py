@@ -362,8 +362,23 @@ def run_chain(pid: str, steps: list[str], options: dict) -> None:
     def worker() -> None:
         try:
             stop = cancel_event(pid)
-            for step in steps:
+            for i, step in enumerate(steps):
                 if stop.is_set():
+                    break
+                # The final needs the captions, and Burmese captions are drawn
+                # in the browser -- the service cannot call that. So the run
+                # parks here rather than rendering a video without them: the
+                # claim is dropped so the page's burn can take it, and the
+                # burn starts what is left when it finishes.
+                project = store.get(pid)
+                if (step == "final" and project
+                        and project.snapshot().get("needs_caption_burn")):
+                    project.chain_pending = list(steps[i:])
+                    project.mark("final", "idle", message=(
+                        "waiting for the Burmese captions to be drawn -- "
+                        "this finishes by itself"))
+                    project.save()
+                    push(project)
                     break
                 run_step(pid, step, options, release=False)
                 project = store.get(pid)
@@ -1733,6 +1748,11 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
         raise HTTPException(409, "something is already running on this project")
 
     def burn() -> None:
+        # Assigned on success and read in the finally, so it has to be the
+        # enclosing one -- a plain assignment here would leave the finally
+        # reading a name that a failed burn never bound.
+        nonlocal resume
+
         def burning(done: float) -> None:
             project.mark("video", "running", progress=done,
                          message=f"burning {len(rows)} captions into the picture")
@@ -1745,6 +1765,8 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
                                           on_progress=burning)
             project.mark("video", "done", message=f"{len(rows)} captions burned in")
             project.mark("final", "idle", message="captions redrawn - render again")
+            resume = list(project.chain_pending or [])
+            project.chain_pending = []
         except Cancelled:
             project.mark("video", "idle", message="stopped")
         except Exception as exc:      # noqa: BLE001
@@ -1755,7 +1777,14 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
             _release(pid)
             project.save()
             push(project)
+            # Started after the claim is released, or it would refuse itself.
+            if resume:
+                try:
+                    run_chain(pid, resume, {})
+                except HTTPException:
+                    pass      # something else took the project; leave it alone
 
+    resume: list[str] = []
     threading.Thread(target=burn, daemon=True).start()
     return {"ok": True, "captions": len(rows), "started": True}
 

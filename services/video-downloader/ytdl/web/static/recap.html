@@ -4446,7 +4446,9 @@ function autoBurnCaptions(p) {
   const key = p.id + ':' + Math.round((p.steps.video || {}).updated || 0);
   if (burned.has(key)) return;
   burned.add(key);
-  $('capSourceNote').textContent = 'drawing the Burmese captions...';
+  $('capSourceNote').textContent = (p.chain_pending || []).length
+    ? 'drawing the Burmese captions -- the run finishes by itself after this'
+    : 'drawing the Burmese captions...';
   burnCaptions(p);
 }
 

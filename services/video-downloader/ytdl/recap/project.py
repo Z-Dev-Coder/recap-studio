@@ -85,6 +85,11 @@ class Project:
     # "Run all" must not walk over it: regenerating is the whole point of that
     # button for a generated script, and the exact opposite for this one.
     script_by_hand: bool = False
+
+    # Steps a chain stopped short of, and will resume once whatever it is
+    # waiting for arrives. Only the caption burn parks a run like this: it
+    # happens in the browser, so the service cannot simply call it.
+    chain_pending: list = field(default_factory=list)
     video_type: str = ""          # podcast, tutorial, cartoon ... shapes the writing
     pacing: str = ""
     hook: dict = field(default_factory=lambda: {"en": "", "my": ""})
@@ -288,6 +293,7 @@ class Project:
             "thumbnail_candidates": self.thumbnail_candidates,
             "coverage": self.coverage,
             "script_by_hand": self.script_by_hand,
+            "chain_pending": self.chain_pending,
             # what the UI and the chain both act on, so they cannot disagree
             "own_script": self.has_own_script(),
             # The cut exists, captions were asked for, and they are Burmese --
@@ -434,6 +440,7 @@ class Project:
             thumbnail_candidates=data.get("thumbnail_candidates") or [],
             coverage=float(data.get("coverage") or 0),
             script_by_hand=bool(data.get("script_by_hand", False)),
+            chain_pending=data.get("chain_pending") or [],
             video_type=data.get("video_type", ""),
             pacing=data.get("pacing", ""),
             hook=data.get("hook") or {"en": "", "my": ""},

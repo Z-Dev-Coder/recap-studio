@@ -54,3 +54,49 @@ def test_the_derived_answer_is_not_stored_back(tmp_path):
     p.save()
     data = json.loads((p.dir / "project.json").read_text(encoding="utf-8"))
     assert "needs_caption_burn" not in data
+
+
+def test_a_chain_parks_before_the_final_rather_than_rendering_without_captions(
+        tmp_path, monkeypatch):
+    """
+    The burn happens in the browser, so the service cannot call it. Rendering
+    anyway produced a finished-looking video missing what was asked for.
+    """
+    from ytdl.recap.project import STEPS
+    from ytdl.web import recap_api
+
+    p = _ready(tmp_path)
+    monkeypatch.setattr(recap_api.store, "get", lambda pid: p)
+    monkeypatch.setattr(recap_api, "push", lambda *a, **k: None)
+    ran = []
+    monkeypatch.setattr(recap_api, "run_step",
+                        lambda pid, step, opts, release=True: ran.append(step))
+    # run the chain body on this thread, so the test does not race it
+    monkeypatch.setattr(recap_api.threading, "Thread",
+                        lambda target, daemon=None: type(
+                            "T", (), {"start": lambda _s: target()})())
+
+    recap_api.run_chain("t", ["video", "thumbnail", "final"], {})
+
+    assert ran == ["video", "thumbnail"], "the final must wait for the captions"
+    assert p.chain_pending == ["final"], "and what is left must be remembered"
+    assert "waiting for the Burmese captions" in p.steps["final"].message
+
+
+def test_a_chain_runs_straight_through_when_no_burn_is_owed(tmp_path, monkeypatch):
+    from ytdl.web import recap_api
+
+    p = _ready(tmp_path)
+    p.captioned_path.write_bytes(b"captioned")
+    monkeypatch.setattr(recap_api.store, "get", lambda pid: p)
+    monkeypatch.setattr(recap_api, "push", lambda *a, **k: None)
+    ran = []
+    monkeypatch.setattr(recap_api, "run_step",
+                        lambda pid, step, opts, release=True: ran.append(step))
+    monkeypatch.setattr(recap_api.threading, "Thread",
+                        lambda target, daemon=None: type(
+                            "T", (), {"start": lambda _s: target()})())
+
+    recap_api.run_chain("t", ["video", "thumbnail", "final"], {})
+    assert ran == ["video", "thumbnail", "final"]
+    assert p.chain_pending == []
