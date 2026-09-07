@@ -62,3 +62,30 @@ def test_a_generated_script_is_not_mistaken_for_one(tmp_path):
     p = Project(id="t", dir=tmp_path)
     p.beats = [{"why": "this is where the story turns"}, {"why": ""}, {}]
     assert chain_steps(p, list(STEPS)) == list(STEPS)
+
+
+def test_the_snapshot_tells_the_page_what_the_chain_knows(tmp_path):
+    """
+    The guide offered "Write the recap script" over a script the user pasted,
+    because it read the step's status and the step had been left idle by an
+    interrupted run. Both sides read one derived answer now.
+    """
+    p = Project(id="t", dir=tmp_path)
+    p.beats = [{"why": "timed by hand", "my": "a line"}]
+    assert p.snapshot()["own_script"] is True
+
+    p.beats = [{"why": "this is where the story turns"}]
+    assert p.snapshot()["own_script"] is False
+
+
+def test_the_derived_answer_is_not_stored_back(tmp_path):
+    """It is computed from the beats; persisting it would let the two drift."""
+    p = Project(id="t", dir=tmp_path)
+    p.dir.mkdir(parents=True, exist_ok=True)
+    p.beats = [{"why": "timed by hand", "my": "a line"}]
+    p.save()
+
+    import json
+    data = json.loads((p.dir / "project.json").read_text(encoding="utf-8"))
+    assert "own_script" not in data
+    assert Project.load(p.dir).has_own_script() is True

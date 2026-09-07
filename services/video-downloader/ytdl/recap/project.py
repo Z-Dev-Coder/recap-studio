@@ -288,6 +288,8 @@ class Project:
             "thumbnail_candidates": self.thumbnail_candidates,
             "coverage": self.coverage,
             "script_by_hand": self.script_by_hand,
+            # what the UI and the chain both act on, so they cannot disagree
+            "own_script": self.has_own_script(),
             "video_type": self.video_type,
             "pacing": self.pacing,
             "hook": self.hook,
@@ -336,6 +338,22 @@ class Project:
             "has_thumbnail": self.thumbnail_path.exists(),
         }
 
+    def has_own_script(self) -> bool:
+        """
+        Whether the script came from the user rather than a model.
+
+        The flag alone was not enough: it was added after projects existed, so
+        anything pasted before it says nothing. from_text() stamps every line
+        it parses with "timed by hand" or "written by hand" and the generator
+        writes neither, so the beats themselves carry the answer. One such
+        line is enough -- add mode mixes hand-written lines among generated
+        ones, and regenerating destroys exactly those.
+        """
+        if self.script_by_hand:
+            return True
+        return any(str(b.get("why") or "").endswith("by hand")
+                   for b in (self.beats or []))
+
     # ---------------------------------------------------------------- disk
     def save(self) -> None:
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -344,6 +362,7 @@ class Project:
         # something the UI needs -- they are large, and snapshot() is what gets
         # broadcast on every progress tick. Persisted here instead.
         data["story"] = self.story
+        data.pop("own_script", None)
         data.pop("has_source", None)
         data.pop("has_logo", None)
         data.pop("has_recap", None)

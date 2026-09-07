@@ -580,6 +580,13 @@ input[type=range] { accent-color: var(--accent); }
 /* ------------------------------------------------------------- the top */
 
 .top {
+  /* backdrop-filter makes this a stacking context, so everything inside it --
+     the open menu included -- is painted as one layer in document order, and
+     .content comes after. The menu's own z-index cannot escape that: it only
+     orders siblings within the header. Lifting the header itself is what puts
+     an open menu over the page instead of under the first card. */
+  position: relative;
+  z-index: 30;
   backdrop-filter: saturate(140%) blur(8px);
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
@@ -2748,10 +2755,25 @@ const GUIDE = [
     run: 'Render final video' },
 ];
 
+/* The steps this project still has to do.
+
+   A script the user wrote is not work outstanding, however the step happens
+   to be marked -- an interrupted regeneration leaves it "idle", and the guide
+   read that as "write the script", offering to replace the very thing they
+   pasted. The chain skips both steps for such a project, so the guide must
+   skip them too or it counts work that will never run. */
+function stepsLeft(p) {
+  const steps = p.steps || {};
+  const mine = !!p.own_script;
+  return GUIDE.filter(g =>
+    !(mine && (g.key === 'script' || g.key === 'transcript')) &&
+    (steps[g.key] || {}).status !== 'done');
+}
+
 function renderGuide(p) {
   const steps = p.steps || {};
   const busy = Object.values(steps).some(s => s.status === 'running');
-  const next = GUIDE.find(g => (steps[g.key] || {}).status !== 'done');
+  const next = stepsLeft(p)[0];
 
   $('guide').classList.toggle('hide', !next || busy);
   if (!next || busy) return;
@@ -2765,7 +2787,7 @@ function renderGuide(p) {
 
   // the same chain the autorun tickbox starts, offered again here for anyone
   // who set their options and now just wants it finished
-  const left = GUIDE.filter(g => (steps[g.key] || {}).status !== 'done').length;
+  const left = stepsLeft(p).length;
   $('guideRunAll').textContent =
     left > 1 ? `Run all ${left} remaining steps` : 'Run every remaining step';
   $('guideRunAll').classList.toggle('hide', left < 2);
