@@ -81,3 +81,41 @@ def test_a_line_can_be_respoken_before_the_cut_exists(project, monkeypatch):
     out = recap_api.regenerate_line("t", 1, lang="my")
     assert out["ok"] is True
     assert project.timeline, "a stand-in is laid out instead of refusing"
+
+
+def test_respeaking_one_line_reports_itself(project, monkeypatch):
+    """
+    A line takes about a minute, four if the model loads first. Saying nothing
+    for that long is indistinguishable from a hang.
+    """
+    seen = []
+    monkeypatch.setattr(recap_api, "load_settings", lambda: {})
+    monkeypatch.setattr(recap_api, "_claim", lambda pid, what: True)
+    monkeypatch.setattr(recap_api, "_release", lambda pid: None)
+    monkeypatch.setattr(recap_api, "push",
+                        lambda p: seen.append(p.steps["voice"].message))
+    monkeypatch.setattr(recap_api.tts_mod, "narrate",
+                        lambda **k: [{"file": "line_001_my.wav", "index": 1,
+                                      "at": 6.0, "seconds": 2.5, "text": "x"}])
+
+    recap_api.regenerate_line("t", 1, lang="my")
+
+    assert any("speaking line 2" in m for m in seen), "it says what it is doing"
+    assert project.steps["voice"].status == "done", "and stops saying it afterwards"
+    assert "2.5s" in project.steps["voice"].message
+
+
+def test_a_failed_line_does_not_leave_the_step_spinning(project, monkeypatch):
+    monkeypatch.setattr(recap_api, "load_settings", lambda: {})
+    monkeypatch.setattr(recap_api, "_claim", lambda pid, what: True)
+    monkeypatch.setattr(recap_api, "_release", lambda pid: None)
+    monkeypatch.setattr(recap_api, "push", lambda p: None)
+
+    def boom(**k):
+        raise RuntimeError("the engine fell over")
+    monkeypatch.setattr(recap_api.tts_mod, "narrate", boom)
+
+    with pytest.raises(recap_api.HTTPException):
+        recap_api.regenerate_line("t", 1, lang="my")
+    assert project.steps["voice"].status == "error"
+    assert "line 2" in project.steps["voice"].error

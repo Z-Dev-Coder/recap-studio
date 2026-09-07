@@ -3052,20 +3052,41 @@ function openLineEditor(p, index, rowEl) {
         $('lengthNote').textContent = `line ${index + 1} changed - speaking it again`;
         await respeak(p, index);
       }
-    } catch (err) { showError($('stepErr'), err.message); }
-    finally { rowEl.dataset.editing = ''; loadVoiceLines(p); }
+    } catch (err) {
+      showError($('stepErr'), err.message);
+      $('lengthNote').textContent = '';
+    } finally {
+      // Whatever happened, the row goes back to being a row: an editor left
+      // open over a line that has already been saved is a second chance to
+      // save the same thing.
+      rowEl.dataset.editing = '';
+      loadVoiceLines(p);
+    }
   };
 }
 
 /* One line spoken again -- minutes of GPU time rather than the whole
-   narration, which is the point of doing it per line at all. */
+   narration, which is the point of doing it per line at all.
+
+   It still takes about a minute, or four if the model has to load first, and
+   the request does not return until it is done. A count of the seconds is the
+   difference between waiting and wondering whether anything is happening. */
 async function respeak(p, index) {
-  const r = await post(
-    `/api/recap/projects/${p.id}/voice/line/${index}/regenerate` +
-    `?lang=${p.voice_lang || 'my'}`, {});
-  $('lengthNote').textContent = `line ${index + 1} spoken again` +
-    (r.seconds ? ` - ${Number(r.seconds).toFixed(1)}s` : '');
-  return r;
+  const began = Date.now();
+  const tick = setInterval(() => {
+    const secs = Math.round((Date.now() - began) / 1000);
+    $('lengthNote').textContent =
+      `speaking line ${index + 1} again - ${secs}s` +
+      (secs > 90 ? ' (the model loads on the first line, give it a few minutes)' : '');
+  }, 1000);
+  try {
+    const r = await post(
+      `/api/recap/projects/${p.id}/voice/line/${index}/regenerate` +
+      `?lang=${p.voice_lang || 'my'}`, {});
+    $('lengthNote').textContent = `line ${index + 1} spoken again` +
+      (r.seconds ? ` - ${Number(r.seconds).toFixed(1)}s` : '');
+    return r;
+  } finally { clearInterval(tick); }
 }
 
 async function loadVoiceLines(p) {

@@ -1714,6 +1714,16 @@ def regenerate_line(pid: str, index: int, lang: str = "") -> dict:
         if candidate.exists():
             reference = candidate
 
+    # A line takes about a minute locally, and four when the model has to load
+    # first. Saying nothing for that long is indistinguishable from a hang, so
+    # this reports itself the way every other long job does -- and takes the
+    # project's claim, so it cannot collide with a full run.
+    if not _claim(pid, "voice"):
+        raise HTTPException(409, "something is already running on this project")
+    project.mark("voice", "running",
+                 message=f"speaking line {index + 1} again")
+    push(project)
+
     try:
         made = tts_mod.narrate(
             api_key=settings.get("gemini_key", ""),
@@ -1732,11 +1742,22 @@ def regenerate_line(pid: str, index: int, lang: str = "") -> dict:
             force=True,
         )
     except Cancelled:
+        project.mark("voice", "idle", message="stopped")
+        _release(pid)
+        push(project)
         raise HTTPException(400, "stopped") from None
     except Exception as exc:      # noqa: BLE001 - whatever the engine said
+        project.mark("voice", "error",
+                     error=f"line {index + 1} could not be spoken: "
+                           f"{str(exc) or exc.__class__.__name__}")
+        _release(pid)
+        push(project)
         raise HTTPException(400, str(exc) or exc.__class__.__name__) from exc
 
+    _release(pid)
     if not made:
+        project.mark("voice", "idle", message="that line has no text to speak")
+        push(project)
         raise HTTPException(400, "that line has no text to speak")
 
     # slot the new clip into the narration, leaving the others untouched
@@ -1746,6 +1767,13 @@ def regenerate_line(pid: str, index: int, lang: str = "") -> dict:
     rows.append(fresh)
     rows.sort(key=lambda m: int(m.get("index", 0)))
     project.narration = rows
+    # Back to a resting state, and saying what happened rather than leaving
+    # the spinner from the line that has just finished.
+    project.mark("voice", "done",
+                 message="line {} spoken again{}".format(
+                     index + 1,
+                     " - {:.1f}s".format(float(fresh.get("seconds") or 0))
+                     if fresh.get("seconds") else ""))
     # the cut was fitted to the old length of this line
     project.mark("video", "idle", message="a line changed - rebuild the cut")
     project.mark("final", "idle", message="a line changed - render again")
