@@ -290,6 +290,15 @@ class Project:
             "script_by_hand": self.script_by_hand,
             # what the UI and the chain both act on, so they cannot disagree
             "own_script": self.has_own_script(),
+            # The cut exists, captions were asked for, and they are Burmese --
+            # which only the page can draw. Said here so the page can act on
+            # it instead of the user having to know.
+            "needs_caption_burn": (
+                self.burn_captions
+                and (self.caption_lang or self.voice_lang) == "my"
+                and self.recap_path.exists()
+                and not self.captioned_path.exists()
+            ),
             "video_type": self.video_type,
             "pacing": self.pacing,
             "hook": self.hook,
@@ -363,6 +372,7 @@ class Project:
         # broadcast on every progress tick. Persisted here instead.
         data["story"] = self.story
         data.pop("own_script", None)
+        data.pop("needs_caption_burn", None)
         data.pop("has_source", None)
         data.pop("has_logo", None)
         data.pop("has_recap", None)

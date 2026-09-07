@@ -2703,6 +2703,7 @@ function renderProject() {
   renderVoice(p);
   renderFinalThumb(p);
   renderPreset(p);
+  autoBurnCaptions(p);
   renderAuditions(p);
   renderWork(p);
   renderGuide(p);
@@ -4337,8 +4338,16 @@ $('capPosReset').onclick = () => {
   capPos.x = 0.5; capPos.y = 0.86; paintCapPos(); saveCapPos();
 };
 
-$('drawCaptions').onclick = async () => {
-  const p = current(); if (!p) return;
+/* Burmese captions can only be drawn here -- ffmpeg places Myanmar glyphs in
+   storage order whatever font it is given -- so the burn has always waited on
+   this button. That is a hole in "run it all with one click": the chain built
+   the cut, rendered the final from the UNcaptioned copy, and reported done,
+   with nothing on screen saying the captions had been skipped.
+
+   The page is open, so it can do its own part. When the cut is ready and the
+   captions it was promised are missing, this runs by itself. */
+async function burnCaptions(p) {
+  if (!p) return;
   const btn = $('drawCaptions');
   const was = btn.textContent;
   btn.disabled = true; btn.textContent = 'drawing...';
@@ -4423,7 +4432,23 @@ $('drawCaptions').onclick = async () => {
     upsert(await request(`/api/recap/projects/${p.id}`));
   } catch (e) { showError($('capErr'), e.message); }
   finally { btn.disabled = false; btn.textContent = was; }
-};
+}
+
+$('drawCaptions').onclick = () => burnCaptions(current());
+
+/* One attempt per cut. The snapshot arrives on every progress tick, and a
+   burn that fails for a real reason -- no lines, a font that will not load --
+   must not be retried a hundred times in a minute. The key is the cut's own
+   timestamp, so rebuilding the cut earns a fresh attempt. */
+const burned = new Set();
+function autoBurnCaptions(p) {
+  if (!p || !p.needs_caption_burn) return;
+  const key = p.id + ':' + Math.round((p.steps.video || {}).updated || 0);
+  if (burned.has(key)) return;
+  burned.add(key);
+  $('capSourceNote').textContent = 'drawing the Burmese captions...';
+  burnCaptions(p);
+}
 
 $('pickCapFile').onclick = () => { $('capFile').value = ''; $('capFile').click(); };
 

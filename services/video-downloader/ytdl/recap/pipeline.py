@@ -814,6 +814,10 @@ def run_final(project: Project, on_progress=None, cancel=None) -> None:
         raise StepError("ffmpeg was not found on PATH")
 
     langs = project.voice_langs or [project.voice_lang or "my"]
+    # Set if any language was rendered from the clean cut when captions had
+    # been asked for.
+    missing_captions = False
+
     for lang in langs:
         if cancel is not None and cancel.is_set():
             raise Cancelled()
@@ -844,6 +848,12 @@ def run_final(project: Project, on_progress=None, cancel=None) -> None:
             continue
 
         base = project.captioned_path if project.captioned_path.exists() else project.recap_path
+        # Rendering the clean cut when captions were asked for is a real
+        # video that is missing something the user chose, and nothing said so
+        # -- it looked finished. It still renders, because a video now beats
+        # no video, but it says what it left out.
+        if project.burn_captions and not project.captioned_path.exists():
+            missing_captions = True
         try:
             mux_narration(
                 base,
@@ -880,6 +890,10 @@ def run_final(project: Project, on_progress=None, cancel=None) -> None:
             on_progress(langs.index(lang) + 1, len(langs))
 
     project.voice_lang = langs[-1]
+    if missing_captions:
+        project.mark("final", "running", message=(
+            "rendered WITHOUT the burned-in captions -- press Burn captions "
+            "on the Recap cut tab, then render again"))
     project.save()
 
 
