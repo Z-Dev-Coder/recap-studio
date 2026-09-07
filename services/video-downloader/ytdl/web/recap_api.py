@@ -432,6 +432,8 @@ class EditRequest(BaseModel):
     skip_start: float | None = None
     skip_end: float | None = None
     cover_lead: float | None = None
+    source_quality: str | None = None
+    frame_count: int | None = None
     caption_style: str | None = None
     caption_lang: str | None = None
     language: str | None = None
@@ -734,7 +736,14 @@ def run_all(pid: str, req: StepRequest) -> dict:
     project = store.get(pid)
     if not project:
         raise HTTPException(404, "no such project")
-    run_chain(pid, list(STEPS), req.model_dump(exclude_none=True))
+    # A chain has no button to read its options from, so it used to run every
+    # step at whatever the request happened to default to -- 1080p, sixteen
+    # frames -- no matter what had been chosen for this project. The project's
+    # own answers win, which is what lets everything be decided up front.
+    options = req.model_dump(exclude_none=True)
+    options["quality"] = project.source_quality or options.get("quality") or "1080"
+    options["frame_count"] = project.frame_count or options.get("frame_count") or 16
+    run_chain(pid, list(STEPS), options)
     return project.snapshot()
 
 
@@ -1766,6 +1775,11 @@ def keep_look(pid: str) -> dict:
         "caption_look": project.caption_look or {},
         "caption_x": project.caption_x,
         "caption_y": project.caption_y,
+        # Not only the layout. Everything a run needs to reach the end without
+        # being asked again: the shape it is cut to, whether captions are
+        # burned in, how fast the voice reads, how loud the mix sits. Deciding
+        # these once is what makes one click enough.
+        "settings": {k: getattr(project, k) for k in PRESET_FIELDS},
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     if project.logo_path.exists():
         SAVED_LOGO.write_bytes(project.logo_path.read_bytes())
@@ -1794,6 +1808,16 @@ def forget_look() -> dict:
     return {"ok": True}
 
 
+# What "save as my defaults" carries from one project to the next. Content and
+# length are deliberately absent: they belong to the video, not the channel.
+PRESET_FIELDS = (
+    "mode", "shape", "framing", "burn_captions", "caption_style", "caption_lang",
+    "fit_to_voice", "narration_speed", "line_gap", "footage_pace",
+    "original_volume", "narration_volume", "cover_lead",
+    "source_quality", "frame_count", "voice_engine", "language",
+)
+
+
 def apply_saved_look(project) -> None:
     """
     Start a new project from the house style.
@@ -1811,6 +1835,12 @@ def apply_saved_look(project) -> None:
     project.caption_look = data.get("caption_look") or {}
     project.caption_x = float(data.get("caption_x", 0.5) or 0.5)
     project.caption_y = float(data.get("caption_y", 0.86) or 0.86)
+    for key, value in (data.get("settings") or {}).items():
+        # Only fields the preset is allowed to carry, and only ones this
+        # version still has: an old preset must not resurrect a dead field or
+        # reach one it was never meant to.
+        if key in PRESET_FIELDS and value is not None and hasattr(project, key):
+            setattr(project, key, value)
     if SAVED_LOGO.exists():
         project.logo_path.write_bytes(SAVED_LOGO.read_bytes())
     project.save()

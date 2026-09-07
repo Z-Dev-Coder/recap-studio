@@ -1737,6 +1737,70 @@ img, video { transition: opacity .2s ease; }
           </section>
 
           <section data-panel="source" class="hide">
+            <!-- Decided here, before anything runs, so that pasting a script
+                 and pressing Run all is the whole job. Every control writes
+                 the same project field its own step reads, so nothing is
+                 duplicated state -- these are the same settings, reachable
+                 at the point where they still save you a round trip. -->
+            <div class="card">
+              <div class="row" style="margin-bottom:6px">
+                <h3 class="grow" style="margin:0">Settings for the whole run</h3>
+                <span class="tiny" id="presetNote"></span>
+              </div>
+              <div class="tiny" style="margin-bottom:12px">
+                Set these once and every later step uses them, so after your
+                script goes in, Run all needs no further answers.
+              </div>
+              <div class="row">
+                <div class="field" style="max-width:160px">
+                  <label class="f">Shape</label>
+                  <select id="preShape">
+                    <option value="">follow the format</option>
+                    <option value="reels">9:16 vertical</option>
+                    <option value="portrait">4:5 portrait</option>
+                    <option value="square">1:1 square</option>
+                  </select>
+                </div>
+                <div class="field" style="max-width:150px">
+                  <label class="f">Download</label>
+                  <select id="preQuality">
+                    <option value="2160">4K if there is one</option>
+                    <option value="1440">1440p</option>
+                    <option value="1080">1080p</option>
+                    <option value="720">720p</option>
+                  </select>
+                </div>
+                <div class="field" style="max-width:150px">
+                  <label class="f">Thumbnail frames</label>
+                  <select id="preFrames">
+                    <option value="8">8</option>
+                    <option value="16">16</option>
+                    <option value="24">24</option>
+                    <option value="40">40</option>
+                  </select>
+                </div>
+                <div class="field" style="max-width:170px">
+                  <label class="f">Voice speed <span class="tiny" id="preSpeedVal"></span></label>
+                  <input type="range" id="preSpeed" min="50" max="200" value="100">
+                </div>
+              </div>
+              <div class="row" style="margin-top:10px">
+                <label class="f" style="display:flex;align-items:center;gap:8px">
+                  <input type="checkbox" id="preBurn"> Burn in captions
+                </label>
+                <label class="f" style="display:flex;align-items:center;gap:8px">
+                  <input type="checkbox" id="preFit"> Trim the footage to the narration
+                </label>
+                <label class="f" style="display:flex;align-items:center;gap:8px">
+                  <input type="checkbox" id="preCover"> Start with the thumbnail
+                </label>
+                <div class="grow"></div>
+                <button class="sm ghost" id="savePreset"
+                        title="Every new video starts with these">Save as my defaults</button>
+              </div>
+              <div class="tiny" id="presetSaved" style="margin-top:8px"></div>
+            </div>
+
             <details class="more"><summary>Cut the file itself &mdash; throws away the transcript and script</summary>
 <div class="card">
               <div class="row" style="margin-bottom:6px">
@@ -2631,6 +2695,7 @@ function renderProject() {
   }
   renderVoice(p);
   renderFinalThumb(p);
+  renderPreset(p);
   renderAuditions(p);
   renderWork(p);
   renderGuide(p);
@@ -4553,6 +4618,57 @@ function paintLength() {
   $('lenPct').textContent = secs >= full ? 'the whole video, uncut'
                                          : Math.round((secs / full) * 100) + '% of ' + fmt(full);
 }
+/* ------------------------------------------------- settings for the run
+
+   The same project fields the later steps read, gathered at the first step.
+   A chain has no button to take its answers from, so anything left to be
+   asked later is a reason the one-click run cannot finish. */
+function renderPreset(p) {
+  if (document.activeElement && document.activeElement.id.startsWith('pre')) return;
+  $('preShape').value = p.shape || '';
+  $('preQuality').value = p.source_quality || '1080';
+  $('preFrames').value = String(p.frame_count || 16);
+  $('preSpeed').value = Math.round((p.narration_speed || 1) * 100);
+  $('preSpeedVal').textContent = (p.narration_speed || 1).toFixed(2) + '×';
+  $('preBurn').checked = !!p.burn_captions;
+  $('preFit').checked = p.fit_to_voice !== false;
+  $('preCover').checked = Number(p.cover_lead || 0) > 0;
+  const skips = [];
+  if (p.script_by_hand && (p.beats || []).length) skips.push('your own script');
+  $('presetNote').textContent = skips.length
+    ? 'Run all will keep ' + skips.join(' and ') : '';
+}
+
+const savePreset = () => {
+  const p = current(); if (!p) return;
+  $('preSpeedVal').textContent =
+    (Number($('preSpeed').value) / 100).toFixed(2) + '×';
+  patch(`/api/recap/projects/${p.id}`, {
+    shape: $('preShape').value,
+    source_quality: $('preQuality').value,
+    frame_count: Number($('preFrames').value) || 16,
+    narration_speed: Number($('preSpeed').value) / 100,
+    burn_captions: $('preBurn').checked,
+    fit_to_voice: $('preFit').checked,
+    // zero is off, so the tick and the slider on the Final tab agree
+    cover_lead: $('preCover').checked ? (Number(p.cover_lead) || 0.6) : 0
+  }).then(upsert).catch(e => showError($('stepErr'), e.message));
+};
+['preShape', 'preQuality', 'preFrames', 'preBurn', 'preFit', 'preCover', 'preSpeed']
+  .forEach(id => { $(id).onchange = savePreset; });
+$('preSpeed').oninput = () =>
+  $('preSpeedVal').textContent =
+    (Number($('preSpeed').value) / 100).toFixed(2) + '×';
+
+$('savePreset').onclick = async () => {
+  const p = current(); if (!p) return;
+  try {
+    await post(`/api/recap/projects/${p.id}/look/save`, {});
+    $('presetSaved').textContent =
+      'Saved. Every new video starts with these settings, this logo and this caption style.';
+  } catch (e) { showError($('stepErr'), e.message); }
+};
+
 const saveLook = () => {
   const p = current(); if (!p) return;
   $('capOpts').classList.toggle('hide', !$('burnCaps').checked);

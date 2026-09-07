@@ -155,6 +155,12 @@ class Project:
     # phone, or fall back into the profile grid.
     cover_lead: float = 0.0
 
+    # Settings the later steps used to take from whichever button was pressed,
+    # so a chain could only ever run them at their defaults. Held on the
+    # project instead, they can be decided before anything starts.
+    source_quality: str = "1080"
+    frame_count: int = 16
+
     caption_look: dict = field(default_factory=dict)
 
     # Channel logo and any free text laid over the picture -- the things that
@@ -299,6 +305,8 @@ class Project:
             "cut_width": self.cut_width,
             "cut_height": self.cut_height,
             "cover_lead": self.cover_lead,
+            "source_quality": self.source_quality,
+            "frame_count": self.frame_count,
             "caption_look": self.caption_look,
             "overlays": self.overlays,
             "caption_x": self.caption_x,
@@ -415,6 +423,8 @@ class Project:
             cut_width=int(data.get("cut_width", 0) or 0),
             cut_height=int(data.get("cut_height", 0) or 0),
             cover_lead=float(data.get("cover_lead", 0) or 0),
+            source_quality=str(data.get("source_quality") or "1080"),
+            frame_count=int(data.get("frame_count") or 16),
             caption_look=data.get("caption_look") or {},
             overlays=data.get("overlays") or [],
             caption_x=float(data.get("caption_x", 0.5) or 0.5),
