@@ -2993,6 +2993,64 @@ function followVoiceProgress(p) {
   if (step.status === 'running' || wasRunning) loadVoiceLines(p);
 }
 
+/* Editing happens in the row itself.
+
+   The first version of this called window.prompt, which Electron does not
+   support -- it returns nothing and logs a refusal, so the button did exactly
+   nothing there. A box in the row is better anyway: these lines are long, and
+   a one-line prompt shows almost none of one. */
+function openLineEditor(p, index, rowEl) {
+  if (!rowEl || rowEl.dataset.editing === '1') return;
+  const row = state.lines.find(x => x.index === index);
+  rowEl.dataset.editing = '1';
+  const was = rowEl.innerHTML;
+
+  rowEl.innerHTML = `
+    <div class="grow">
+      <div class="tiny" style="margin-bottom:5px">Line ${index + 1} &mdash;
+        editing changes this line only, then speaks it again</div>
+      <textarea class="line-edit" rows="3"
+                style="width:100%;resize:vertical"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="primary sm" data-act="save">Save &amp; speak again</button>
+        <button class="sm ghost" data-act="cancel">Cancel</button>
+        <span class="tiny" data-act="count"></span>
+      </div>
+    </div>`;
+
+  const box = rowEl.querySelector('textarea');
+  const count = rowEl.querySelector('[data-act="count"]');
+  const say = () => {
+    const n = box.value.trim().length;
+    // the same measure the engine speaks at, so a line that will run long is
+    // visible before it is spoken rather than after
+    count.textContent = `${n} characters - about ${(n / 14.5).toFixed(1)}s`;
+  };
+  box.value = row ? row.text : '';
+  box.oninput = say;
+  say();
+  box.focus();
+
+  const close = () => { rowEl.dataset.editing = ''; rowEl.innerHTML = was; loadVoiceLines(p); };
+  rowEl.querySelector('[data-act="cancel"]').onclick = close;
+  rowEl.querySelector('[data-act="save"]').onclick = async (e) => {
+    const said = box.value.trim();
+    if (!said) return;
+    e.target.disabled = true; e.target.textContent = 'speaking...';
+    try {
+      const r = await post(`/api/recap/projects/${p.id}/voice/line/${index}/text`,
+                           { text: said, lang: p.voice_lang || 'my' });
+      showError($('stepErr'), '');
+      upsert(await request(`/api/recap/projects/${p.id}`));
+      if (r.changed) {
+        $('lengthNote').textContent = `line ${index + 1} changed - speaking it again`;
+        await respeak(p, index);
+      }
+    } catch (err) { showError($('stepErr'), err.message); }
+    finally { rowEl.dataset.editing = ''; loadVoiceLines(p); }
+  };
+}
+
 /* One line spoken again -- minutes of GPU time rather than the whole
    narration, which is the point of doing it per line at all. */
 async function respeak(p, index) {
@@ -3045,28 +3103,7 @@ async function loadVoiceLines(p) {
     b.onclick = async () => {
       const proj = current();
       if (b.dataset.edit !== undefined) {
-        /* Hearing a line is when its wording turns out to be wrong -- a name
-           the engine cannot say, a sentence that runs too long. Editing it
-           here changes that line and nothing else: sending the whole script
-           back would clear the cut and the narration with it. */
-        const i = Number(b.dataset.edit);
-        const row = state.lines.find(x => x.index === i);
-        const said = prompt('What should line ' + (i + 1) + ' say?', row ? row.text : '');
-        if (said === null || !said.trim()) return;
-        b.disabled = true;
-        try {
-          const r = await post(
-            `/api/recap/projects/${proj.id}/voice/line/${i}/text`,
-            { text: said, lang: proj.voice_lang || 'my' });
-          showError($('stepErr'), '');
-          upsert(await request(`/api/recap/projects/${proj.id}`));
-          if (r.changed) {
-            $('lengthNote').textContent = `line ${i + 1} changed - speaking it again`;
-            await respeak(proj, i);
-          }
-          loadVoiceLines(proj);
-        } catch (e) { showError($('stepErr'), e.message); }
-        finally { b.disabled = false; }
+        openLineEditor(proj, Number(b.dataset.edit), b.closest('.line-row'));
       } else if (b.dataset.redo !== undefined) {
         // one line, not thirteen: locally that is minutes of GPU time saved
         const was = b.innerHTML;
