@@ -4439,16 +4439,25 @@ async function burnCaptions(p) {
 
 $('drawCaptions').onclick = () => burnCaptions(current());
 
-/* One attempt per cut. The snapshot arrives on every progress tick, and a
-   burn that fails for a real reason -- no lines, a font that will not load --
-   must not be retried a hundred times in a minute. The key is the cut's own
-   timestamp, so rebuilding the cut earns a fresh attempt. */
+/* One attempt per cut.
+
+   The first version keyed this on the video step's timestamp, which the burn
+   itself rewrites on every progress tick -- so each tick looked like a new
+   cut and started another burn over the top of the running one. The second
+   one emptied the captions folder while ffmpeg was still reading it, and the
+   encode died on a file that had existed a moment earlier.
+
+   Two things stop that. Nothing is started while anything is running, and the
+   attempt is remembered per project until the burn is no longer owed -- which
+   is what rebuilding the cut brings about, so a rebuild still earns a fresh
+   attempt without depending on a clock. */
 const burned = new Set();
 function autoBurnCaptions(p) {
-  if (!p || !p.needs_caption_burn) return;
-  const key = p.id + ':' + Math.round((p.steps.video || {}).updated || 0);
-  if (burned.has(key)) return;
-  burned.add(key);
+  if (!p) return;
+  if (!p.needs_caption_burn) { burned.delete(p.id); return; }
+  if (Object.values(p.steps || {}).some(s => s.status === 'running')) return;
+  if (burned.has(p.id)) return;
+  burned.add(p.id);
   $('capSourceNote').textContent = (p.chain_pending || []).length
     ? 'drawing the Burmese captions -- the run finishes by itself after this'
     : 'drawing the Burmese captions...';

@@ -1720,10 +1720,23 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
     if not req.images:
         raise HTTPException(400, "no caption images were sent")
 
-    shots = project.dir / "captions"
-    if shots.exists():
-        shutil.rmtree(shots, ignore_errors=True)
-    shots.mkdir(parents=True, exist_ok=True)
+    # Claimed BEFORE anything is written. The claim was taken further down,
+    # after this had already emptied the captions folder -- so a second burn
+    # arriving mid-encode deleted the pictures the first one was reading, and
+    # ffmpeg stopped on a file that had existed a moment earlier. Refusing
+    # early costs a caller nothing; deleting a running job's inputs costs it
+    # the whole encode.
+    if not _claim(pid, "video"):
+        raise HTTPException(409, "something is already running on this project")
+
+    try:
+        shots = project.dir / "captions"
+        if shots.exists():
+            shutil.rmtree(shots, ignore_errors=True)
+        shots.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        _release(pid)
+        raise HTTPException(500, f"the captions folder could not be made: {exc}") from None
 
     rows = []
     for img in req.images:
@@ -1731,6 +1744,7 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
         try:
             blob = base64.b64decode(raw, validate=True)
         except Exception as exc:      # noqa: BLE001
+            _release(pid)
             raise HTTPException(400, f"caption {img.index} is not valid PNG data: {exc}") from exc
         path = shots / f"cap_{img.index:04d}.png"
         path.write_bytes(blob)
@@ -1745,9 +1759,6 @@ def burn_caption_images(pid: str, req: CaptionImagesRequest) -> dict:
     # perfectly well underneath. The images are saved here, where a bad one
     # can still be reported, and the encode goes to a worker thread that
     # reports itself over the event stream like every other long step.
-    if not _claim(pid, "video"):
-        raise HTTPException(409, "something is already running on this project")
-
     def burn() -> None:
         # Assigned on success and read in the finally, so it has to be the
         # enclosing one -- a plain assignment here would leave the finally
