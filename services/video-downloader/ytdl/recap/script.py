@@ -903,20 +903,35 @@ def _manual_srt(text: str) -> list[tuple[float, float, str]] | None:
     if not stamp.search(text):
         return None
 
+    # Cut at the timestamps, not at the blank lines.
+    #
+    # Splitting on blank lines and skipping whatever had no timestamp threw
+    # away every paragraph after the first in a cue -- and a writer laying a
+    # cue out as two paragraphs is normal, so half the words of a script
+    # disappeared on paste and nothing said they had. A cue runs from its own
+    # timestamp to the next one, whatever blank lines are inside it.
+    marks = list(stamp.finditer(text))
+    if not marks:
+        return None
+
     out: list[tuple[float, float, str]] = []
-    for block in re.split(r"\n\s*\n", text):
-        found = stamp.search(block)
-        if not found:
-            continue
+    for n, found in enumerate(marks):
         h1, m1, s1, ms1, h2, m2, s2, ms2 = (int(x) for x in found.groups())
         start = h1 * 3600 + m1 * 60 + s1 + ms1 / 1000
         end = h2 * 3600 + m2 * 60 + s2 + ms2 / 1000
-        body = " ".join(
-            ln.strip() for ln in block.splitlines()
-            if ln.strip() and not stamp.search(ln) and not ln.strip().isdigit()
-        )
+
+        stop = marks[n + 1].start() if n + 1 < len(marks) else len(text)
+        lines = text[found.end():stop].splitlines()
+        # the last non-empty line before the next timestamp is that cue's
+        # number, not this cue's words
+        while lines and not lines[-1].strip():
+            lines.pop()
+        if n + 1 < len(marks) and lines and lines[-1].strip().isdigit():
+            lines.pop()
+
+        body = " ".join(ln.strip() for ln in lines if ln.strip())
         if body:
-            out.append((start, max(end, start + 0.5), body))
+            out.append((start, max(end, start + 0.5), " ".join(body.split())))
     return out or None
 
 
