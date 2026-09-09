@@ -306,6 +306,33 @@ class OllamaBackend:
         self.url = (url or OLLAMA_URL).rstrip("/")
         self.timeout = timeout
 
+    def _unreachable(self, exc: Exception, ctx: int = 0) -> str:
+        """
+        What actually went wrong, which is not always what it looks like.
+
+        A read timeout was reported as "Is it running?" -- and Ollama was
+        running perfectly, having accepted the request and then taken longer
+        than ten minutes over it. That sends someone to restart a service that
+        is fine, instead of to the model that does not fit in their card.
+        """
+        if isinstance(exc, requests.ReadTimeout):
+            return (
+                "Ollama accepted the request but had not answered after {:.0f} "
+                "minutes, so it is running -- it is just too slow with this "
+                "model. {!r} was asked for a {}-token context; if the model "
+                "does not fit in the graphics card at that size, Ollama runs "
+                "part of it on the CPU and generation crawls. Check with "
+                "'ollama ps': when size is larger than the VRAM figure, that "
+                "is what is happening. Use a smaller model for this stage, or "
+                "a shorter transcript."
+            ).format(self.timeout / 60, self.model, ctx)
+        if isinstance(exc, requests.ConnectTimeout):
+            return (
+                "Ollama did not answer at {} within the connection timeout. "
+                "It may be starting up -- try again in a moment.".format(self.url)
+            )
+        return "Could not reach Ollama at {}. Is it running? ({})".format(self.url, exc)
+
     def generate_json(self, prompt, schema, temperature=0.7, images=None,
                       cancel=None, max_tokens=0):
         body = {
@@ -331,9 +358,7 @@ class OllamaBackend:
             resp = requests.post(f"{self.url}/api/generate", json=body,
                                  timeout=self.timeout)
         except requests.RequestException as exc:
-            raise LLMError(
-                "Could not reach Ollama at {}. Is it running? ({})".format(self.url, exc)
-            ) from exc
+            raise LLMError(self._unreachable(exc, body["options"]["num_ctx"])) from exc
 
         if resp.status_code == 404:
             raise LLMError(
@@ -349,7 +374,7 @@ class OllamaBackend:
                 resp = requests.post(f"{self.url}/api/generate", json=body,
                                      timeout=self.timeout)
             except requests.RequestException as exc:
-                raise LLMError(f"Could not reach Ollama at {self.url}: {exc}") from exc
+                raise LLMError(self._unreachable(exc, body["options"]["num_ctx"])) from exc
 
         if resp.status_code >= 400:
             raise LLMError(f"Ollama refused the request ({resp.status_code}): {resp.text[:200]}")

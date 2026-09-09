@@ -500,3 +500,36 @@ def test_the_font_list_is_ordered_and_real():
     from ytdl.recap import media
     assert media.MY_FONTS[0] == "Pyidaungsu"       # compared at caption size
     assert len(media.MY_FONTS) >= 3                # something to fall back to
+
+
+def test_a_slow_ollama_is_not_reported_as_a_missing_one(monkeypatch):
+    """
+    A read timeout was reported as "Is it running?" -- and it was running
+    perfectly, having accepted the request and then taken longer than ten
+    minutes over it. That sends someone to restart a service that is fine.
+    """
+    import requests
+
+    def slow(*a, **k):
+        raise requests.ReadTimeout("read timed out")
+
+    monkeypatch.setattr(llm.requests, "post", slow)
+    with pytest.raises(llm.LLMError) as err:
+        llm.OllamaBackend("qwen2.5:7b").generate_json("p" * 9000, {})
+
+    said = str(err.value)
+    assert "Is it running?" not in said
+    assert "accepted the request" in said
+    assert "qwen2.5:7b" in said, "the model is the thing to change"
+    assert "ollama ps" in said, "and how to see the cause"
+
+
+def test_the_context_it_asked_for_is_named(monkeypatch):
+    """A window too big for the card is what pushes the model onto the CPU."""
+    import requests
+
+    monkeypatch.setattr(llm.requests, "post",
+                        lambda *a, **k: (_ for _ in ()).throw(requests.ReadTimeout()))
+    with pytest.raises(llm.LLMError) as err:
+        llm.OllamaBackend("m").generate_json("p" * 40000, {})
+    assert "16384-token" in str(err.value)
