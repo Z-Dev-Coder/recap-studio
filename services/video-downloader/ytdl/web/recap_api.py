@@ -2598,14 +2598,30 @@ def clear_voice_reference(pid: str) -> dict:
 
 @router.get("/projects/{pid}/voice/lines")
 def voice_lines(pid: str, lang: str = "") -> dict:
-    """Which lines have audio, and whether it was generated or supplied."""
+    """
+    Which lines have audio, and whether it was generated or supplied.
+
+    Read from the timeline when there is one, and from the beats laid out the
+    same way when there is not. The timeline only appears once something has
+    been run, so a script that had just been pasted showed an empty list --
+    and the list is where a single line is played, edited or spoken. Nobody
+    could try one line before committing to all of them, which is the point of
+    having them one at a time.
+    """
     project = store.get(pid)
     if not project:
         raise HTTPException(404, "no such project")
+
     lang = lang or project.voice_lang
+    rows_in = project.timeline or pipeline.provisional_timeline(project)
+    if not lang or not any((r.get(lang) or "").strip() for r in rows_in):
+        # the language the script is actually in, rather than one set earlier
+        lang = next((k for k in ("my", "en")
+                     if any((r.get(k) or "").strip() for r in rows_in)), lang or "my")
+
     rows = []
     for i, row in enumerate(
-        [r for r in project.timeline if (r.get(lang) or "").strip()]
+        [r for r in rows_in if (r.get(lang) or "").strip()]
     ):
         mine = tts_mod.custom_path(project.voice_dir, i, lang)
         generated = project.voice_dir / f"line_{i:03d}_{lang}.wav"
