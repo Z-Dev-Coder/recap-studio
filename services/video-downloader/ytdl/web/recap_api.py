@@ -44,6 +44,7 @@ from ..recap.scrape import install_hint as playwright_hint
 from ..recap import script as script_mod
 from ..recap.script import LANGUAGES
 from ..recap.transcript import Cue, to_srt, whisper_available
+from ..recap import llm as llm_mod
 from ..recap import localtts as localtts_mod
 from ..recap import tts as tts_mod
 from ..recap.video import recap_srt, source_srt
@@ -253,6 +254,17 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
                 project.mark("voice", "running", progress=done / max(1, total),
                              message=f"line {done} of {total}")
                 push(project)
+
+            # The card is only big enough for one of these at a time. A
+            # language model left over from the script step holds four of its
+            # six gigabytes, and the voice needs 5.9 -- so the narration
+            # either runs half on the CPU at a crawl or fails outright, on a
+            # machine that looks idle. Ask for the card back first.
+            if (project.voice_engine or "voxcpm") == "voxcpm":
+                for name in llm_mod.unload_ollama():
+                    project.mark("voice", "running",
+                                 message=f"freeing the graphics card from {name}")
+                    push(project)
 
             pipeline.run_voice(
                 project,
@@ -1720,6 +1732,8 @@ def regenerate_line(pid: str, index: int, lang: str = "") -> dict:
     # project's claim, so it cannot collide with a full run.
     if not _claim(pid, "voice"):
         raise HTTPException(409, "something is already running on this project")
+    if (project.voice_engine or "voxcpm") == "voxcpm":
+        llm_mod.unload_ollama()      # one model in the card at a time
     project.mark("voice", "running",
                  message=f"speaking line {index + 1} again")
     push(project)
@@ -2344,6 +2358,7 @@ def voice_candidates(pid: str, count: int = 4, lang: str = "", slot: int = -1) -
 def _audition(project, out, first: int, count: int, text: str, lang: str) -> None:
     """Speak the sample line a few times, reporting each voice as it lands."""
     pid = project.id
+    llm_mod.unload_ollama()          # the voice model needs the whole card
     rows = []
     for offset in range(count):
         i = first + offset

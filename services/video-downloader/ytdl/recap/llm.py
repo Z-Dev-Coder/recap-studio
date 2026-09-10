@@ -291,6 +291,42 @@ def _context_for(prompt: str, max_tokens: int = 0) -> int:
     return _CTX_STEPS[-1]
 
 
+def unload_ollama(url: str = "", model: str = "") -> list[str]:
+    """
+    Ask Ollama to give the graphics card back, and say what it dropped.
+
+    The local voice model needs 5.9GB of a 6GB card. A language model left
+    loaded from the script step holds four of those, so the narration either
+    crawls with half of itself on the CPU or fails outright -- on a machine
+    that looks idle, because nothing here is running.
+
+    Only what is actually loaded is touched, and a request that fails is not
+    worth reporting: this is housekeeping before real work, and Ollama not
+    being there at all is fine.
+    """
+    url = (url or OLLAMA_URL).rstrip("/")
+    wanted = [model] if model else []
+    if not wanted:
+        try:
+            live = requests.get(f"{url}/api/ps", timeout=5).json()
+            wanted = [m.get("name") or m.get("model") for m in live.get("models", [])]
+        except Exception:      # noqa: BLE001 - no Ollama, nothing to unload
+            return []
+
+    dropped = []
+    for name in [w for w in wanted if w]:
+        try:
+            # an empty prompt with keep_alive 0 is Ollama's own way of saying
+            # "unload this now" -- it generates nothing
+            requests.post(f"{url}/api/generate",
+                          json={"model": name, "prompt": "", "keep_alive": 0},
+                          timeout=30)
+            dropped.append(name)
+        except Exception:      # noqa: BLE001
+            continue
+    return dropped
+
+
 class OllamaBackend:
     """
     A model running on this machine. No quota and no key.
@@ -340,6 +376,13 @@ class OllamaBackend:
             "prompt": prompt + _schema_note(schema),
             "stream": False,
             "format": "json",
+            # How long the model may sit in the card after answering. Ollama
+            # keeps it for five minutes by default, which is five minutes of
+            # 4GB held on a 6GB card while the narration that needs 5.9 is
+            # waiting to start. Long enough to serve the next stage of a
+            # script, short enough to be gone by the time anything else wants
+            # the GPU.
+            "keep_alive": "90s",
             "options": {"temperature": temperature,
                         "num_predict": max_tokens or MAX_COMPLETION_TOKENS,
                         # Ollama defaults to a 2048-token context and silently
