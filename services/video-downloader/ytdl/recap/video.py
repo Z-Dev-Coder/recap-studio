@@ -47,6 +47,20 @@ def _bounds(beats: list[dict], duration: float) -> list[tuple[float, float]]:
     return out
 
 
+def _clear(work: Path, parts: list[Path]) -> None:
+    """Throw away the pieces a cut was assembled from."""
+    for p in parts:
+        p.unlink(missing_ok=True)
+    # anything left from an earlier run that ended badly goes too
+    if work.exists():
+        for stray in work.glob("part_*.mp4"):
+            stray.unlink(missing_ok=True)
+        try:
+            work.rmdir()
+        except OSError:
+            pass
+
+
 def plan_fitted(beats: list[dict], wants: list[float],
                 duration: float = 0.0, first: float = 0.0,
                 last: float = 0.0) -> list[tuple[float, float]]:
@@ -370,15 +384,17 @@ def build(
             on_progress(i + 1, len(ordered))
 
     if not parts:
+        _clear(work, parts)
         raise ValueError("every beat was empty or out of range")
 
-    concat(parts, dest, cancel=cancel)
-    for p in parts:
-        p.unlink(missing_ok=True)
     try:
-        work.rmdir()
-    except OSError:
-        pass
+        concat(parts, dest, cancel=cancel)
+    finally:
+        # Cleared however this ended. Tidying only on success left the pieces
+        # of every stopped or failed cut on disk for ever -- 57MB found in one
+        # project, from a run interrupted days earlier, in a folder no part of
+        # the app ever looks at again.
+        _clear(work, parts)
 
     made = probe(dest)
     return {
