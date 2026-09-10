@@ -1241,7 +1241,6 @@ img, video { transition: opacity .2s ease; }
                 <span class="saved" id="beatsSaved">Saved</span>
                 <span class="note" id="scriptNote"></span>
                 <button class="sm hide" id="scriptOtherLang"></button>
-                <button class="sm" id="regenScript">Regenerate</button>
               </div>
               <div id="hookBox" class="hide"
                    style="background:var(--accent-soft);border-radius:var(--r-sm);padding:11px 13px;margin-bottom:12px">
@@ -1264,9 +1263,6 @@ img, video { transition: opacity .2s ease; }
 <div class="work" data-work="script"><div class="work-top"><span class="work-spin"></span><span class="work-say"></span><span class="work-pct"></span></div><div class="work-track"><div class="work-fill"></div></div></div>
               <div class="scroll" id="beatRows"></div>
               <div class="row" style="margin-top:14px">
-                <button class="sm" id="reReadStory" title="Re-read the video into story notes, one call">Re-read</button>
-                <button class="sm" id="reWriteBurmese" title="Rewrite the Burmese from the existing notes, one call">Rewrite Burmese</button>
-                <button class="sm" id="reReviewBurmese" title="Check the Burmese again, one call">Re-check</button>
                 <!-- Named for what they do. "SRT - original timing" read as a
                      setting rather than a download, and was looked for and not
                      found. -->
@@ -1278,13 +1274,16 @@ img, video { transition: opacity .2s ease; }
               </div>
             </div>
 
-            <details class="more"><summary>Write or paste your own lines</summary>
-<div class="card">
+            <!-- Pasting is the way this app is used: the prompt goes to a
+                 cloud model, the script comes back, it arrives here. It was
+                 behind a disclosure while generation had the visible button,
+                 which is the wrong way round for that workflow. -->
+            <div class="card">
               <div class="row" style="margin-bottom:6px">
-                <h3 class="grow" style="margin:0">Add my own lines</h3>
-                <button class="sm ghost" id="ownToggle">Write some</button>
+                <h3 class="grow" style="margin:0">Paste the script</h3>
+                <button class="sm ghost" id="ownToggle">Hide</button>
               </div>
-              <div class="hide" id="ownBox">
+              <div id="ownBox">
                 <div class="tiny" style="margin-bottom:10px">
                   Write your lines &mdash; one per line, or separated by blank lines.
                   They join the script, and the whole thing is laid across the video
@@ -1325,6 +1324,27 @@ img, video { transition: opacity .2s ease; }
                 </div>
                 <div class="tiny" style="margin-top:8px" id="ownWarn"></div>
                 <div id="ownErr"></div>
+              </div>
+            </div>
+
+            <details class="more"><summary>Have the app write a draft instead</summary>
+<div class="card">
+              <div class="tiny" style="margin-bottom:10px">
+                Writes the script here, from the transcript, using the models set
+                in Settings. A cloud model given the copied prompt does this
+                better &mdash; this is for a quick draft, or an English video.
+              </div>
+              <div class="row">
+                <button class="sm" id="regenScript">Write a draft</button>
+                <button class="sm ghost" id="reReadStory"
+                        title="Re-read the video into story notes, one call">Re-read</button>
+                <button class="sm ghost" id="reWriteBurmese"
+                        title="Rewrite the Burmese from the existing notes, one call">Rewrite Burmese</button>
+                <button class="sm ghost" id="reReviewBurmese"
+                        title="Check the Burmese again, one call">Re-check</button>
+              </div>
+              <div class="tiny" style="margin-top:8px;color:var(--err)">
+                This replaces every line in the script.
               </div>
             </div>
 </details>
@@ -2710,6 +2730,7 @@ function renderProject() {
   renderVoice(p);
   renderFinalThumb(p);
   renderPreset(p);
+  readyOwnBox(p);
   autoBurnCaptions(p);
   renderAuditions(p);
   renderWork(p);
@@ -2740,10 +2761,13 @@ const GUIDE = [
   { key: 'transcript', title: 'Get the transcript',
     what: 'Uses the platform captions if there are any, otherwise transcribes the audio here.',
     set: '', run: 'Transcribe' },
-  { key: 'script', title: 'Write the recap script',
-    what: 'Picks the moments and writes the narration, title, description and hashtags in both languages.',
-    set: 'Set the format (Reel or Long) in the header first — it decides how long each line is written to be.',
-    run: 'Write the script' },
+  // The button used to generate a script. That is now the fallback: the
+  // prompt is copied out, a cloud model writes it, and it comes back here.
+  { key: 'script', title: 'Add the recap script',
+    what: 'Copy the prompt, have a cloud model write the script, and paste it back. '
+        + 'The timings in it decide which footage each line plays over.',
+    set: 'Set the length and format in the header first — the copied prompt carries them.',
+    run: 'Open the script step', go: 'script' },
   { key: 'voice', title: 'Speak the narration',
     what: 'Records each line on its own. The cut is fitted to these afterwards, '
         + 'which is why this comes before it.',
@@ -2791,7 +2815,8 @@ function renderGuide(p) {
   $('guideSet').textContent = next.set;
   $('guideSet').style.display = next.set ? '' : 'none';
   $('guideRun').textContent = next.run;
-  $('guideRun').onclick = () => runStep(next.key);
+  // Some steps are not a button to press but a place to go
+  $('guideRun').onclick = () => next.go ? showTab(next.go) : runStep(next.key);
 
   // the same chain the autorun tickbox starts, offered again here for anyone
   // who set their options and now just wants it finished
@@ -3565,6 +3590,14 @@ function paintOwnMode() {
 /* Where the new lines go. Offered as "after line N" rather than an index box,
    because the only way to know where a line belongs is to read the one before
    it. */
+/* The box is open from the start now, so what used to be prepared when it
+   was revealed has to be prepared when the project loads. */
+function readyOwnBox(p) {
+  if (!p || $('ownBox').classList.contains('hide')) return;
+  paintOwnWhere(p);
+  paintOwnMode();
+}
+
 function paintOwnWhere(p) {
   const lines = (p && p.beats) || [];
   $('ownWhere').innerHTML =
@@ -3610,7 +3643,7 @@ $('ownToggle').onclick = () => {
   const box = $('ownBox');
   const hidden = box.classList.contains('hide');
   box.classList.toggle('hide', !hidden);
-  $('ownToggle').textContent = hidden ? 'Cancel' : 'Write some';
+  $('ownToggle').textContent = hidden ? 'Hide' : 'Paste a script';
   if (hidden) {
     paintOwnWhere(current());
     paintOwnMode();
