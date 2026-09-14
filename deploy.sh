@@ -24,7 +24,7 @@ cp -a "$REPO/$SVC/requirements.txt" "$DEST/$SVC/" 2>/dev/null || true
 
 # The launcher, so the browser route works from the installed copy too and
 # not only from the repo.
-for f in "RecapStudio.cmd" "Make desktop shortcut.cmd"; do
+for f in "RecapStudio.cmd" "Make desktop shortcut.cmd" "ytdl-ui.cmd"; do
   cp -a "$REPO/$SVC/$f" "$DEST/$SVC/$f" 2>/dev/null || true
 done
 
