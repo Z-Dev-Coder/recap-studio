@@ -1796,6 +1796,19 @@ img, video { transition: opacity .2s ease; }
                     <option value="square">1:1 square</option>
                   </select>
                 </div>
+                <!-- Chosen at download, before anything is cut: framing decides
+                     every clip the cut makes, so it belongs with the shape rather
+                     than four steps later on the Recap cut tab, where it could
+                     only be set after the first cut had already been built
+                     without it. -->
+                <div class="field" style="max-width:220px">
+                  <label class="f">Fitting</label>
+                  <select id="preFraming">
+                    <option value="blur">Blurred bars (keep it all)</option>
+                    <option value="crop">Crop to fill (lose the edges)</option>
+                    <option value="frame">Framed on a blurred border</option>
+                  </select>
+                </div>
                 <div class="field" style="max-width:150px">
                   <label class="f">Download</label>
                   <select id="preQuality">
@@ -4871,6 +4884,7 @@ function paintLength() {
 function renderPreset(p) {
   if (document.activeElement && document.activeElement.id.startsWith('pre')) return;
   $('preShape').value = p.shape || '';
+  $('preFraming').value = p.framing || 'blur';
   $('preQuality').value = p.source_quality || '1080';
   $('preFrames').value = String(p.frame_count || 16);
   $('preSpeed').value = Math.round((p.narration_speed || 1) * 100);
@@ -4890,6 +4904,7 @@ const savePreset = () => {
     (Number($('preSpeed').value) / 100).toFixed(2) + '×';
   patch(`/api/recap/projects/${p.id}`, {
     shape: $('preShape').value,
+    framing: $('preFraming').value,
     source_quality: $('preQuality').value,
     frame_count: Number($('preFrames').value) || 16,
     narration_speed: Number($('preSpeed').value) / 100,
@@ -4899,7 +4914,7 @@ const savePreset = () => {
     cover_lead: $('preCover').checked ? (Number(p.cover_lead) || 0.6) : 0
   }).then(upsert).catch(e => showError($('stepErr'), e.message));
 };
-['preShape', 'preQuality', 'preFrames', 'preBurn', 'preFit', 'preCover', 'preSpeed']
+['preShape', 'preFraming', 'preQuality', 'preFrames', 'preBurn', 'preFit', 'preCover', 'preSpeed']
   .forEach(id => { $(id).onchange = savePreset; });
 $('preSpeed').oninput = () =>
   $('preSpeedVal').textContent =
