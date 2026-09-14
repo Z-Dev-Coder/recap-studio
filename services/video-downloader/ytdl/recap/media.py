@@ -206,6 +206,12 @@ SLOWEST = 0.5
 FASTEST = 2.0
 
 
+# How much of the frame the picture keeps in the framed look. Small enough that
+# the blurred border reads as a design, large enough that nothing on screen is
+# lost to it.
+FRAME_SCALE = 0.86
+
+
 def cut(src: Path, dest: Path, start: float, end: float, vertical: bool = False,
         cancel=None, framing: str = "blur", fit_to: float = 0.0) -> Path:
     """
@@ -234,7 +240,21 @@ def cut(src: Path, dest: Path, start: float, end: float, vertical: bool = False,
             stretch = min(FASTEST, max(SLOWEST, wanted / duration))
 
     shape = SHAPES.get(str(vertical), None) if isinstance(vertical, str) else None
-    if shape:
+    if framing == "frame":
+        # The picture a little smaller than the frame, on a blurred copy of
+        # itself. Blurred bars only ever appeared when the shapes differed --
+        # a wide video cut wide had no treatment at all -- so this is the one
+        # look that applies to 16:9 as much as to 9:16.
+        w, h = shape or ((1080, 1920) if vertical is True else (1920, 1080))
+        inner_w, inner_h = int(w * FRAME_SCALE) // 2 * 2, int(h * FRAME_SCALE) // 2 * 2
+        vf = (
+            f"split=2[bg][fg];"
+            f"[bg]scale={w}:{h}:force_original_aspect_ratio=increase,"
+            f"crop={w}:{h},boxblur=28:2[bgb];"
+            f"[fg]scale={inner_w}:{inner_h}:force_original_aspect_ratio=decrease[fgs];"
+            f"[bgb][fgs]overlay=(W-w)/2:(H-h)/2,setsar=1"
+        )
+    elif shape:
         w, h = shape
         if framing == "crop":
             vf = (f"scale={w}:{h}:force_original_aspect_ratio=increase,"
@@ -285,7 +305,7 @@ def cut(src: Path, dest: Path, start: float, end: float, vertical: bool = False,
         # retiming had just created. Bounding the source here leaves the
         # output's length to the filters, which is where it is decided.
         "-ss", f"{start:.3f}", "-t", f"{duration:.3f}", "-i", str(src),
-        "-filter_complex" if ((vertical or shape) and framing != "crop") else "-vf", vf,
+        "-filter_complex" if (framing == "frame" or ((vertical or shape) and framing != "crop")) else "-vf", vf,
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-pix_fmt", "yuv420p", "-r", "30",
         *af,
