@@ -201,14 +201,16 @@ def run_step(pid: str, step: str, options: dict, release: bool = True) -> None:
         if step == "source":
             pipeline.run_source(
                 project,
-                cookies_browser=options.get("cookies_browser", ""),
+                cookies_browser=(options.get("cookies_browser")
+                                 or settings.get("cookies_browser", "")),
                 quality=str(options.get("quality", "1080")),
                 cancel=stop,
             )
         elif step == "transcript":
             pipeline.run_transcript(
                 project,
-                cookies_browser=options.get("cookies_browser", ""),
+                cookies_browser=(options.get("cookies_browser")
+                                 or settings.get("cookies_browser", "")),
                 whisper_model=settings.get("whisper_model", "small"),
                 cancel=stop,
                 # A silent video is read from its frames instead, which needs
@@ -518,6 +520,10 @@ class SettingsRequest(BaseModel):
     gemini_model: str | None = None
     tts_model: str | None = None
     whisper_model: str | None = None
+    # A browser to borrow YouTube sign-in from. Age-restricted and members-only
+    # videos refuse an anonymous download, and the page never sent this --
+    # so a video like that could not be fetched from here at all.
+    cookies_browser: str | None = None
     # Diffusion steps for the local voice. Pydantic drops what it has never
     # heard of, so an undeclared setting is silently thrown away -- which has
     # already happened once in this file.

@@ -124,7 +124,21 @@ def run_source(project: Project, cookies_browser: str = "", quality: str = "1080
         # yt-dlp wraps whatever the hook raised, so a stop can arrive disguised
         if cancel is not None and cancel.is_set():
             raise Cancelled() from exc
-        raise StepError(str(exc)) from exc
+        said = str(exc)
+        # yt-dlp's own advice names command-line flags nobody using this app
+        # can type. Say where the setting is instead.
+        if "Sign in to confirm" in said or "cookies" in said.lower():
+            said = (
+                "YouTube wants a signed-in viewer for this video (age-restricted "
+                "or members-only). Open Settings, choose the browser you are "
+                "signed in to YouTube with under 'Browser cookies', close that "
+                "browser, and run Download again."
+                + ("" if not cookies_browser else
+                   f" It was already set to {cookies_browser}: make sure that "
+                   "browser is signed in to YouTube and fully closed.")
+                + chr(10) * 2 + said
+            )
+        raise StepError(said) from exc
 
     if not dest.exists():
         # the merge may have produced .mkv or .webm depending on the source

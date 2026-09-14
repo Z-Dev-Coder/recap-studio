@@ -2057,6 +2057,16 @@ img, video { transition: opacity .2s ease; }
           rougher render.
         </div>
       </div>
+      <div class="field" style="max-width:170px">
+        <label class="f">Browser cookies</label>
+        <select id="cookiesBrowser" title="For age-restricted or members-only videos: borrow the sign-in from this browser. Close it before downloading.">
+          <option value="">None</option>
+          <option value="chrome">Chrome</option>
+          <option value="edge">Edge</option>
+          <option value="firefox">Firefox</option>
+          <option value="brave">Brave</option>
+        </select>
+      </div>
       <div class="field" style="max-width:140px">
         <label class="f">Whisper model</label>
         <select id="whisperModel">
@@ -2155,6 +2165,7 @@ $('saveSettings').onclick = async () => {
   const body = {
     gemini_model: $('geminiModel').value,
     whisper_model: $('whisperModel').value,
+    cookies_browser: $('cookiesBrowser').value,
     voice_timesteps: Number($('voiceSteps').value) || 10,
     use_scrape: $('useScrape').checked,
     use_vision: $('useVision').checked
@@ -5880,6 +5891,7 @@ function listen() {
     const settings = await request('/api/recap/settings');
     $('geminiKey').value = settings.gemini_key || '';
     $('whisperModel').value = settings.whisper_model || 'small';
+    $('cookiesBrowser').value = settings.cookies_browser || '';
     $('voiceSteps').value = String(settings.voice_timesteps || 10);
     $('qualityMode').value = settings.quality || 'balanced';
     $('groqKey').value = settings.groq_key || '';
