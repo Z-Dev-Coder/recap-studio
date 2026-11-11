@@ -1,523 +1,254 @@
-# Toolbox
+# Recap Studio — Desktop AI Multimedia & Voice Cloning Suite
 
-An Electron app hosting three personal tools behind one dashboard: a screen
-recorder, a video downloader, and **Recap Studio** — which turns a video into
-everything needed to post it: a recap cut, a bilingual script, description,
-hashtags, thumbnail, subtitles and spoken narration.
+<div align="center">
 
-Built to grow: adding a tool is a folder plus a manifest entry, not a code
-change.
+[![Python](https://img.shields.io/badge/Python-3.11--3.14-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Electron](https://img.shields.io/badge/Electron.js-Desktop_App-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://electronjs.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend_Service-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Gemini AI](https://img.shields.io/badge/Gemini_AI-Bilingual_Scripting-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
+[![PyTorch](https://img.shields.io/badge/PyTorch-Neural_TTS-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org)
 
----
+**Production desktop application that transforms raw video into a complete social media posting kit — automated transcription, bilingual AI scripting, highlight cuts, and self-hosted neural voice cloning, all at $0 cloud cost.**
 
-## Contents
-
-- [What it does](#what-it-does)
-- [Requirements](#requirements)
-- [Install the built app](#install-the-built-app)
-- [Install from source](#install-from-source)
-- [Optional extras](#optional-extras)
-- [Getting a Gemini API key](#getting-a-gemini-api-key)
-- [Running it](#running-it)
-- [Building the installer](#building-the-installer)
-- [Using Recap Studio](#using-recap-studio)
-- [Where files go](#where-files-go)
-- [Troubleshooting](#troubleshooting)
-- [Layout](#layout)
+</div>
 
 ---
 
-## What it does
+## Overview
 
-### Screen recorder
-Records a display, a single window, a dragged region, the webcam alone, or
-audio alone. A floating camera bubble sits on screen while you record — drag
-it, resize it, hide it mid-take. The recording follows the bubble, so where you
-put your face is where it lands in the video, and hiding it takes your face out
-of the recording.
+Recap Studio is the flagship component of **Toolbox**, a multi-process Electron desktop application housing three purpose-built personal productivity tools. It demonstrates end-to-end software engineering across process boundaries: an Electron.js frontend communicates via IPC with an asynchronous Python FastAPI microservice that orchestrates a full multimedia pipeline.
 
-Hotkeys are global: `F9` start/stop, `F10` pause, `F11` screenshot, `F8`
-hide/show the camera. All rebindable in Settings.
+**Pipeline input → output:**
 
-### Video downloader
-yt-dlp behind a local web UI. YouTube, Facebook, TikTok, Instagram and around
-1,750 other sites. Quality picker, audio-only, subtitles, playlists, and
-cookies from your browser for private or age-gated content.
+| Input | Output |
+|-------|--------|
+| Video URL or local file | Full narrated recap cut (`.mp4`) |
+| — | Bilingual script (English + Burmese) |
+| — | Automated subtitle tracks (`.srt`) |
+| — | Thumbnail candidates (scored frames) |
+| — | Hashtags, description, and posting copy |
+| — | Zero-latency voice cloning narration audio |
 
-### Recap Studio
-A link — or a file already on your PC — in, and a full posting kit out:
+---
 
-| Step | What it produces |
-| --- | --- |
-| Download | the source video and its real metadata |
-| Transcript | platform captions when they exist, local Whisper when they don't |
-| Script | beats, title, description, hashtags — in English **and** Burmese |
-| Recap cut | the moments spliced together, any length from seconds to the full original |
-| Frames | thumbnail candidates, ranked by the script's own scores |
-| Voice | narration spoken over the cut, original audio held underneath |
+## Architecture
 
-Every step reruns on its own, everything is editable by hand, and anything
-running can be stopped.
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Electron.js Frontend                   │
+│  Renderer (HTML/JS) ←→ Preload bridge ←→ Main process   │
+│          IPC channels for per-step streaming             │
+└────────────────────┬────────────────────────────────────┘
+                     │  HTTP + SSE (Server-Sent Events)
+┌────────────────────▼────────────────────────────────────┐
+│              Python FastAPI Microservice                  │
+│                                                          │
+│  pipeline.py  → Coordinates all steps, cancelable        │
+│  video.py     → yt-dlp download, FFmpeg slicing/burn     │
+│  script.py    → Gemini AI prompt engineering (EN + MY)   │
+│  tts.py       → Google TTS cloud synthesis               │
+│  localtts.py  → VoxCPM2 CUDA neural voice cloning        │
+│  media.py     → All FFmpeg subprocess calls              │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Key architectural decisions:**
+- **IPC + HTTP bridge**: Electron's main process proxies FastAPI SSE streams into IPC events, so the renderer receives real-time progress without polling.
+- **Pluggable TTS provider**: A common TTS interface accepts either `tts.py` (Gemini Cloud) or `localtts.py` (self-hosted VoxCPM2 on CUDA), swapped via settings — zero application code changes.
+- **Per-step rerunnability**: Each pipeline step persists its outputs. Any step can be rerun independently after editing, without redoing upstream work.
+- **Tool registry pattern**: New tools are added by dropping a folder + a manifest entry — no changes to main process code.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Desktop Shell** | Electron.js (Node.js 22+) |
+| **Backend Service** | Python FastAPI with async/await |
+| **IPC & Streaming** | Electron IPC + HTTP Server-Sent Events (SSE) |
+| **Speech-to-Text** | Faster-Whisper (local, runs offline) |
+| **Script Generation** | Gemini AI (bilingual EN + Burmese prompting) |
+| **Video Processing** | FFmpeg: slicing, audio ducking, subtitle burn |
+| **Neural TTS / Voice Cloning** | VoxCPM2 (PyTorch CUDA acceleration) |
+| **Video Download** | yt-dlp (1,750+ platform support) |
+| **Screen Recording** | Electron desktopCapturer + MediaRecorder |
+| **Language Support** | English + Burmese (Myanmar) |
+
+---
+
+## Toolbox: The Three Tools
+
+### 🎬 Recap Studio
+Video URL or local file in → full social media posting kit out. Automated Whisper transcription, Gemini-powered bilingual scripting, FFmpeg highlight extraction, thumbnail scoring, and self-hosted VoxCPM2 voice cloning. See [Using Recap Studio](#using-recap-studio).
+
+### 🖥️ Screen Recorder
+Records display, window, dragged region, webcam, or audio. Features a floating draggable camera bubble, global hotkeys (`F9` start/stop, `F10` pause, `F11` screenshot, `F8` show/hide camera), and camera-aware recording — where you position the bubble is where your face lands in the output.
+
+### ⬇️ Video Downloader
+yt-dlp behind a local web UI. Quality picker, audio-only mode, subtitle extraction, playlist support, and browser cookie import for private/age-gated content.
 
 ---
 
 ## Requirements
 
-| | Version | Notes |
-| --- | --- | --- |
-| Windows | 10 or 11 | the recorder and installer are Windows-only |
-| Node.js | 22+ | tested on 24.15.0 |
-| Python | 3.11–3.14 | tested on 3.14.4 |
-| ffmpeg | any recent | must be on `PATH`; ffprobe ships with it |
-| Disk | ~2 GB | plus ~5 GB more for local narration |
-| GPU | optional | an NVIDIA card is what makes local narration usable |
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| Windows | 10 or 11 | Recorder and installer are Windows-only |
+| Node.js | 22+ | Tested on 24.15.0 |
+| Python | 3.11–3.14 | Tested on 3.14.4 |
+| FFmpeg | Any recent | Must be on `PATH`; `ffprobe` ships with it |
+| Disk | ~2 GB | +~5 GB for local neural TTS (optional) |
+| GPU | Optional | NVIDIA GPU required for VoxCPM2 voice cloning |
 
 ---
 
-## Install the built app
+## Installation
 
-Use this if you just want to run it. To develop it, or to build the installer
-yourself, see [Install from source](#install-from-source).
+### From the Built Installer
 
-### Step 1 — Run the installer
+1. **Run** `Toolbox Setup 1.0.0.exe`
+   - Windows SmartScreen may warn (unsigned build): click **More info → Run anyway**
+2. **Choose install path** — avoid `C:\Program Files\` (write permissions needed for local TTS setup)
+   - Recommended: `D:\Toolbox` or `C:\Users\<you>\AppData\Local\Programs\Toolbox`
+3. **Install FFmpeg**
+   ```powershell
+   winget install Gyan.FFmpeg
+   ```
+   Restart Toolbox afterwards so it detects the updated `PATH`.
+4. **Add Gemini API key** in Settings → API (free tier is sufficient)
+5. **Optional: Enable local neural TTS** — see [Optional Extras](#optional-extras)
 
-Double-click **`Toolbox Setup 1.0.0.exe`**.
+### From Source
 
-Windows SmartScreen will warn, because the build is unsigned:
-**More info → Run anyway**.
-
-### Step 2 — Choose where it goes
-
-This step matters more than it looks.
-
-| Location | Works? |
-| --- | --- |
-| `D:\Toolbox` | ✅ recommended |
-| `C:\Users\<you>\AppData\Local\Programs\Toolbox` | ✅ the default |
-| `C:\Program Files\Toolbox` | ⚠️ avoid |
-
-**Do not install into Program Files.** Local narration is a `pip install` into
-the app's own bundled environment, and Program Files cannot be written to
-without administrator rights — so an app installed there can never gain that
-feature. Anywhere in your own user folder, or a data drive like `D:\`, stays
-writable.
-
-Type a full path such as `D:\Toolbox`, or use **Browse**. The **Install**
-button stays greyed out until the path is a valid absolute one — clearing the
-field disables it.
-
-It needs about **711 MB** installed (the installer itself is ~190 MB
-compressed).
-
-### Step 3 — Install ffmpeg
-
-The recap cut, the thumbnails and the screen recorder's conversion all need
-it. In PowerShell:
-
-```powershell
-winget install Gyan.FFmpeg
-```
-
-Restart Toolbox afterwards so it picks up the new `PATH`.
-
-### Step 4 — Add a Gemini API key
-
-See [Getting a Gemini API key](#getting-a-gemini-api-key). Free tier is enough.
-
-### Step 5 — Optional: enable local narration
-
-> **Set up the service environment first.** Run `setup-external.cmd` from the
-> source checkout, or the commands below against
-> `%APPDATA%\Toolbox\service`. That folder sits outside the app, so updating
-> Toolbox never deletes it — an environment inside the app folder is wiped on
-> every update, which also makes the update take minutes.
-
-
-The installer deliberately leaves out the local-narration stack — it is 4.3 GB
-of PyTorch for a feature that downloads its own model as well. To turn it on,
-point these at wherever you installed:
-
-```powershell
-cd "D:\Toolbox\resources\app\services\video-downloader"
-
-# 1. VoxCPM itself, WITHOUT its dependency chain
-.\venv\Scripts\python.exe -m pip install voxcpm --no-deps
-
-# 2. the dependencies it actually needs
-.\venv\Scripts\python.exe -m pip install torch torchaudio transformers safetensors huggingface-hub soundfile librosa einops inflect addict tqdm pydantic
-
-# 3. swap in the CUDA build so it runs on the GPU
-.\venv\Scripts\python.exe -m pip install --force-reinstall torch torchaudio --index-url https://download.pytorch.org/whl/cu126
-```
-
-> **Why `--no-deps`.** A plain `pip install voxcpm` fails on Python 3.13+
-> with *"Failed building wheel for kaldifst"*. `kaldifst` publishes no
-> wheel for these versions and building it needs CMake and a C++ compiler.
-> It arrives through `wetext`, which VoxCPM uses in exactly one place — to
-> expand Chinese and English numbers into words. Burmese narration never
-> touches it, and the app supplies a pass-through stand-in, so skipping the
-> chain costs nothing but the number formatting in English narration.
-
-About 4.5 GB and ten minutes. **No administrator rights are needed** as long as
-you did not install into Program Files. Model weights are cached in your user
-profile, so they are shared with any other copy and never downloaded twice.
-
-Check it took:
-
-```powershell
-.\venv\Scripts\python.exe -c "import torch; print(torch.cuda.is_available())"
-```
-
-`True` means narration runs on your GPU at roughly a third of realtime.
-`False` means the CPU build got installed, which is ~100x slower and not
-usable — see the note about matching the CUDA channel in
-[Optional extras](#optional-extras).
-
-> Upgrading? Install the new version over the old one, then uninstall any
-> earlier copy in a different folder so you do not run the stale one by
-> mistake.
-
----
-
-## Install from source
-
-### Step 1 — Install the prerequisites
-
-In PowerShell:
-
-```powershell
-winget install OpenJS.NodeJS
-winget install Python.Python.3.12
-winget install Gyan.FFmpeg
-```
-
-Close and reopen PowerShell so the new `PATH` takes effect, then check all
-three are visible:
-
-```powershell
-node -v
-python -V
-ffmpeg -version
-```
-
-Each should print a version. If `ffmpeg` is missing the recap cut and the
-thumbnails cannot work, so fix that before going on.
-
-### Step 2 — Get the code
-
-```powershell
+```bash
+# Clone and install Node dependencies
 git clone https://github.com/Z-Dev-Coder/recap-studio.git
 cd recap-studio
-```
-
-### Step 3 — Install the app's dependencies
-
-```powershell
 npm install
+
+# Set up Python service environment
+cd services/video-downloader
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+
+# Run in development mode
+cd ../..
+npm run dev
 ```
-
-A couple of minutes; it downloads Electron.
-
-### Step 4 — Set up the Python service
-
-Recap Studio and the downloader run on a small local Python service. It gets
-its own virtual environment, so nothing touches your system Python:
-
-```powershell
-cd services\video-downloader
-.\setup.cmd
-cd ..\..
-```
-
-This creates `venv\`, upgrades pip and installs the requirements. It warns you
-if ffmpeg is missing.
-
-### Step 5 — Start it
-
-```powershell
-npm start
-```
-
-The dashboard opens with both tools listed. **This is enough to record your
-screen and download videos.** Recap Studio needs an API key (Step 6) and
-benefits from the optional extras below.
-
-### Step 6 — Add a Gemini API key
-
-See [Getting a Gemini API key](#getting-a-gemini-api-key).
 
 ---
 
-## Optional extras
+## Optional Extras
 
-Each of these goes into the service's venv. None is required for the app to
-start — every feature detects its own absence and prints the command you need.
+### Local Neural Voice Cloning (VoxCPM2)
 
-Run them from wherever the service lives:
+Enables self-hosted narration at **$0 cloud cost**. Requires an NVIDIA GPU.
 
-| How you installed | Folder |
-| --- | --- |
-| Built app | `<install folder>\resources\app\services\video-downloader` |
-| From source | `services\video-downloader` |
+```bash
+# In services/video-downloader (activate venv first)
 
-### Transcribing videos that have no captions
+# Install PyTorch with CUDA support
+pip install torch==2.3.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
 
-Most Facebook, TikTok and Instagram videos have none. This transcribes them
-locally:
-
-```powershell
-venv\Scripts\python.exe -m pip install faster-whisper
+# Install VoxCPM2 TTS (without kaldifst to avoid CMake build issues)
+pip install voxcpm --no-deps
+pip install openai-whisper soundfile omegaconf pydantic
 ```
 
-First use downloads a model (~500 MB for the `small` default). Size is
-selectable in Settings.
+> **Note on kaldifst**: VoxCPM2's `wetext` dependency requires `kaldifst`, which needs CMake + C++ compiler on Python 3.13+. The app substitutes its own implementation — install with `--no-deps` as above.
 
-### Reading the source page for context
+### Local Speech-to-Text (Faster-Whisper)
 
-Gives the script writer the video's real tags and top comments, so the recap
-knows what the audience actually reacted to:
-
-```powershell
-venv\Scripts\python.exe -m pip install playwright
-venv\Scripts\python.exe -m playwright install chromium
+```bash
+pip install faster-whisper
 ```
-
-### Local narration — unlimited, free, and the practical way to get Burmese
-
-Gemini's free tier speaks roughly three lines a minute and a recap is a dozen
-lines. VoxCPM runs on your own machine with no quota at all, supports Burmese,
-and can clone a voice from a few seconds of audio.
-
-```powershell
-# VoxCPM without its dependency chain -- see the note below
-venv\Scripts\python.exe -m pip install voxcpm --no-deps
-
-# what it actually needs
-venv\Scripts\python.exe -m pip install torch torchaudio transformers safetensors huggingface-hub soundfile librosa einops inflect addict tqdm pydantic
-```
-
-> **`--no-deps` is not optional.** A plain `pip install voxcpm` fails on
-> Python 3.13+ with *"Failed building wheel for kaldifst"* — no wheel is
-> published and building it needs CMake and a C++ compiler. It comes in
-> through `wetext`, which VoxCPM uses only to expand Chinese and English
-> numbers into words; the app supplies a pass-through stand-in for it.
-
-**On CPU this is roughly 100× slower than realtime — not usable.** With an
-NVIDIA card, install the CUDA build of PyTorch. Match the channel to your
-torch version — `cu126` carries 2.13:
-
-```powershell
-venv\Scripts\python.exe -m pip install --force-reinstall torch torchaudio --index-url https://download.pytorch.org/whl/cu126
-```
-
-Confirm it took:
-
-```powershell
-venv\Scripts\python.exe -c "import torch; print(torch.cuda.is_available())"
-```
-
-`True` means narration runs at about a third of realtime instead. On a 6 GB
-GTX 1660 Ti, ten lines take roughly five minutes.
-
-> **Only VoxCPM2 is offered, deliberately.** `VoxCPM-0.5B` and `VoxCPM1.5` are
-> a third the size and three times faster, but they are trained on Chinese and
-> English alone — and handed Burmese they do not fail, they speak fluent
-> Chinese-sounding nonsense. A faster model that silently produces the wrong
-> language is not a choice worth offering, so the app does not offer it.
-
----
-
-## Getting a Gemini API key
-
-Recap Studio uses Google Gemini to write the script, description and hashtags,
-and optionally to speak them. The free tier is enough.
-
-1. Go to <https://aistudio.google.com/apikey>
-2. Sign in and click **Create API key**
-3. Copy it
-4. In Recap Studio open **Settings** and paste it into **Gemini API key**
-5. Click **Load** beside Model to list what your key can use, or leave it on
-   *choose automatically*
-
-The key is stored locally in `Downloads\RecapStudio\settings.json`. It is never
-committed — `.gitignore` excludes it.
-
-> Google retires models from under new keys. If generation fails with "model is
-> not available for this key", the error names one that works; pick it in
-> Settings.
-
----
-
-## Running it
-
-```powershell
-npm start
-```
-
-To reach Recap Studio: dashboard → **Video Downloader** → **Recap Studio** in
-the header.
-
-The app starts the Python service on a free port it picks at launch, so there
-is no fixed URL to bookmark. To run the service on its own instead — useful
-for debugging, and it opens a browser tab:
-
-```powershell
-cd services\video-downloader
-.\ytdl-ui.cmd
-```
-
-That one uses port 8756: <http://127.0.0.1:8756/recap>.
-
----
-
-## Building the installer
-
-```powershell
-npm run dist
-```
-
-Two files land in `dist\`:
-
-- **`Toolbox Setup 1.0.0.exe`** — installer, ~190 MB, with Start-menu and
-  desktop shortcuts
-- **`Toolbox 1.0.0.exe`** — portable, no install
-
-The installer deliberately **excludes the local-narration stack** (PyTorch and
-friends, ~4.3 GB); it would make the download unusably large for a feature that
-fetches its own model anyway. Everything else is bundled, including the Python
-service. To enable local narration in an installed copy, run the
-`pip install voxcpm` step against the installed venv.
-
-Windows SmartScreen warns on first run because the build is unsigned:
-**More info → Run anyway**.
 
 ---
 
 ## Using Recap Studio
 
-1. **New recap** — paste a link, or **Choose file** for a video already on your
-   PC. Pick **Short / Reel** or **Long form**.
-2. The pipeline runs. Watch the step chips; **Stop** cancels anything
-   mid-flight, including a download or an encode.
-3. **Recap cut** — the length bar starts at the full original. Drag it down and
-   the weakest moments give up their seconds first, so what remains is the best
-   of it. Then **Apply & rebuild**.
-4. **Script** — every line is editable, with the moment it plays over and a
-   1–10 score for why it earned its place. Edits save themselves.
-5. **Title & tags** — editable, autosaving.
-6. **Voice** — pick the engine, the language (or **Both**, which renders one
-   video per language), and a voice. Click any voice to hear it. **Suggest for
-   this video** picks one to match the content. Set how loud the original audio
-   stays underneath *before* generating.
-7. **Thumbnail** — frames ranked by the script's scores; drop text on one.
-   Burmese shapes correctly here.
-8. **Files** — every raw output, downloadable.
+1. **Input** — Paste a URL or select a local file
+2. **Download** — Original video + real platform metadata fetched
+3. **Transcript** — Platform captions used if available; Faster-Whisper runs locally as fallback
+4. **Script** — Gemini AI generates title, description, hashtags, and beats in English *and* Burmese
+5. **Recap Cut** — FFmpeg splices the highest-scoring beats into a compact highlight reel
+6. **Thumbnails** — Frames extracted and scored by the script's own beat rankings
+7. **Voice** — Each script line spoken by VoxCPM2 (or Gemini TTS); original audio is ducked underneath
+8. **Files** — All outputs collected with plain-English labels, ready to drag into your uploader
 
-### Using your own voice
+Every step runs independently and reruns without invalidating others. Any running step can be cancelled.
 
-Upload a few seconds of yourself speaking under **Your own voice**. VoxCPM
-clones it across languages, so one recording narrates every line — including in
-Burmese. Telling it what the clip says sharpens the copy.
+### Voice Cloning
 
-You can also upload your own recording for any single line. Those survive a
-regenerate and cost no quota.
+Upload a short recording of your own voice under **Your own voice**. VoxCPM2 clones it across any language — one recording narrates every line, including Burmese. Individual lines can be manually re-recorded; those recordings survive regeneration.
 
 ---
 
-## Where files go
-
-Recordings go to `Videos\ScreenRecorder`, downloads to your Downloads folder.
-Each recap gets its own folder:
+## Project Structure
 
 ```
-Downloads\RecapStudio\<title>-<id>\
-  source.mp4                             the original, untouched
-  recap_reels.mp4                        the cut: no captions, no narration
-  recap_reels_captioned.mp4              the cut with captions burned in
-  final_reels_my.mp4                     the finished video, Burmese narration
-  transcript.srt / .txt                  what was said in the original
-  transcript_my.srt                      that transcript, translated
-  recap_script_my.srt                    the recap script, timed to the recap
-  recap_script_my_original_timing.srt    the same, timed to the source
-  post_my.txt                            title, description and hashtags
+main.js                       Electron main process — windows, hotkeys, IPC
+preload.js                    Secure bridge exposing window.api to renderers
+renderer/                     Dashboard shell, camera bubble, recording UI
+modules/
+  screen-recorder/            Screen recorder UI module
+  manifest.json               Tool registry (add new tools here)
+services/
+  video-downloader/
+    ytdl/
+      downloader.py           yt-dlp wrapper
+      web/                    FastAPI app + web UI
+      recap/
+        pipeline.py           Step orchestrator (each step independently cancelable)
+        script.py             Prompt builder and beat planner
+        video.py              FFmpeg splice, caption retime, subtitle burn
+        tts.py                Gemini Cloud TTS synthesis
+        localtts.py           VoxCPM2 CUDA local TTS
+        media.py              All raw FFmpeg subprocess calls
+```
+
+---
+
+## Output File Structure
+
+Each recap run produces a self-contained folder ready to upload:
+
+```
+Downloads/RecapStudio/<title>-<id>/
+  source.mp4                      Original, untouched
+  recap_reels.mp4                 Highlight cut: no captions, no narration
+  recap_reels_captioned.mp4       Highlight cut with captions burned in
+  final_reels_my.mp4              Finished video with Burmese narration
+  transcript.srt / .txt           Full original transcript
+  transcript_my.srt               Translated transcript
+  recap_script_my.srt             Recap script timed to the cut
+  post_my.txt                     Title, description, and hashtags
   hashtags.txt
   thumbnail.png
-  frames\                                thumbnail candidates, no text on them
-  voice\                                 each spoken line on its own
+  frames/                         Scored thumbnail candidates (no overlays)
+  voice/                          Individual narration lines as audio files
 ```
-
-The folder is the deliverable — open it and drag files straight into an
-uploader. The **Files** tab in the app lists all of it with plain-English
-labels.
 
 ---
 
 ## Troubleshooting
 
-**Nothing happens when I click anything in Recap Studio**
-The page's script failed to load. Press `Ctrl+Shift+I` and read the Console
-tab — a single error there stops every button on the page.
-
-**"ffmpeg was not found on PATH"**
-`winget install Gyan.FFmpeg`, then restart the app so it picks up the new
-`PATH`.
-
-**"This video has no captions"**
-Install `faster-whisper` (above). Most non-YouTube videos need it.
-
-**"Gemini free-tier limit reached"**
-The app reads Google's own reset time and tells you when to retry. Narration is
-the heavy user — switch to the local engine to stop hitting the limit at all.
-Lines already spoken are kept, so a retry resumes rather than starting over.
-
-**Narration sounds like the wrong language**
-Check the model is `openbmb/VoxCPM2`. The smaller VoxCPM models are trained on
-Chinese and English alone and will speak anything else as Chinese-sounding
-nonsense without complaining. The app only offers VoxCPM2 for that reason, but
-a project saved before that change may still name one of them.
-
-**Narration is impossibly slow**
-`torch.cuda.is_available()` is `False` — you have the CPU build of PyTorch.
-Install the CUDA build (above).
-
-**"Failed building wheel for kaldifst" when installing voxcpm**
-Use `pip install voxcpm --no-deps` and then install its dependencies
-separately, as in [Optional extras](#optional-extras). `kaldifst` has no
-wheel for Python 3.13+ and needs CMake and a C++ compiler to build. VoxCPM
-does not import it — it arrives through `wetext`, which the app stands in
-for.
-
-**"VoxCPM could not speak this part"**
-A line was too long for the model's context. Lines are split on sentence
-punctuation automatically; if it persists, shorten that line in the Script tab.
-
-**The narration is much longer than the video**
-The script writes to the clip length, so this means the beats were rewritten
-without rebuilding the cut. Rebuild the cut, then regenerate the voice.
-
-**The installer is enormous, or the build takes forever**
-Something large landed in `services\video-downloader\venv`. The exclusion list
-lives in `package.json` under `build.files`. Anything newly installed and heavy
-belongs there — but check nothing shipped imports it at module level, or the
-app will fail to start.
+| Symptom | Fix |
+|---------|-----|
+| Buttons in Recap Studio do nothing | Press `Ctrl+Shift+I`, check Console for errors |
+| `ffmpeg was not found on PATH` | `winget install Gyan.FFmpeg`, then restart app |
+| `This video has no captions` | Install `faster-whisper` (see Optional Extras) |
+| Gemini free-tier rate limit hit | App shows reset time; switch to local engine to avoid limits |
+| Narration sounds like wrong language | Confirm model is `openbmb/VoxCPM2` (not smaller VoxCPM variants, which only support Chinese/English) |
+| Narration is very slow | `torch.cuda.is_available()` is `False` — reinstall PyTorch with CUDA build |
+| `Failed building wheel for kaldifst` | Use `pip install voxcpm --no-deps` and install dependencies separately |
+| VoxCPM voice is too long for a line | Shorten the line in the Script tab; lines are auto-split on sentence punctuation |
+| Installer is very large / build takes forever | Check `services/video-downloader/venv` — large newly-installed packages need an exclusion in `package.json` under `build.files` |
 
 ---
 
-## Layout
+## License
 
-```
-main.js                    Electron main process: windows, hotkeys, IPC
-preload.js                 the bridge the pages use (exposes window.api)
-renderer/                  dashboard shell, camera bubble, recording panel
-modules/screen-recorder/   the recorder UI
-modules/manifest.json      the tool registry
-services/video-downloader/ the Python service
-  ytdl/downloader.py         yt-dlp wrapper
-  ytdl/web/                  FastAPI app and the web UI
-  ytdl/recap/                Recap Studio
-    pipeline.py                the steps, each runnable alone
-    script.py                  prompt building and beat planning
-    video.py                   splicing and subtitle retiming
-    tts.py / localtts.py       cloud and local narration
-    media.py                   every ffmpeg call
-```
+MIT © Zaw Myo Tun
