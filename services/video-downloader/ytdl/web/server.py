@@ -17,6 +17,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ..downloader import default_out_dir
@@ -25,8 +26,12 @@ from .recap_api import router as recap_router
 from .resource_hub_api import router as resource_hub_router
 
 STATIC = Path(__file__).parent / "static"
+THEME_DIR = STATIC / "theme"
 
 app = FastAPI(title="Video Downloader", docs_url=None, redoc_url=None)
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
+if THEME_DIR.exists():
+    app.mount("/theme", StaticFiles(directory=THEME_DIR), name="theme")
 app.include_router(recap_router)
 app.include_router(resource_hub_router)
 

@@ -1,13 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark" class="dark">
 <head>
   <meta charset="UTF-8">
   <title>AI Movie Recap Studio</title>
+  <link rel="stylesheet" href="/theme/tokens.css">
+  <link rel="stylesheet" href="/theme/components.css">
   <style>
     :root {
-      --bg: #0f172a; --panel: #1e293b; --text: #f8fafc; --text-muted: #94a3b8;
-      --accent: #3b82f6; --accent-hover: #2563eb; --success: #10b981; --error: #ef4444;
-      --border: #334155;
+      --bg: oklch(0.145 0.005 270);
+      --panel: oklch(0.22 0.007 270);
+      --text: oklch(0.97 0 0);
+      --text-muted: oklch(0.72 0.01 270);
+      --accent: #6d8bff;
+      --accent-hover: #8b7cff;
+      --success: #3ddc97;
+      --error: #f87171;
+      --border: oklch(1 0 0 / 8%);
     }
     body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 2rem; display: flex; justify-content: center; min-height: 100vh; }
     .container { max-width: 900px; width: 100%; }

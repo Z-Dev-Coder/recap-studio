@@ -1,0 +1,442 @@
+/* ===================================================================
+   SHARED COMPONENT SYSTEM — DARK MODE LUXE + BENTO + GLASS
+   =================================================================== */
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.text-display, .page-head h1 {
+  font-size: var(--text-display);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.text-h1 { font-size: var(--text-h1); font-weight: 600; line-height: 1.3; }
+.text-h2 { font-size: var(--text-h2); font-weight: 600; line-height: 1.4; }
+.text-body { font-size: var(--text-body); color: var(--text-secondary); line-height: 1.6; }
+.text-caption { font-size: var(--text-caption); line-height: 1.4; font-weight: 500; }
+.text-micro, .section-label, .sec-label {
+  font-size: var(--text-micro);
+  line-height: 1.4;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+
+/* ===================================================================
+   BUTTONS
+   =================================================================== */
+
+button {
+  font-family: var(--font-sans);
+}
+
+/* Primary Button (Gradient Accent) */
+.primary-btn, button.primary, .btn-primary {
+  background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-full);
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: filter var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
+}
+
+.primary-btn:hover, button.primary:hover, .btn-primary:hover {
+  filter: brightness(1.08);
+  box-shadow: var(--shadow-md), var(--shadow-glow);
+}
+
+.primary-btn:active, button.primary:active, .btn-primary:active {
+  transform: scale(0.98);
+}
+
+.primary-btn:disabled, button.primary:disabled, .btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+  box-shadow: none;
+}
+
+/* Secondary / Ghost Button */
+.ghost, button.ghost, .btn-secondary {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: var(--radius-full);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+.ghost:hover, button.ghost:hover, .btn-secondary:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+
+.ghost:active, button.ghost:active, .btn-secondary:active {
+  transform: scale(0.98);
+}
+
+.ghost.small, button.sm, .btn-sm {
+  padding: 5px 12px;
+  font-size: 11.5px;
+  border-radius: var(--radius-sm);
+}
+
+.ghost.danger, button.danger {
+  color: var(--danger);
+  border-color: color-mix(in oklch, var(--danger) 30%, transparent);
+}
+
+.ghost.danger:hover, button.danger:hover {
+  background: color-mix(in oklch, var(--danger) 14%, transparent);
+  border-color: var(--danger);
+}
+
+/* Icon Buttons */
+.btn-icon, .icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.btn-icon:hover, .icon-btn:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+/* ===================================================================
+   FORMS & INPUTS
+   =================================================================== */
+
+input[type="text"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+input[type="url"],
+textarea,
+select,
+.input,
+.select {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 9px 13px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+.input:focus,
+.select:focus {
+  border-color: var(--accent-start);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--surface-2);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Form Labels */
+label.f, .field label, .form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 5px;
+}
+
+/* Switches & Checkboxes */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle input { display: none; }
+
+.tk {
+  width: 38px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  position: relative;
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+  flex: 0 0 38px;
+}
+
+.tk::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  transition: transform var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+
+.toggle input:checked + .tk {
+  background: var(--accent-soft);
+  border-color: var(--accent-start);
+}
+
+.toggle input:checked + .tk::after {
+  transform: translateX(16px);
+  background: var(--accent-start);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* ===================================================================
+   CARDS & PANELS
+   =================================================================== */
+
+.card, .panel, .box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.card:hover, .panel:hover {
+  border-color: var(--border-strong);
+}
+
+/* ===================================================================
+   BADGES & PILLS
+   =================================================================== */
+
+.badge, .pill, .tag, .chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: var(--text-micro);
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.badge.ok, .badge.success, .pill.ok {
+  background: color-mix(in oklch, var(--success) 12%, transparent);
+  color: var(--success);
+  border: 1px solid color-mix(in oklch, var(--success) 24%, transparent);
+}
+
+.badge.warn, .badge.warning, .pill.warn {
+  background: color-mix(in oklch, var(--warning) 12%, transparent);
+  color: var(--warning);
+  border: 1px solid color-mix(in oklch, var(--warning) 24%, transparent);
+}
+
+.badge.danger, .badge.err, .pill.err {
+  background: color-mix(in oklch, var(--danger) 12%, transparent);
+  color: var(--danger);
+  border: 1px solid color-mix(in oklch, var(--danger) 24%, transparent);
+}
+
+.badge.info, .badge.accent, .pill.accent {
+  background: var(--accent-soft);
+  color: var(--accent-start);
+  border: 1px solid color-mix(in oklch, var(--accent-start) 24%, transparent);
+}
+
+/* ===================================================================
+   SEGMENTED CONTROLS & TABS
+   =================================================================== */
+
+.seg, .tabs, .nav-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+}
+
+.seg .nav-item, .tabs .tab-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.seg .nav-item:hover, .tabs .tab-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+.seg .nav-item.active, .tabs .tab-btn.active {
+  color: var(--text-primary);
+  background: var(--surface-3);
+  font-weight: 600;
+  box-shadow: var(--shadow-xs);
+}
+
+/* ===================================================================
+   MODALS & DIALOGS
+   =================================================================== */
+
+.veil, .modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 12, 16, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: veilFade var(--duration-base) var(--ease-out);
+}
+
+.modal, .dialog {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  box-shadow: var(--shadow-lg);
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: modalPop var(--duration-base) var(--ease-out);
+}
+
+@keyframes veilFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalPop {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ===================================================================
+   PROGRESS & TIMELINES
+   =================================================================== */
+
+.progress-track, .bar-wrap, .meter {
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill, .bar-fill, .meter-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+  border-radius: var(--radius-full);
+  transition: width var(--duration-base) var(--ease-out);
+}
+
+/* ===================================================================
+   ACCESSIBILITY & SCROLLBARS
+   =================================================================== */
+
+:focus-visible {
+  outline: 2px solid var(--accent-start);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--surface-4);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

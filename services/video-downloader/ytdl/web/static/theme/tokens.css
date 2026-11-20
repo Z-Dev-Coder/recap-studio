@@ -1,0 +1,138 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ===================================================================
+     BASE SURFACES (Layered Darkness - OKLCH)
+     =================================================================== */
+  --bg:            oklch(0.145 0.005 270);  /* #131418 Page base */
+  --surface-1:     oklch(0.18  0.006 270);  /* #1b1c22 Sidebar, module headers, nested panels */
+  --surface-2:     oklch(0.22  0.007 270);  /* #24262e Cards, tiles, forms, inputs */
+  --surface-3:     oklch(0.26  0.008 270);  /* #2d303a Hover states, popovers, secondary buttons */
+  --surface-4:     oklch(0.31  0.009 270);  /* #3a3d4a Active states, modals, floating dialogs */
+
+  /* ===================================================================
+     BORDERS
+     =================================================================== */
+  --border:        oklch(1 0 0 / 8%);
+  --border-strong: oklch(1 0 0 / 14%);
+
+  /* ===================================================================
+     TYPOGRAPHY & CONTRAST (WCAG AA Compliant)
+     =================================================================== */
+  --text-primary:   oklch(0.97 0 0);         /* Pure crisp white heading text (~14.2:1) */
+  --text-secondary: oklch(0.72 0.01 270);    /* Clean body readable copy (~6.5:1) */
+  --text-tertiary:  oklch(0.55 0.01 270);    /* Muted metadata, section labels (~4.6:1) */
+
+  /* ===================================================================
+     ACCENT GRADIENT (Cool Blue -> Violet)
+     =================================================================== */
+  --accent-start: #6d8bff;
+  --accent-mid:   #8b7cff;
+  --accent-end:   #a78bfa;
+  --accent:       var(--accent-start);
+  --accent-hi:    var(--accent-mid);
+  --accent-soft:  oklch(0.72 0.16 265 / 12%);
+  --accent-glow:  oklch(0.72 0.16 265 / 35%);
+
+  /* ===================================================================
+     SEMANTIC STATUS COLORS
+     =================================================================== */
+  --success: #3ddc97;
+  --warning: #fbbf24;
+  --danger:  #f87171;
+  --info:    #60a5fa;
+
+  --ok:      var(--success);
+  --ok-soft: color-mix(in oklch, var(--success) 12%, transparent);
+  --warn:    var(--warning);
+  --warn-soft: color-mix(in oklch, var(--warning) 12%, transparent);
+  --err:     var(--danger);
+  --err-soft: color-mix(in oklch, var(--danger) 12%, transparent);
+
+  /* ===================================================================
+     GLASSMORPHISM
+     =================================================================== */
+  --glass-bg:      rgba(255, 255, 255, 0.04);
+  --glass-border:  rgba(255, 255, 255, 0.08);
+  --glass-blur:    20px;
+
+  /* ===================================================================
+     LAYERED SHADOWS
+     =================================================================== */
+  --shadow-xs:   0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm:   0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md:   0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg:   0 16px 48px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 24px var(--accent-glow);
+  --shadow:      var(--shadow-md);
+
+  /* ===================================================================
+     BORDER RADIUS SCALE
+     =================================================================== */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-full: 9999px;
+
+  --r:    var(--radius-lg);
+  --r-sm: var(--radius-sm);
+  --r-xs: var(--radius-xs);
+
+  /* ===================================================================
+     SPACING SCALE (4px Base Grid)
+     =================================================================== */
+  --space-1: 4px;   --space-2: 8px;   --space-3: 12px;
+  --space-4: 16px;  --space-5: 20px;  --space-6: 24px;
+  --space-8: 32px;  --space-10: 40px; --space-12: 48px;
+  --sp: var(--space-4);
+
+  /* ===================================================================
+     TYPOGRAPHY SCALE (Inter)
+     =================================================================== */
+  --font-sans: "Inter", "Geist", system-ui, -apple-system, sans-serif;
+  --text-display: 28px;
+  --text-h1: 20px;
+  --text-h2: 16px;
+  --text-body: 14px;
+  --text-caption: 12px;
+  --text-micro: 11px;
+
+  /* ===================================================================
+     MOTION & TRANSITIONS
+     =================================================================== */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+
+  /* ===================================================================
+     LAYOUT
+     =================================================================== */
+  --sidebar-width: 240px;
+  --sidebar-width-collapsed: 64px;
+
+  /* ===================================================================
+     LEGACY TOKEN BACKWARD-COMPATIBILITY ALIASES
+     =================================================================== */
+  --surface:       var(--surface-1);
+  --surface-subtle: var(--surface-2);
+  --card:          var(--surface-2);
+  --card-2:        var(--surface-3);
+  --bg-2:          var(--surface-1);
+  --line:          var(--border);
+  --text:          var(--text-primary);
+  --muted:         var(--text-secondary);
+  --faint:         var(--text-tertiary);
+  --blue:          var(--info);
+
+  color-scheme: dark;
+}
+
+/* Force dark color scheme at HTML/Body level */
+html, body {
+  color-scheme: dark;
+  background-color: var(--bg);
+  color: var(--text-secondary);
+}
