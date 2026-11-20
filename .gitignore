@@ -11,6 +11,11 @@ services/video-downloader/downloads/
 # secrets and per-machine state -- the Gemini key lives here
 settings.json
 services/video-downloader/**/settings.json
+resource_settings.json
+services/video-downloader/**/resource_settings.json
+*.db
+*.sqlite
+*.sqlite3
 
 # media and generated projects
 *.mp4

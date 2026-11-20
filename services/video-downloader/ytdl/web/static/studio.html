@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Movie Recap Studio</title>
+  <style>
+    :root {
+      --bg: #0f172a; --panel: #1e293b; --text: #f8fafc; --text-muted: #94a3b8;
+      --accent: #3b82f6; --accent-hover: #2563eb; --success: #10b981; --error: #ef4444;
+      --border: #334155;
+    }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 2rem; display: flex; justify-content: center; min-height: 100vh; }
+    .container { max-width: 900px; width: 100%; }
+    .header { text-align: center; margin-bottom: 2rem; }
+    .header h1 { margin: 0; font-size: 2rem; font-weight: 700; color: #fff; }
+    .header p { color: var(--text-muted); margin-top: 0.5rem; }
+    
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+    
+    label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem; color: var(--text-muted); }
+    input[type="text"], select { width: 100%; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: #fff; margin-bottom: 1rem; box-sizing: border-box; }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    
+    .btn { display: block; width: 100%; padding: 0.875rem; border: none; border-radius: 6px; background: var(--accent); color: white; font-weight: 600; font-size: 1rem; cursor: pointer; text-align: center; transition: background 0.2s; }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn.secondary { background: transparent; border: 1px solid var(--border); }
+    .btn.secondary:hover { background: var(--border); }
+    
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    
+    .progress-list { list-style: none; padding: 0; margin: 0; }
+    .progress-item { display: flex; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+    .progress-item:last-child { border-bottom: none; }
+    .progress-icon { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border); margin-right: 1rem; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; }
+    .progress-item.running .progress-icon { border-color: var(--accent); background: var(--accent); color: white; animation: pulse 1.5s infinite; }
+    .progress-item.done .progress-icon { border-color: var(--success); background: var(--success); color: white; }
+    .progress-item.error .progress-icon { border-color: var(--error); background: var(--error); color: white; }
+    
+    .progress-content { flex: 1; }
+    .progress-title { font-weight: 500; }
+    .progress-msg { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; }
+    
+    @keyframes pulse {
+      0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; }
+    }
+    
+    .hide { display: none !important; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; }
+    .error-box { background: rgba(239, 68, 68, 0.1); border: 1px solid var(--error); padding: 1rem; border-radius: 6px; color: #fca5a5; margin-bottom: 1rem; }
+    
+    video { width: 100%; border-radius: 8px; margin-bottom: 1rem; background: #000; }
+    
+    #settingsModal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    #settingsModal .card { max-width: 400px; width: 100%; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>AI Movie Recap Studio</h1>
+    <p>Professional One-Click Workflow</p>
+  </div>
+  
+  <div class="flex-between" style="margin-bottom: 1rem;">
+    <button class="btn secondary" style="width: auto; padding: 0.5rem 1rem;" onclick="$('settingsModal').classList.remove('hide')">Settings</button>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+      <select id="recentProjects" onchange="resumeProject(this.value)" style="padding: 0.5rem; margin: 0; font-size: 0.875rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted);">
+        <option value="">-- Resume Recent Project --</option>
+      </select>
+      <a href="/advanced" style="color: var(--text-muted); font-size: 0.875rem; text-decoration: none;">Advanced Mode &rarr;</a>
+    </div>
+  </div>
+
+  <div id="errorBox" class="error-box hide"></div>
+
+  <!-- Wizard Step 1: Input -->
+  <div class="card" id="inputCard">
+    <label>Video URL (YouTube or Local File Path)</label>
+    <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=..." />
+    
+    <div class="grid-2" style="grid-template-columns: 1fr 1fr 1fr 1fr; margin-bottom: 1rem;">
+      <div>
+        <label>Format</label>
+        <select id="modeInput">
+          <option value="reels">Vertical Reel (9:16)</option>
+          <option value="long">Standard Video (16:9)</option>
+        </select>
+      </div>
+      <div>
+            <label>Target Length</label>
+            <select id="lengthInput">
+              <option value="60">60 seconds (Shorts)</option>
+              <option value="180">3 minutes (Summary)</option>
+              <option value="300">5 minutes (Detailed)</option>
+              <option value="600">10 minutes (Full)</option>
+            </select>
+          </div>
+          <div>
+            <label>Quality (Resolution)</label>
+            <select id="qualityInput">
+              <option value="1080">1080p (High Quality)</option>
+              <option value="720">720p (Faster)</option>
+              <option value="2160">4K (Slowest)</option>
+            </select>
+          </div>
+      <div>
+        <label>Language</label>
+        <select id="langInput">
+          <option value="my">Burmese</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+      <div>
+        <label>AI Engine</label>
+        <select id="engineInput">
+          <option value="gemini">Gemini (Default)</option>
+          <option value="groq">Groq (Fast)</option>
+          <option value="ollama">Ollama (Local)</option>
+        </select>
+      </div>
+    </div>
+    
+    <button class="btn" id="generateBtn" style="margin-top: 1rem;" onclick="startRun()">Generate Recap</button>
+  </div>
+
+  <!-- Wizard Step 2: Progress -->
+  <div class="card hide" id="progressCard">
+    <div class="flex-between" style="margin-bottom: 1rem;">
+      <h3 style="margin:0;" id="progressTitle">Generating...</h3>
+      <div style="display: flex; gap: 0.5rem;">
+        <button id="retryBtn" class="btn hide" style="width: auto; padding: 0.25rem 0.75rem; background: var(--success);" onclick="retryRun()">Retry / Resume</button>
+        <button id="stopBtn" class="btn secondary" style="width: auto; padding: 0.25rem 0.75rem;" onclick="cancelRun()">Stop</button>
+        <button id="backBtn" class="btn secondary hide" style="width: auto; padding: 0.25rem 0.75rem;" onclick="window.location.reload()">Back</button>
+      </div>
+    </div>
+    <ul class="progress-list" id="progressList">
+      <!-- Injected via JS -->
+    </ul>
+  </div>
+
+  <!-- Wizard Step 3: Result -->
+  <div class="card hide" id="resultCard">
+    <h3 style="margin-top:0;">Your Recap is Ready!</h3>
+    <video id="finalVideo" controls></video>
+    <div class="grid-2">
+      <button class="btn" onclick="downloadVideo()">Download</button>
+      <button class="btn secondary" onclick="location.reload()">Start Over</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="hide">
+  <div class="card">
+    <h3 style="margin-top: 0;">Settings</h3>
+    <label>Gemini API Key</label>
+    <input type="text" id="apiKeyInput" placeholder="AI Studio Key (required for Script/QA)" />
+    
+        <label>Groq API Key (Optional)</label>
+    <input type="text" id="groqKeyInput" placeholder="gsk_..." />
+    
+    <label>Ollama URL (Optional)</label>
+    <input type="text" id="ollamaInput" placeholder="http://127.0.0.1:11434" />
+    
+    <label>Voice TTS Engine</label>
+    <select id="ttsEngine">
+      <option value="voxcpm">VoxCPM2 (Local GPU - Burmese Support)</option>
+    </select>
+    
+    
+      <label class="note" style="display:block; margin-top: 1rem; color: var(--text-muted); font-size: 0.875rem;">
+        <input type="checkbox" id="burnCaps" onchange="toggleBurnCaps()"> Burn Burmese captions into the final video
+      </label>
+
+      <div class="grid-2" style="margin-top: 1.5rem;">
+      <button class="btn secondary" onclick="$('settingsModal').classList.add('hide')">Cancel</button>
+      <button class="btn" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let currentProject = null;
+  const STEPS = [
+    { key: 'source', label: 'Download & Inspect' },
+    { key: 'transcript', label: 'Transcribe Audio' },
+    { key: 'script', label: 'Write Script & Timings' },
+    { key: 'script_qa', label: 'QA & Review' },
+    { key: 'voice', label: 'Generate Voiceover' },
+    { key: 'video', label: 'Cut & Assemble Footage' },
+    { key: 'thumbnail', label: 'Extract Thumbnail' },
+    { key: 'final', label: 'Render Final Video' },
+    { key: 'qc', label: 'Output QC Verification' }
+  ];
+
+  // Initialize UI
+      function initList() {
+      $('progressList').innerHTML = STEPS.map(s => `
+        <li class="progress-item" id="step-${s.key}" style="display: flex; align-items: flex-start; padding: 1rem 0; border-bottom: 1px solid var(--border);">
+          <div class="progress-icon" style="margin-top: 4px;"></div>
+          <div class="progress-content" style="flex: 1; display: grid; grid-template-columns: 220px 1fr; gap: 1.5rem; align-items: start;">
+            <div>
+              <div class="progress-title" style="font-weight: 500;">${s.label}</div>
+              <div class="progress-msg" id="msg-${s.key}" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">Waiting...</div>
+            </div>
+            <div id="result-${s.key}" style="display: none; min-width: 0; font-size: 0.875rem; background: var(--bg); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);"></div>
+          </div>
+        </li>
+      `).join('');
+    }
+    initList();
+
+  // Load Settings
+  async function loadSettings() {
+    const res = await fetch('/api/recap/settings');
+    const data = await res.json();
+    $('apiKeyInput').value = data.gemini_key || '';
+    $('groqKeyInput').value = data.groq_key || '';
+    $('ollamaInput').value = data.ollama_url || 'http://127.0.0.1:11434';
+    $('ttsEngine').value = data.tts_engine || 'voxcpm';
+      $('burnCaps').checked = !!data.burn_captions;
+    
+    if (data.stage_models && data.stage_models.write) {
+        if (data.stage_models.write.startsWith('groq')) $('engineInput').value = 'groq';
+        else if (data.stage_models.write.startsWith('ollama')) $('engineInput').value = 'ollama';
+        else $('engineInput').value = 'gemini';
+    }
+  }
+  loadSettings(); loadRecentProjects();
+
+  async function saveSettings() {
+    
+    let engine = $('engineInput').value;
+    let stages = {};
+    if (engine === 'groq') {
+        stages = {read: 'groq:llama-3.1-70b-versatile', pick: 'groq:llama-3.1-70b-versatile', write: 'groq:llama-3.1-70b-versatile', review: 'groq:llama-3.1-70b-versatile'};
+    } else if (engine === 'ollama') {
+        stages = {read: 'ollama:qwen2.5:7b-instruct-q4_K_M', pick: 'ollama:qwen2.5:7b-instruct-q4_K_M', write: 'ollama:qwen2.5:7b-instruct-q4_K_M', review: 'ollama:qwen2.5:7b-instruct-q4_K_M'};
+    }
+    
+    const body = { 
+      gemini_key: $('apiKeyInput').value.includes('*') ? undefined : $('apiKeyInput').value,
+      groq_key: $('groqKeyInput').value.includes('*') ? undefined : $('groqKeyInput').value,
+      ollama_url: $('ollamaInput').value,
+      tts_engine: $('ttsEngine').value,
+        burn_captions: $('burnCaps').checked,
+      stage_models: stages
+    };
+    await fetch('/api/recap/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+    $('settingsModal').classList.add('hide');
+  }
+
+  function showError(msg) {
+    $('errorBox').textContent = msg;
+    $('errorBox').classList.remove('hide');
+  }
+
+  
+  async function retryRun() {
+    await saveSettings();
+    const sk = $("apiKeyInput").value;
+    const engine = $("engineInput").value;
+    if (engine === 'gemini' && (!sk || sk.trim() === "")) {
+      $("settingsModal").classList.remove("hide");
+      return showError("Please enter your Gemini API Key in the settings first.");
+    }
+    
+    if(!currentProject) return;
+    
+    $('retryBtn').disabled = true;
+    $('retryBtn').textContent = 'Resuming...';
+    
+    try {
+      const res = await fetch(`/api/recap/projects/${currentProject.id}/run`, { 
+        method: 'POST', 
+        headers: {'Content-Type': 'application/json'}, 
+        body: JSON.stringify({}) 
+      });
+      if(!res.ok) throw new Error("Server error: " + await res.text());
+    } catch(err) {
+      showError(err.message);
+      $('retryBtn').disabled = false;
+      $('retryBtn').textContent = 'Retry / Resume';
+    }
+  }
+
+  async function startRun() {
+    await saveSettings();
+    const sk = $("apiKeyInput").value;
+    if (!sk || sk.trim() === "") {
+      $("settingsModal").classList.remove("hide");
+      return showError("Please enter your Gemini API Key in the settings first.");
+    }
+    $('errorBox').classList.add('hide');
+    const url = $('urlInput').value.trim();
+    if(!url) return showError('Please enter a video URL.');
+    
+    $('generateBtn').disabled = true;
+    $('generateBtn').textContent = 'Starting...';
+
+    try {
+      // 1. Create Project
+      const res = await fetch('/api/recap/projects', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          url: url, mode: $('modeInput').value, language: $('langInput').value,
+          target_seconds: Number($('lengthInput').value),
+            quality: $('qualityInput').value,
+            content_type: 'recap', autorun: false
+        })
+      });
+      if(!res.ok) throw new Error('Failed to create project');
+      currentProject = await res.json();
+
+      // 2. Start SSE listener
+      listenSSE();
+
+      // 3. Switch UI
+      $('inputCard').classList.add('hide');
+      $('progressCard').classList.remove('hide');
+
+      // 4. Trigger Run All
+      // Note: backend 'autorun' flag in create project usually handles triggering the chain automatically,
+      // but if not, we can manually call run_chain:
+      await fetch(`/api/recap/projects/${currentProject.id}/run`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({}) });
+    } catch(err) {
+      showError(err.message);
+      $('generateBtn').disabled = false;
+      $('generateBtn').textContent = 'Generate Recap';
+    }
+  }
+
+  async function cancelRun() {
+    if(!currentProject) return;
+    await fetch(`/api/recap/projects/${currentProject.id}/cancel`, { method: 'POST' });
+    $('progressCard').classList.add('hide');
+    $('inputCard').classList.remove('hide');
+    $('generateBtn').disabled = false;
+    $('generateBtn').textContent = 'Generate Recap';
+    initList();
+  }
+
+
+  let runningStartTime = {};
+  let progressInterval = null;
+
+  function updateTimers() {
+    STEPS.forEach(s => {
+      const msgEl = $(`msg-${s.key}`);
+      if (!msgEl) return;
+      if (runningStartTime[s.key]) {
+        const elapsed = Math.floor((Date.now() - runningStartTime[s.key]) / 1000);
+        // Only append to the base message
+        const baseMsg = msgEl.getAttribute('data-base-msg') || 'Working...';
+        msgEl.textContent = `${baseMsg} (${elapsed}s)`;
+      }
+    });
+  }
+
+
+  async function toggleBurnCaps() {
+      const isChecked = $('burnCaps').checked;
+      saveSettings(); // save to global settings
+      if (currentProject) {
+          try {
+              // Update the current project!
+              await fetch(`/api/recap/projects/${currentProject.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ burn_captions: isChecked })
+              });
+              // Force the final step to rebuild next time Retry is clicked
+              await fetch(`/api/recap/projects/${currentProject.id}/final/clear`, { method: 'POST' });
+              $('step-final').classList.remove('done');
+              $('msg-final').textContent = 'Will be rebuilt with captions on Retry';
+              $('btnRetry').style.display = 'inline-block';
+          } catch(e) {}
+      }
+  }
+  function updateUI(p) {
+    if(!p || p.id !== currentProject?.id) return;
+    if ($('burnerIframe') && $('burnerIframe').src.indexOf('id=' + p.id) === -1) {
+        $('burnerIframe').src = '/recap?id=' + p.id;
+    }
+    
+    let allDone = true;
+    let anyError = false;
+
+    STEPS.forEach(s => {
+      const el = $(`step-${s.key}`);
+      const msgEl = $(`msg-${s.key}`);
+      const state = (p.steps || {})[s.key] || { status: 'idle', message: 'Waiting...' };
+      
+      el.className = 'progress-item ' + state.status;
+      // Timer Logic
+      if (state.status === 'running') {
+          if (!runningStartTime[s.key]) runningStartTime[s.key] = Date.now();
+      } else {
+          delete runningStartTime[s.key];
+      }
+      
+      let base = state.error || state.message || (state.status === 'done' ? 'Completed' : 'Waiting...');
+      if (typeof state.progress === 'number' && state.status === 'running') {
+          base += ` - ${Math.round(state.progress * 100)}%`;
+      }
+      msgEl.setAttribute('data-base-msg', base);
+      msgEl.textContent = base;
+      
+      if (!progressInterval && Object.keys(runningStartTime).length > 0) {
+          progressInterval = setInterval(updateTimers, 1000);
+      } else if (Object.keys(runningStartTime).length === 0 && progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+      }
+      
+      if(state.status === 'error') {
+        anyError = true;
+        showError(`${s.label} failed: ${state.error}`);
+      }
+      if(state.status !== 'done') allDone = false;
+      
+      if (s.key === 'final' && state.status === 'idle' && state.message && state.message.includes('waiting for Burmese captions')) {
+            const resEl = $(`result-${s.key}`);
+            resEl.style.display = 'block';
+            
+            if (window._autoBurnPid !== p.id) {
+                window._autoBurnPid = p.id; // Just to mark that we've rendered the buttons
+                resEl.innerHTML = `
+                  <div style="padding: 1rem; background: var(--surface-2); border-radius: 6px; border: 1px solid var(--border);">
+                    <strong style="color: var(--text);">Final Cut Ready for Layout!</strong><br/>
+                    <p style="margin: 0.5rem 0; font-size: 0.85rem; color: var(--text-muted);">The video is ready. Because caption and logo placements change based on the video's aspect ratio, you can adjust them before finalizing.</p>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button class="btn" style="flex: 1; background: var(--accent); color: white; border: none; padding: 0.75rem; border-radius: 4px; cursor: pointer;" onclick="window.open('/recap?id=${p.id}', '_blank')">1. Adjust Layout (Opens Tab)</button>
+                        <button class="btn" style="flex: 1; background: var(--ok); color: white; border: none; padding: 0.75rem; border-radius: 4px; cursor: pointer;" onclick="this.disabled=true; this.textContent='Burning... please wait'; $('burnerIframe').contentWindow.burnCaptions(currentProject)">2. Burn Final Video</button>
+                    </div>
+                  </div>
+                `;
+            }
+        }
+      
+        const resEl = $(`result-${s.key}`);
+        
+        if (s.key === 'voice' && (state.status === 'running' || state.status === 'done')) {
+            resEl.style.display = 'block';
+            if (resEl.dataset.lastMsg !== state.message || resEl.dataset.loaded !== p.id) {
+                resEl.dataset.lastMsg = state.message;
+                resEl.dataset.loaded = p.id;
+                
+                fetch(`/api/recap/projects/${p.id}/voice/lines?lang=my`).then(r => r.json()).then(d => {
+                  const lines = d.lines || [];
+                  const linesHtml = lines.map(l => {
+                      if(!l.file) return '';
+                      return `<div style="display:flex; justify-content:space-between; align-items:center; margin-top: 0.5rem; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 4px;">
+                        <div style="font-size:0.875rem; flex:1; min-width:0; margin-right: 1rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${(l.text || '(empty)').replace(/"/g, '&quot;')}">${l.text || '(empty)'}</div>
+                        <button class="btn secondary" style="padding:0.25rem 0.5rem; min-width: 60px;" onclick="window.playVoiceLine('${p.id}', '${l.file}')">Play</button>
+                      </div>`;
+                  }).join('');
+                  resEl.innerHTML = `<strong>Generated Audio Lines:</strong><br/>
+                    <div style="max-height:300px; overflow-y:auto; margin-bottom:1rem;">
+                      ${linesHtml}
+                    </div>
+                    ${state.status === 'done' ? `<a href="/api/recap/projects/${p.id}/voice.zip?lang=my" class="btn" style="display:block; text-align:center;">Download All (ZIP)</a>` : `<em>Generating remaining lines...</em>`}
+                  `;
+                });
+            }
+        }
+
+        if (s.key === 'script' && p.beats && p.beats.length > 0) {
+            resEl.style.display = 'block';
+            window._editBeats = p.beats;
+            resEl.innerHTML = `<strong>Generated Script (Burmese):</strong><br/>
+              <div style="max-height: 300px; overflow-y: auto; margin: 0.5rem 0; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 4px;">
+                ${p.beats.map((b, idx) => `
+                  <div style="margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">[${b.start.toFixed(1)}s - ${b.end.toFixed(1)}s] English Reference:</div>
+                    <div style="font-size: 0.85rem; margin-bottom: 0.5rem;">${b.en || ''}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">Burmese Narration:</div>
+                    <textarea onchange="window._editBeats[${idx}].my = this.value" style="width:100%; height: 60px; font-family: inherit; font-size: 0.95rem;">${b.my || ''}</textarea>
+                  </div>
+                `).join('')}
+              </div>
+            `;
+        }
+    });
+
+
+    let isWorking = false;
+    STEPS.forEach(s => {
+      const state = (p.steps || {})[s.key] || { status: 'idle' };
+      if(state.status === 'running') isWorking = true;
+    });
+
+    if (allDone) {
+      $('progressTitle').innerText = "Finished!";
+      $('stopBtn').classList.add('hide');
+      $('retryBtn').classList.add('hide');
+      $('backBtn').classList.remove('hide');
+      $('progressCard').classList.add('hide');
+      $('resultCard').classList.remove('hide');
+      $('finalVideo').src = `/api/recap/projects/${p.id}/file?name=final_${p.mode}_${p.voice_lang}.mp4`;
+    } else if (anyError || !isWorking) {
+      $('progressTitle').innerText = "Paused / Error";
+      $('stopBtn').classList.add('hide');
+      $('retryBtn').classList.remove('hide');
+      $('backBtn').classList.remove('hide');
+    } else {
+      $('progressTitle').innerText = "Generating...";
+      $('stopBtn').classList.remove('hide');
+      $('retryBtn').classList.add('hide');
+      $('backBtn').classList.add('hide');
+    }
+  }
+
+  let es = null;
+  function listenSSE() {
+    if(es) es.close();
+    es = new EventSource('/api/recap/events');
+    es.onmessage = e => {
+      try {
+        const p = JSON.parse(e.data);
+        updateUI(p);
+      } catch(err) {}
+    };
+  }
+
+  function downloadVideo() {
+    const a = document.createElement('a');
+    a.href = $('finalVideo').src;
+    a.download = 'recap.mp4';
+    a.click();
+  }
+
+  // --- RECENT PROJECTS ---
+  async function loadRecentProjects() {
+    try {
+      const res = await fetch('/api/recap/projects');
+      if (res.ok) {
+        const projects = await res.json();
+        const sel = $('recentProjects');
+        projects.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = p.title || p.url || p.id;
+          sel.appendChild(opt);
+        });
+      }
+    } catch(err) { console.error(err); }
+  }
+
+  async function resumeProject(pid) {
+    if(!pid) return;
+    try {
+      const res = await fetch(`/api/recap/projects/${pid}`);
+      if(res.ok) {
+        currentProject = await res.json();
+        $('inputCard').classList.add('hide');
+        $('progressCard').classList.remove('hide');
+        
+        // Auto-select the dropdowns to match project
+        if(currentProject.mode) $('modeInput').value = currentProject.mode;
+        if(currentProject.language) $('langInput').value = currentProject.language;
+        
+        updateUI(currentProject);
+        listenSSE();
+        
+        // Let user manually click generate to resume, but show it's loaded
+        $('progressCard').insertAdjacentHTML('afterbegin', `<div style="margin-bottom: 1rem; padding: 0.5rem; background: var(--accent); color: white; border-radius: 4px; text-align: center; font-weight: 500;">Loaded existing project! Scroll down and click Retry / Resume.</div>`);
+      }
+    } catch(err) {
+      showError("Could not load project: " + err.message);
+    }
+  }
+
+  // Hook into window.onload
+
+
+  async function saveScript(pid) {
+    if(!window._editTimeline) return;
+    try {
+      await fetch(`/api/recap/projects/${pid}`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ timeline: window._editTimeline })
+      });
+      alert('Script saved successfully!');
+    } catch (e) {
+      alert('Failed to save script: ' + e.message);
+    }
+  }
+
+  window.playVoiceLine = function(pid, file) {
+      if(window._currentAudio) window._currentAudio.pause();
+      window._currentAudio = new Audio(`/api/recap/projects/${pid}/file?name=${encodeURIComponent('voice/' + file)}`);
+      window._currentAudio.play();
+  };
+</script>
+  <iframe id="burnerIframe" style="display:none;"></iframe>
+</body>
+</html>

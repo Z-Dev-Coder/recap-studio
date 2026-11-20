@@ -22,11 +22,13 @@ from pydantic import BaseModel, Field
 from ..downloader import default_out_dir
 from .jobs import registry
 from .recap_api import router as recap_router
+from .resource_hub_api import router as resource_hub_router
 
 STATIC = Path(__file__).parent / "static"
 
 app = FastAPI(title="Video Downloader", docs_url=None, redoc_url=None)
 app.include_router(recap_router)
+app.include_router(resource_hub_router)
 
 
 class DownloadRequest(BaseModel):

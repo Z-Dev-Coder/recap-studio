@@ -823,6 +823,441 @@ img, video { transition: opacity .2s ease; }
     transition-duration: 0.001ms !important;
   }
 }
+
+/* -------------------------------------------------------- Resource Hub UI */
+.side-nav-group {
+  padding: 0 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.side-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  text-align: left;
+  transition: background .12s ease, border-color .12s ease;
+}
+.side-nav-btn:hover {
+  background: var(--surface-2);
+}
+.side-nav-btn.active {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent-hi);
+  font-weight: 600;
+}
+.side-nav-btn .nav-ic {
+  font-size: 14px;
+  opacity: .85;
+}
+.hub-side-pill {
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-weight: 600;
+}
+.side-nav-btn.active .hub-side-pill {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Hub Container & Header */
+.hub-container {
+  background: var(--bg);
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.hub-header {
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.hub-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.hub-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hub-icon {
+  font-size: 20px;
+}
+.hub-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+.hub-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.hub-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Search Box */
+.hub-search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 4px 6px 4px 12px;
+  margin: 14px 0 10px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.hub-search-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+  background: var(--surface);
+}
+.hub-search-icon {
+  font-size: 14px;
+  color: var(--faint);
+}
+.hub-search-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13.5px;
+  outline: none;
+  padding: 6px 0;
+}
+.hub-search-clear {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.hub-search-clear:hover {
+  color: var(--text);
+}
+
+/* Tabs */
+.hub-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.hub-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: var(--r-xs);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .12s ease;
+}
+.hub-tab:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.hub-tab.on {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--accent-hi);
+  font-weight: 600;
+}
+.hub-tab-status {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--muted);
+}
+.hub-tab.on .hub-tab-status {
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface-3));
+  color: var(--accent-hi);
+}
+.hub-tab-count {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--muted);
+}
+.hub-tab.on .hub-tab-count {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Filters Bar */
+.hub-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0 2px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.hub-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hub-filter-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
+
+/* Grid & Cards */
+.hub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
+  gap: 18px;
+  margin-top: 14px;
+}
+.hub-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+  position: relative;
+}
+.hub-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+.hub-thumb-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #090b0e;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hub-thumb-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.hub-thumb-placeholder {
+  font-size: 32px;
+  color: var(--faint);
+  opacity: .5;
+}
+.hub-duration-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+}
+.hub-provider-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.hub-badge-yt { background: #e02424; color: #fff; }
+.hub-badge-bili { background: #f43f5e; color: #fff; }
+.hub-badge-local { background: #10b981; color: #fff; }
+.hub-badge-direct { background: #6366f1; color: #fff; }
+
+.hub-type-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+}
+.hub-type-local { background: rgba(16, 185, 129, 0.88); color: #fff; }
+.hub-type-ref { background: rgba(180, 83, 9, 0.88); color: #fff; }
+
+.hub-card-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 5px;
+}
+.hub-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.38;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: pointer;
+}
+.hub-card-title:hover {
+  color: var(--accent-hi);
+}
+.hub-card-author {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hub-card-meta {
+  font-size: 11px;
+  color: var(--faint);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.hub-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.hub-tag-pill {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.hub-card-notes {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--surface-2);
+  padding: 6px 9px;
+  border-radius: var(--r-xs);
+  margin-top: 6px;
+  border-left: 2px solid var(--accent);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hub-card-attached {
+  font-size: 10.5px;
+  color: var(--ok);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.hub-card-actions {
+  padding: 9px 12px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--surface) 80%, var(--surface-2));
+}
+
+/* Skeletons */
+.hub-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
+  gap: 18px;
+  margin-top: 14px;
+}
+.hub-skeleton-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+  height: 280px;
+  animation: pulse 1.5s infinite;
+}
+.hub-skeleton-thumb {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: var(--surface-2);
+}
+.hub-skeleton-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hub-skeleton-line {
+  height: 12px;
+  background: var(--surface-2);
+  border-radius: 4px;
+}
+
+/* Preview Modal Video/Iframe */
+.hub-preview-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+.hub-preview-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
 </style>
 </head>
 <body>
@@ -835,6 +1270,16 @@ img, video { transition: opacity .2s ease; }
         <h1>Recap Studio</h1>
         <p>video &rarr; post kit</p>
       </div>
+    </div>
+
+    <div class="side-nav-group">
+      <button class="side-nav-btn active" id="navProjectsBtn">
+        <span class="nav-ic">&#9635;</span> <span class="grow" style="text-align:left">Projects</span>
+      </button>
+      <button class="side-nav-btn" id="navResourceHubBtn">
+        <span class="nav-ic">&#128269;</span> <span class="grow" style="text-align:left">Resource Hub</span>
+        <span class="hub-side-pill" id="hubSavedCountBadge">0</span>
+      </button>
     </div>
 
     <div style="padding:0 12px 6px">
@@ -854,6 +1299,7 @@ img, video { transition: opacity .2s ease; }
   </aside>
 
   <main class="main">
+    <div id="recapWorkspaceArea" style="display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;flex:1">
     <div class="top">
       <div class="grow">
         <h2 id="projTitle">Recap Studio</h2>
@@ -1935,9 +2381,208 @@ img, video { transition: opacity .2s ease; }
         </div>
       </div>
     </div>
+    </div><!-- /recapWorkspaceArea -->
+
+    <!-- ================================================================= -->
+    <!-- RESOURCE HUB VIEW                                                -->
+    <!-- ================================================================= -->
+    <div id="resourceHubView" class="hub-container hide" style="display:none;flex-direction:column;min-width:0;min-height:0;height:100%;flex:1;overflow-y:auto;background:var(--bg)">
+
+      <!-- Top Header -->
+      <header class="hub-header">
+        <div class="hub-header-row">
+          <div class="grow">
+            <div class="hub-title-row">
+              <span class="hub-icon">&#128269;</span>
+              <h2 class="hub-title">Resource Hub</h2>
+            </div>
+            <div class="hub-subtitle">Discover, collect, and organize source videos for your recap projects.</div>
+          </div>
+          <div class="hub-header-actions">
+            <button class="sm ghost" id="hubImportUrlBtn"><span class="ic">&#128279;</span> Import URL</button>
+            <button class="sm ghost" id="hubBrowseLocalBtn"><span class="ic">&#128193;</span> Local Video</button>
+            <button class="sm ghost" id="hubOpenSettingsBtn"><span class="ic">&#9881;</span> API Settings</button>
+          </div>
+        </div>
+
+        <!-- Global Search Box -->
+        <div class="hub-search-box">
+          <span class="hub-search-icon">&#128269;</span>
+          <input type="text" id="hubSearchInput" placeholder="Search movies, anime, documentaries, videos..." spellcheck="false" autocomplete="off">
+          <button class="hub-search-clear hide" id="hubSearchClear" title="Clear search">✕</button>
+          <button class="primary sm" id="hubSearchBtn">Search</button>
+        </div>
+
+        <!-- Provider Tabs with Real Capabilities -->
+        <div class="hub-tabs" id="hubTabs">
+          <button class="hub-tab on" data-provider="all" id="tabAll">
+            <b>All Sources</b>
+          </button>
+          <button class="hub-tab" data-provider="youtube" id="tabYouTube">
+            <b>YouTube</b> <span class="hub-tab-status" id="statusYouTube">Checking...</span>
+          </button>
+          <button class="hub-tab" data-provider="bilibili" id="tabBilibili">
+            <b>Bilibili</b> <span class="hub-tab-status" id="statusBilibili">URL Import</span>
+          </button>
+          <button class="hub-tab" data-provider="local" id="tabLocal">
+            <b>Local Files</b> <span class="hub-tab-status" id="statusLocal">Available</span>
+          </button>
+          <button class="hub-tab" data-provider="library" id="tabLibrary">
+            <b>Saved Library</b> <span class="hub-tab-count" id="libraryCountPill">0</span>
+          </button>
+        </div>
+
+        <!-- Filters Bar (Provider-Adaptive) -->
+        <div class="hub-filters" id="hubFiltersBar">
+          <div class="hub-filter-group" id="hubSortGroup">
+            <label class="hub-filter-label">Sort:</label>
+            <select id="hubSortSel" class="sm">
+              <option value="relevance">Relevance</option>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="title">Title (A-Z)</option>
+            </select>
+          </div>
+
+          <div class="hub-filter-group" id="hubCategoryGroup">
+            <label class="hub-filter-label">Category:</label>
+            <select id="hubCategorySel" class="sm">
+              <option value="all">All Categories</option>
+              <option value="Movies">Movies</option>
+              <option value="Anime">Anime</option>
+              <option value="Documentary">Documentary</option>
+              <option value="Drama">Drama</option>
+              <option value="Science Fiction">Science Fiction</option>
+              <option value="Action">Action</option>
+              <option value="Horror">Horror</option>
+              <option value="Education">Education</option>
+              <option value="News">News</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="hub-filter-group" id="hubDurationGroup">
+            <label class="hub-filter-label">Duration:</label>
+            <select id="hubDurationSel" class="sm">
+              <option value="all">Any duration</option>
+              <option value="short">Short (&lt; 4m)</option>
+              <option value="medium">Medium (4 - 20m)</option>
+              <option value="long">Long (&gt; 20m)</option>
+            </select>
+          </div>
+
+          <div class="hub-filter-group" id="hubSavedFilterGroup">
+            <label class="hub-filter-label">Status:</label>
+            <select id="hubSavedFilterSel" class="sm">
+              <option value="all">All Items</option>
+              <option value="saved">Saved in Library</option>
+              <option value="unsaved">Not Saved</option>
+            </select>
+          </div>
+
+          <div class="hub-filter-group hide" id="hubTagGroup">
+            <label class="hub-filter-label">Tag:</label>
+            <input type="text" id="hubTagFilterInput" placeholder="Filter by tag..." class="sm" style="max-width:140px">
+          </div>
+
+          <div class="grow"></div>
+          <div class="tiny hub-result-count" id="hubResultStats"></div>
+        </div>
+      </header>
+
+      <!-- Provider Status Notices -->
+      <div class="hub-banner-area" id="hubBannerArea" style="padding:14px 24px 0">
+        <!-- Notice for Bilibili Tab -->
+        <div class="card hide" id="bilibiliNotice" style="margin-bottom:12px;background:var(--surface-2);border-color:var(--line)">
+          <div class="row" style="align-items:center;gap:14px">
+            <div style="font-size:24px">&#128250;</div>
+            <div class="grow">
+              <div style="font-weight:600;font-size:13.5px">Bilibili URL Bookmarking &amp; Embed Preview</div>
+              <div class="tiny" style="margin-top:2px;color:var(--muted)">
+                Official search requires enterprise API partner credentials. Paste a Bilibili link (BV... or b23.tv) to save external video references with metadata and player preview.
+              </div>
+            </div>
+            <button class="primary sm" id="bilibiliQuickImportBtn">+ Import Bilibili Link</button>
+          </div>
+        </div>
+
+        <!-- Notice for Local Files Tab -->
+        <div class="card hide" id="localFilesNotice" style="margin-bottom:12px;background:var(--surface-2);border-color:var(--line)">
+          <div class="row" style="align-items:center;gap:14px">
+            <div style="font-size:24px">&#128193;</div>
+            <div class="grow">
+              <div style="font-weight:600;font-size:13.5px">Authorized Local Media Files</div>
+              <div class="tiny" style="margin-top:2px;color:var(--muted)">
+                Local video files that you own or have permission to process are ready for immediate use in the Recap Pipeline (transcription, scripting, and cut generation).
+              </div>
+            </div>
+            <button class="primary sm" id="localQuickBrowseBtn">Choose Video File...</button>
+          </div>
+        </div>
+
+        <!-- YouTube Missing Key Warning -->
+        <div class="card hide" id="youtubeKeyWarning" style="margin-bottom:12px;border-color:var(--warn);background:var(--warn-soft)">
+          <div class="row" style="align-items:center;gap:12px">
+            <div style="font-size:20px">&#9888;&#65039;</div>
+            <div class="grow">
+              <div style="font-weight:600;color:var(--warn);font-size:13px">YouTube Data API Key Required</div>
+              <div class="tiny" style="color:var(--text);margin-top:2px">Configure a free YouTube Data API v3 key from Google Cloud Console to enable official search.</div>
+            </div>
+            <button class="sm primary" id="hubSetupKeyBtn">Configure Key</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Results / Content Grid Area -->
+      <div class="hub-content" style="padding:14px 24px 24px;flex:1">
+        <!-- Loading Skeletons -->
+        <div class="hub-skeleton-grid hide" id="hubSkeleton"></div>
+
+        <!-- Error Box -->
+        <div class="card hide" id="hubErrorBox" style="border-color:var(--err);background:var(--err-soft);margin-bottom:16px">
+          <div class="row" style="align-items:center;gap:12px">
+            <div style="font-size:20px">&#9888;&#65039;</div>
+            <div class="grow">
+              <div style="font-weight:600;color:var(--err)" id="hubErrorTitle">Search Error</div>
+              <div class="tiny" id="hubErrorMsg" style="color:var(--text);margin-top:2px"></div>
+            </div>
+            <button class="sm ghost" id="hubRetryBtn">Retry</button>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty hide" id="hubEmptyBox" style="padding:48px 16px">
+          <div class="big" style="font-size:36px">&#128269;</div>
+          <div style="font-weight:600;margin-top:8px" id="hubEmptyTitle">No resources found</div>
+          <div class="note" id="hubEmptyMsg" style="margin-top:4px;max-width:440px">Try a different search term, change your filter, or import a direct video URL.</div>
+          <button class="sm ghost" id="hubEmptyAction" style="margin-top:14px">+ Import Video Link</button>
+        </div>
+
+        <!-- Media Cards Grid -->
+        <div class="hub-grid" id="hubCardGrid"></div>
+
+        <!-- Load More / Pagination -->
+        <div class="hub-load-more hide" id="hubLoadMoreWrap" style="text-align:center;padding:24px 0 12px">
+          <button class="ghost sm" id="hubLoadMoreBtn">Load more results &#8595;</button>
+        </div>
+
+        <!-- Compliance Disclosure Footer -->
+        <footer class="hub-footer" style="margin-top:40px;padding-top:18px;border-top:1px solid var(--line);text-align:center">
+          <div class="tiny" style="color:var(--faint);line-height:1.6;max-width:760px;margin:0 auto">
+            YouTube Data API v3 is used strictly for public search and metadata discovery in compliance with the
+            <a href="https://developers.google.com/youtube/terms/developer-policies" target="_blank" style="color:var(--accent)">YouTube Developer Policies</a>,
+            <a href="https://www.youtube.com/t/terms" target="_blank" style="color:var(--accent)">YouTube Terms of Service</a>, and
+            <a href="https://policies.google.com/privacy" target="_blank" style="color:var(--accent)">Google Privacy Policy</a>.
+            Audio/video content is never downloaded or saved through YouTube API search results.
+          </div>
+        </footer>
+      </div>
+
+    </div><!-- /resourceHubView -->
   </main>
 </div>
 
+<input type="file" id="hubLocalFileInput" accept="video/*" class="hide">
 <input type="file" id="lineFile" accept="audio/*" class="hide">
 <input type="file" id="videoFile" accept="video/*" class="hide">
 <input type="file" id="referenceFile" accept="audio/*" class="hide">
@@ -2022,6 +2667,14 @@ img, video { transition: opacity .2s ease; }
     <label class="f">Gemini API key &mdash; free from aistudio.google.com/apikey</label>
     <input type="password" id="geminiKey" placeholder="paste key" autocomplete="off">
 
+    <label class="f" style="margin-top:14px">YouTube Data API v3 key &mdash; free from console.cloud.google.com</label>
+    <div class="row">
+      <input type="password" id="youtubeKey" placeholder="paste key" autocomplete="off" class="grow">
+      <button class="sm ghost" id="testYoutubeBtn" type="button">Test</button>
+      <button class="sm ghost" id="clearYoutubeBtn" type="button">Clear</button>
+    </div>
+    <div class="tiny" id="youtubeKeyStatus" style="margin-top:2px"></div>
+
     <div class="row" style="margin-top:14px">
       <div class="field">
         <label class="f">Model</label>
@@ -2105,6 +2758,208 @@ img, video { transition: opacity .2s ease; }
   </div>
 </div>
 
+<!-- =================================================================== -->
+<!-- RESOURCE HUB MODALS                                                 -->
+<!-- =================================================================== -->
+
+<!-- 1. Video Preview Modal -->
+<div class="veil hide" id="hubPreviewVeil">
+  <div class="modal" style="max-width:760px;width:95%">
+    <div class="row" style="align-items:center;margin-bottom:12px">
+      <h3 id="hubPreviewTitle" class="grow" style="margin:0;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Video Preview</h3>
+      <button class="ghost sm" id="hubPreviewClose">✕</button>
+    </div>
+    <div class="hub-preview-frame-wrap" id="hubPreviewFrameWrap" style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:var(--r-sm);overflow:hidden;margin-bottom:12px">
+      <!-- Iframe or Video dynamically inserted -->
+    </div>
+    <div class="row" style="align-items:flex-start;gap:12px;margin-bottom:14px">
+      <div class="grow">
+        <div id="hubPreviewCreator" style="font-weight:600;font-size:13px"></div>
+        <div id="hubPreviewMeta" class="tiny" style="color:var(--muted);margin-top:2px"></div>
+        <div id="hubPreviewTypeBadge" style="margin-top:6px"></div>
+      </div>
+      <div class="row" style="gap:8px">
+        <button class="sm ghost" id="hubPreviewCopyUrl">Copy URL</button>
+        <button class="sm ghost" id="hubPreviewOpenExt">Open Platform ↗</button>
+      </div>
+    </div>
+    <div id="hubPreviewNotesBox" class="card hide" style="background:var(--surface-2);padding:10px 12px;margin-bottom:12px">
+      <div class="tiny" style="font-weight:600">Personal Notes:</div>
+      <div class="tiny" id="hubPreviewNotesText" style="margin-top:2px"></div>
+    </div>
+    <div class="row" style="justify-content:flex-end;gap:10px">
+      <button class="ghost sm" id="hubPreviewSaveBtn">Save to Library</button>
+      <button class="primary sm" id="hubPreviewAttachBtn">Add to Project</button>
+    </div>
+  </div>
+</div>
+
+<!-- 2. Import URL Modal -->
+<div class="veil hide" id="hubImportVeil">
+  <div class="modal">
+    <h3>Import Video Reference</h3>
+    <p class="note" style="margin:0 0 14px">
+      Paste a YouTube, Bilibili, or direct video URL to save as a reference bookmark.
+    </p>
+    <label class="f">Video URL</label>
+    <input type="text" id="hubImportUrlInput" placeholder="https://www.youtube.com/watch?v=... or https://www.bilibili.com/video/BV..." spellcheck="false">
+    <div class="tiny" id="hubImportDetectedProvider" style="margin:4px 0 10px;color:var(--accent)"></div>
+
+    <label class="f">Custom Title (Optional)</label>
+    <input type="text" id="hubImportTitleInput" placeholder="Leave blank to use provider title">
+
+    <div class="row" style="margin-top:12px">
+      <div class="field grow">
+        <label class="f">Category</label>
+        <select id="hubImportCategorySel">
+          <option value="Movies">Movies</option>
+          <option value="Anime">Anime</option>
+          <option value="Documentary">Documentary</option>
+          <option value="Drama">Drama</option>
+          <option value="Science Fiction">Science Fiction</option>
+          <option value="Action">Action</option>
+          <option value="Horror">Horror</option>
+          <option value="Education">Education</option>
+          <option value="News">News</option>
+          <option value="Other" selected>Other</option>
+        </select>
+      </div>
+      <div class="field grow">
+        <label class="f">Tags (Comma-separated)</label>
+        <input type="text" id="hubImportTagsInput" placeholder="e.g. trailer, anime, scene">
+      </div>
+    </div>
+
+    <label class="f" style="margin-top:12px">Personal Notes</label>
+    <textarea id="hubImportNotesInput" rows="2" placeholder="Ideas, recap concepts, timestamps..." style="width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-xs);color:inherit;font:inherit;padding:8px;resize:vertical"></textarea>
+
+    <div id="hubImportErr" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:16px;justify-content:flex-end;gap:10px">
+      <button class="ghost" id="hubImportCancel">Cancel</button>
+      <button class="primary" id="hubImportSubmit">Save to Library</button>
+    </div>
+  </div>
+</div>
+
+<!-- 3. Add to Project Modal -->
+<div class="veil hide" id="hubAttachVeil">
+  <div class="modal">
+    <h3>Add Resource to Recap Project</h3>
+    <div class="card" style="background:var(--surface-2);padding:10px 12px;margin:10px 0 14px">
+      <div id="hubAttachResourceTitle" style="font-weight:600;font-size:13px"></div>
+      <div id="hubAttachResourceType" class="tiny" style="margin-top:4px"></div>
+    </div>
+
+    <div id="hubAttachNotice" style="margin-bottom:14px"></div>
+
+    <label class="f">Target Project</label>
+    <div class="seg" id="hubAttachModeSeg" style="margin-bottom:12px">
+      <button data-target="existing" class="on" id="hubAttachTabExisting">Existing Project</button>
+      <button data-target="new" id="hubAttachTabNew">Create New Project</button>
+    </div>
+
+    <!-- Existing Project picker -->
+    <div id="hubAttachExistingSection">
+      <label class="f">Select Project</label>
+      <select id="hubAttachProjectSel" style="width:100%"></select>
+    </div>
+
+    <!-- New Project inputs -->
+    <div id="hubAttachNewSection" class="hide">
+      <label class="f">New Project Title</label>
+      <input type="text" id="hubAttachNewTitle" placeholder="Project name">
+      <div class="row" style="margin-top:10px">
+        <div class="field grow">
+          <label class="f">Format</label>
+          <select id="hubAttachNewFormat">
+            <option value="reels">Short / Reel (9:16)</option>
+            <option value="long">Long form (original shape)</option>
+          </select>
+        </div>
+        <div class="field grow">
+          <label class="f">Language</label>
+          <select id="hubAttachNewLang">
+            <option value="en">English</option>
+            <option value="my">Burmese</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="hubAttachErr" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:16px;justify-content:flex-end;gap:10px">
+      <button class="ghost" id="hubAttachCancel">Cancel</button>
+      <button class="primary" id="hubAttachConfirm">Confirm &amp; Open Project</button>
+    </div>
+  </div>
+</div>
+
+<!-- 4. Edit Resource Notes & Tags Modal -->
+<div class="veil hide" id="hubEditVeil">
+  <div class="modal">
+    <h3>Edit Saved Resource</h3>
+    <div id="hubEditResourceTitle" style="font-weight:600;font-size:13px;margin:8px 0 12px"></div>
+
+    <label class="f">Category</label>
+    <select id="hubEditCategorySel">
+      <option value="Movies">Movies</option>
+      <option value="Anime">Anime</option>
+      <option value="Documentary">Documentary</option>
+      <option value="Drama">Drama</option>
+      <option value="Science Fiction">Science Fiction</option>
+      <option value="Action">Action</option>
+      <option value="Horror">Horror</option>
+      <option value="Education">Education</option>
+      <option value="News">News</option>
+      <option value="Other">Other</option>
+    </select>
+
+    <label class="f" style="margin-top:12px">Tags (Comma-separated)</label>
+    <input type="text" id="hubEditTagsInput" placeholder="action, scene, notes">
+
+    <label class="f" style="margin-top:12px">Personal Notes</label>
+    <textarea id="hubEditNotesInput" rows="3" placeholder="Notes, timestamps, recap concepts..." style="width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-xs);color:inherit;font:inherit;padding:8px;resize:vertical"></textarea>
+
+    <div id="hubEditErr" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:16px;justify-content:flex-end;gap:10px">
+      <button class="ghost" id="hubEditCancel">Cancel</button>
+      <button class="primary" id="hubEditSave">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- 5. Dedicated Resource Hub Settings Modal -->
+<div class="veil hide" id="hubSettingsVeil">
+  <div class="modal">
+    <h3>Resource Hub Settings</h3>
+    <p class="note" style="margin:0 0 14px">Configure official API credentials for media discovery.</p>
+
+    <label class="f">YouTube Data API v3 Key</label>
+    <div class="row">
+      <input type="password" id="hubSettingYoutubeKey" placeholder="Paste YouTube API Key" autocomplete="off" class="grow">
+      <button class="sm ghost" id="hubSettingTestYoutube" type="button">Test Key</button>
+      <button class="sm ghost" id="hubSettingClearYoutube" type="button">Clear</button>
+    </div>
+    <div class="tiny" id="hubSettingYoutubeStatus" style="margin-top:4px"></div>
+
+    <div class="card" style="background:var(--surface-2);padding:10px 12px;margin:14px 0 10px">
+      <div class="tiny" style="font-weight:600;margin-bottom:2px">How to get a free YouTube Data API key:</div>
+      <div class="tiny" style="color:var(--muted);line-height:1.5">
+        1. Open <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--accent)">Google Cloud Console</a>.<br>
+        2. Create a project and enable "YouTube Data API v3".<br>
+        3. Create an API Key under Credentials and paste it above.<br>
+        Google provides 10,000 free quota units per day.
+      </div>
+    </div>
+
+    <div id="hubSettingsMsg" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:16px;justify-content:flex-end;gap:10px">
+      <button class="ghost" id="hubSettingsCancel">Close</button>
+      <button class="primary" id="hubSettingsSave">Save Settings</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* `request`, not `api`: inside Toolbox the Electron preload has already put a
    non-configurable window.api on the page, and a top-level `const api` there
@@ -2152,7 +3007,7 @@ const current = () => state.projects.find(p => p.id === state.current);
 /* -------------------------------------------------------------- modals */
 const openModal = id => $(id).classList.remove('hide');
 const shutModal = id => $(id).classList.add('hide');
-$('newBtn').onclick = () => { showError($('createErr'), ''); openModal('newVeil'); $('url').focus(); };
+$('newBtn').onclick = () => { showRecapWorkspace(); showError($('createErr'), ''); openModal('newVeil'); $('url').focus(); };
 $('newCancel').onclick = () => shutModal('newVeil');
 $('settingsBtn').onclick = () => openModal('setVeil');
 $('setCancel').onclick = () => shutModal('setVeil');
@@ -2188,6 +3043,11 @@ $('saveSettings').onclick = async () => {
   if (key && !key.startsWith('*')) body.gemini_key = key;
   try {
     await post('/api/recap/settings', body);
+    const ytKey = $('youtubeKey') ? $('youtubeKey').value.trim() : '';
+    if (ytKey && !ytKey.startsWith('*')) {
+      await post('/api/resources/settings', { youtube_api_key: ytKey });
+      if (typeof loadHubSettings === 'function') await loadHubSettings();
+    }
     $('settingsMsg').textContent = 'Saved.';
     await loadEnv();
     setTimeout(() => shutModal('setVeil'), 400);
@@ -2568,6 +3428,7 @@ function renderList() {
   [...$('projects').children].forEach(el => el.onclick = () => {
     state.current = el.dataset.id;
     state.frame = null; thumbImage = null;
+    showRecapWorkspace();
     renderList(); renderProject();
   });
 }
@@ -2640,6 +3501,21 @@ function renderProject() {
   });
   const failed = Object.entries(p.steps || {}).find(([, s]) => s.status === 'error');
   showError($('stepErr'), failed ? `${STEP_LABELS[failed[0]] || failed[0]}: ${failed[1].error}` : '');
+
+  // If project was created from an external reference and needs a local video file
+  if (!failed && p.story && p.story.external_reference && !p.has_source && !p.source_file) {
+    const ext = p.story.external_reference;
+    $('stepErr').innerHTML = `
+      <div class="banner warn" style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div class="grow">
+          <b>External Reference:</b> ${escapeHtml(ext.title || 'Video')} (${escapeHtml(ext.provider || 'Web')})<br>
+          <span class="tiny">To comply with platform policies, external media is saved as a reference. Please import an authorized local video file that you own to run local AI transcription, cut generation, and voice cloning.</span>
+        </div>
+        <button class="sm primary" id="importAuthLocalBtn">Import Authorized Local Video</button>
+      </div>`;
+    const btn = $('importAuthLocalBtn');
+    if (btn) btn.onclick = () => { $('videoFile').value = ''; $('videoFile').click(); };
+  }
 
   /* cut */
   const v = $('recapVideo');
@@ -3414,6 +4290,19 @@ $('videoFile').onchange = () => {
   state.pickedFile = path;
   $('pickedFile').textContent = 'Using: ' + f.name;
   showError($('createErr'), '');
+
+  // If a project is open and waiting for an authorized local file:
+  const curP = current();
+  if (curP && (!curP.has_source || (curP.story && curP.story.external_reference))) {
+    curP.source_file = path;
+    const newTitle = curP.title && curP.title !== 'Narration' ? curP.title : f.name.replace(/\.[^/.]+$/, '');
+    patch(`/api/recap/projects/${curP.id}`, { source_file: path, title: newTitle })
+      .then(updated => {
+        upsert(updated);
+        post(`/api/recap/projects/${curP.id}/steps/source`, {}).catch(() => {});
+      })
+      .catch(e => showError($('stepErr'), e.message));
+  }
 };
 
 $('lineFile').onchange = async () => {
@@ -5900,6 +6789,944 @@ function listen() {
   es.onerror = () => { es.close(); setTimeout(listen, 3000); };
 }
 
+/* ==================================================================== */
+/* RESOURCE HUB CONTROLLER                                              */
+/* ==================================================================== */
+
+const hubState = {
+  activeTab: 'all',          // 'all', 'youtube', 'bilibili', 'local', 'library'
+  query: '',
+  sortBy: 'relevance',
+  category: 'all',
+  duration: 'all',
+  savedFilter: 'all',
+  tag: '',
+  items: [],
+  nextPageToken: null,
+  totalResults: null,
+  loading: false,
+  providers: [],
+  settings: { youtube_api_key_configured: false, youtube_api_key_masked: '' },
+  libraryMap: new Map(),     // canonical_url / local_file_path / id -> ResourceItem
+  libraryCount: 0,
+  activePreviewItem: null,
+  activeAttachItem: null,
+  activeEditItem: null,
+  debounceTimer: null,
+  abortController: null,
+  libraryOffset: 0
+};
+
+function showRecapWorkspace() {
+  const ws = $('recapWorkspaceArea');
+  const hub = $('resourceHubView');
+  if (ws) ws.style.display = 'flex';
+  if (hub) hub.style.display = 'none';
+  $('navProjectsBtn').classList.add('active');
+  $('navResourceHubBtn').classList.remove('active');
+}
+
+function showResourceHubView() {
+  const ws = $('recapWorkspaceArea');
+  const hub = $('resourceHubView');
+  if (ws) ws.style.display = 'none';
+  if (hub) hub.style.display = 'flex';
+  $('navProjectsBtn').classList.remove('active');
+  $('navResourceHubBtn').classList.add('active');
+  refreshHub();
+}
+
+async function refreshHub() {
+  await Promise.all([loadHubSettings(), loadHubProviders(), updateLibraryBadge()]);
+  switchHubTab(hubState.activeTab);
+}
+
+async function loadHubSettings() {
+  try {
+    const s = await request('/api/resources/settings');
+    hubState.settings = s;
+    const configured = s.youtube_api_key_configured;
+    if ($('statusYouTube')) {
+      $('statusYouTube').textContent = configured ? 'API Ready' : 'Key Needed';
+      $('statusYouTube').style.color = configured ? 'var(--ok)' : 'var(--warn)';
+    }
+    if ($('youtubeKeyWarning')) {
+      $('youtubeKeyWarning').classList.toggle('hide', configured || hubState.activeTab !== 'youtube');
+    }
+    if ($('youtubeKey') && s.youtube_api_key_masked) {
+      $('youtubeKey').value = s.youtube_api_key_masked;
+      $('youtubeKeyStatus').textContent = 'Configured (' + s.youtube_api_key_masked + ')';
+    }
+  } catch (e) {
+    console.error('Failed to load resource settings', e);
+  }
+}
+
+async function loadHubProviders() {
+  try {
+    const list = await request('/api/resources/providers');
+    hubState.providers = list || [];
+    const bili = list.find(p => p.provider_id === 'bilibili');
+    if (bili && $('statusBilibili')) {
+      $('statusBilibili').textContent = bili.search_configured ? 'API Ready' : 'URL Import';
+    }
+    const local = list.find(p => p.provider_id === 'local');
+    if (local && $('statusLocal')) {
+      $('statusLocal').textContent = local.search_configured ? 'Available' : 'Disabled';
+    }
+  } catch (e) {
+    console.error('Failed to load providers', e);
+  }
+}
+
+async function updateLibraryBadge() {
+  try {
+    const d = await request('/api/resources/library?limit=1000');
+    hubState.libraryMap.clear();
+    (d.items || []).forEach(item => {
+      hubState.libraryMap.set(item.canonical_url, item);
+      if (item.local_file_path) hubState.libraryMap.set(item.local_file_path, item);
+      if (item.id) hubState.libraryMap.set(item.id, item);
+    });
+    const total = d.total || 0;
+    hubState.libraryCount = total;
+    if ($('hubSavedCountBadge')) $('hubSavedCountBadge').textContent = String(total);
+    if ($('libraryCountPill')) $('libraryCountPill').textContent = String(total);
+  } catch (e) {
+    console.error('Failed to update library badge', e);
+  }
+}
+
+function switchHubTab(tabId) {
+  hubState.activeTab = tabId;
+  hubState.items = [];
+  hubState.nextPageToken = null;
+  hubState.libraryOffset = 0;
+
+  [...$('hubTabs').querySelectorAll('.hub-tab')].forEach(t => {
+    t.classList.toggle('on', t.dataset.provider === tabId);
+  });
+
+  const showDuration = tabId === 'youtube' || tabId === 'all';
+  $('hubDurationGroup').classList.toggle('hide', !showDuration);
+  const showSavedFilter = tabId !== 'library';
+  $('hubSavedFilterGroup').classList.toggle('hide', !showSavedFilter);
+  const showTagFilter = tabId === 'library';
+  $('hubTagGroup').classList.toggle('hide', !showTagFilter);
+
+  $('bilibiliNotice').classList.toggle('hide', tabId !== 'bilibili');
+  $('localFilesNotice').classList.toggle('hide', tabId !== 'local');
+  const ytWarn = tabId === 'youtube' && !hubState.settings.youtube_api_key_configured;
+  $('youtubeKeyWarning').classList.toggle('hide', !ytWarn);
+
+  if (tabId === 'library') {
+    loadLibraryItems(false);
+  } else if (tabId === 'local') {
+    loadLocalLibraryItems();
+  } else if (tabId === 'bilibili') {
+    loadBilibiliLibraryItems();
+  } else {
+    if (hubState.query.trim()) {
+      executeHubSearch(hubState.query, null, false);
+    } else {
+      loadLibraryItems(false);
+    }
+  }
+}
+
+function renderSkeletons() {
+  const skel = $('hubSkeleton');
+  skel.innerHTML = Array(6).fill(0).map(() => `
+    <div class="hub-skeleton-card">
+      <div class="hub-skeleton-thumb"></div>
+      <div class="hub-skeleton-body">
+        <div class="hub-skeleton-line" style="width:85%"></div>
+        <div class="hub-skeleton-line" style="width:60%"></div>
+        <div class="hub-skeleton-line" style="width:40%;margin-top:6px"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function showHubError(title, msg) {
+  $('hubErrorTitle').textContent = title;
+  $('hubErrorMsg').textContent = msg;
+  $('hubErrorBox').classList.remove('hide');
+}
+
+function filterItems(items) {
+  const cat = $('hubCategorySel').value;
+  const dur = $('hubDurationSel').value;
+  const saved = $('hubSavedFilterSel').value;
+
+  return items.filter(item => {
+    if (cat && cat !== 'all' && item.category !== cat) return false;
+    if (dur && dur !== 'all' && item.duration_seconds != null) {
+      if (dur === 'short' && item.duration_seconds >= 240) return false;
+      if (dur === 'medium' && (item.duration_seconds < 240 || item.duration_seconds > 1200)) return false;
+      if (dur === 'long' && item.duration_seconds <= 1200) return false;
+    }
+    if (saved && saved !== 'all') {
+      const isSaved = hubState.libraryMap.has(item.canonical_url) || (item.local_file_path && hubState.libraryMap.has(item.local_file_path));
+      if (saved === 'saved' && !isSaved) return false;
+      if (saved === 'unsaved' && isSaved) return false;
+    }
+    return true;
+  });
+}
+
+async function executeHubSearch(query, pageToken = null, append = false) {
+  const q = (query || '').trim();
+  if (!q) {
+    loadLibraryItems(false);
+    return;
+  }
+
+  if (hubState.abortController) hubState.abortController.abort();
+  hubState.abortController = new AbortController();
+
+  if (!append) {
+    $('hubCardGrid').innerHTML = '';
+    $('hubSkeleton').classList.remove('hide');
+    renderSkeletons();
+  }
+  $('hubErrorBox').classList.add('hide');
+  $('hubEmptyBox').classList.add('hide');
+  $('hubLoadMoreWrap').classList.add('hide');
+
+  const provider = hubState.activeTab === 'all' ? 'youtube' : hubState.activeTab;
+
+  try {
+    if (provider === 'youtube' && !hubState.settings.youtube_api_key_configured) {
+      $('hubSkeleton').classList.add('hide');
+      showHubError('YouTube API Key Required', 'Please configure your free YouTube Data API key in Settings to search YouTube.');
+      $('youtubeKeyWarning').classList.remove('hide');
+      return;
+    }
+
+    const sort = $('hubSortSel').value || 'relevance';
+    let url = `/api/resources/search?provider=${encodeURIComponent(provider)}&query=${encodeURIComponent(q)}&sort_by=${encodeURIComponent(sort)}&limit=16`;
+    if (pageToken) url += `&page_token=${encodeURIComponent(pageToken)}`;
+
+    const res = await fetch(url, { signal: hubState.abortController.signal });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || res.statusText);
+    }
+    const data = await res.json();
+    $('hubSkeleton').classList.add('hide');
+
+    let items = data.items || [];
+    hubState.nextPageToken = data.next_page_token || null;
+    hubState.totalResults = data.total_results;
+
+    items = filterItems(items);
+    hubState.items = append ? hubState.items.concat(items) : items;
+
+    renderHubCards(hubState.items);
+    $('hubResultStats').textContent = `${hubState.items.length} result(s)`;
+    $('hubLoadMoreWrap').classList.toggle('hide', !hubState.nextPageToken);
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    $('hubSkeleton').classList.add('hide');
+    showHubError('Search Error', err.message);
+  }
+}
+
+async function loadLibraryItems(append = false) {
+  if (!append) {
+    $('hubCardGrid').innerHTML = '';
+    $('hubSkeleton').classList.remove('hide');
+    renderSkeletons();
+    hubState.libraryOffset = 0;
+  }
+  $('hubErrorBox').classList.add('hide');
+  $('hubEmptyBox').classList.add('hide');
+  $('hubLoadMoreWrap').classList.add('hide');
+
+  try {
+    const q = hubState.query.trim();
+    const sort = $('hubSortSel').value || 'newest';
+    const cat = $('hubCategorySel').value;
+    const tag = $('hubTagFilterInput').value.trim();
+
+    let url = `/api/resources/library?sort_by=${encodeURIComponent(sort)}&limit=24&offset=${hubState.libraryOffset}`;
+    if (q) url += `&query=${encodeURIComponent(q)}`;
+    if (cat && cat !== 'all') url += `&category=${encodeURIComponent(cat)}`;
+    if (tag) url += `&tag=${encodeURIComponent(tag)}`;
+
+    const data = await request(url);
+    $('hubSkeleton').classList.add('hide');
+
+    let items = data.items || [];
+    items = filterItems(items);
+
+    hubState.items = append ? hubState.items.concat(items) : items;
+    renderHubCards(hubState.items);
+
+    $('hubResultStats').textContent = `${data.total || 0} saved resource(s)`;
+    const hasMore = (hubState.libraryOffset + items.length) < (data.total || 0);
+    $('hubLoadMoreWrap').classList.toggle('hide', !hasMore);
+  } catch (err) {
+    $('hubSkeleton').classList.add('hide');
+    showHubError('Failed to Load Library', err.message);
+  }
+}
+
+async function loadLocalLibraryItems() {
+  $('hubCardGrid').innerHTML = '';
+  $('hubSkeleton').classList.remove('hide');
+  renderSkeletons();
+  $('hubErrorBox').classList.add('hide');
+  $('hubEmptyBox').classList.add('hide');
+  $('hubLoadMoreWrap').classList.add('hide');
+
+  try {
+    const data = await request('/api/resources/library?provider=local&limit=50');
+    $('hubSkeleton').classList.add('hide');
+    let items = filterItems(data.items || []);
+    hubState.items = items;
+    renderHubCards(items);
+    $('hubResultStats').textContent = `${items.length} local video(s)`;
+  } catch (err) {
+    $('hubSkeleton').classList.add('hide');
+    showHubError('Failed to Load Local Videos', err.message);
+  }
+}
+
+async function loadBilibiliLibraryItems() {
+  $('hubCardGrid').innerHTML = '';
+  $('hubSkeleton').classList.remove('hide');
+  renderSkeletons();
+  $('hubErrorBox').classList.add('hide');
+  $('hubEmptyBox').classList.add('hide');
+  $('hubLoadMoreWrap').classList.add('hide');
+
+  try {
+    const data = await request('/api/resources/library?provider=bilibili&limit=50');
+    $('hubSkeleton').classList.add('hide');
+    let items = filterItems(data.items || []);
+    hubState.items = items;
+    renderHubCards(items);
+    $('hubResultStats').textContent = `${items.length} Bilibili reference(s)`;
+  } catch (err) {
+    $('hubSkeleton').classList.add('hide');
+    showHubError('Failed to Load Bilibili References', err.message);
+  }
+}
+
+function renderHubCards(items) {
+  const grid = $('hubCardGrid');
+  grid.innerHTML = '';
+
+  if (!items || items.length === 0) {
+    $('hubEmptyBox').classList.remove('hide');
+    $('hubEmptyTitle').textContent = hubState.activeTab === 'library'
+      ? 'No saved resources yet'
+      : 'No resources found';
+    $('hubEmptyMsg').textContent = hubState.activeTab === 'library'
+      ? 'Save videos from YouTube, Bilibili, direct URLs, or your PC to build your collection.'
+      : 'Try a different search query or use "Import URL" to add by direct link.';
+    return;
+  }
+
+  $('hubEmptyBox').classList.add('hide');
+
+  items.forEach(item => {
+    const isSaved = hubState.libraryMap.has(item.canonical_url) || (item.local_file_path && hubState.libraryMap.has(item.local_file_path));
+    const card = document.createElement('div');
+    card.className = 'hub-card';
+    card.dataset.id = item.id;
+
+    let pClass = 'hub-badge-yt', pName = 'YouTube';
+    if (item.provider === 'bilibili') { pClass = 'hub-badge-bili'; pName = 'Bilibili'; }
+    else if (item.provider === 'local') { pClass = 'hub-badge-local'; pName = 'Local'; }
+    else if (item.provider === 'direct') { pClass = 'hub-badge-direct'; pName = 'Direct'; }
+
+    const typeBadge = item.is_local
+      ? '<span class="hub-type-badge hub-type-local" title="Local file ready for recap pipeline">📁 Local Media</span>'
+      : '<span class="hub-type-badge hub-type-ref" title="External link reference">🔗 Reference</span>';
+
+    const durBadge = item.duration_seconds != null
+      ? `<span class="hub-duration-badge">${fmt(item.duration_seconds)}</span>`
+      : '';
+
+    const thumbHtml = item.thumbnail_url
+      ? `<img src="${escapeHtml(item.thumbnail_url)}" loading="lazy" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><div class="hub-thumb-placeholder" style="display:none">&#9654;</div>`
+      : `<div class="hub-thumb-placeholder">${item.provider === 'youtube' ? '&#9654;' : item.provider === 'bilibili' ? '&#128250;' : '&#128193;'}</div>`;
+
+    const tagsHtml = (item.tags || []).slice(0, 4).map(t => `<span class="hub-tag-pill">#${escapeHtml(t)}</span>`).join('');
+    const notesHtml = item.notes ? `<div class="hub-card-notes">${escapeHtml(item.notes)}</div>` : '';
+
+    const attachedCount = (item.attached_projects || []).length;
+    const attachedHtml = attachedCount > 0 ? `<div class="hub-card-attached">&#10003; Attached to ${attachedCount} project(s)</div>` : '';
+
+    card.innerHTML = `
+      <div class="hub-thumb-wrap" data-action="preview">
+        ${thumbHtml}
+        <span class="hub-provider-badge ${pClass}">${pName}</span>
+        ${typeBadge}
+        ${durBadge}
+      </div>
+      <div class="hub-card-body">
+        <div class="hub-card-title" title="${escapeHtml(item.title)}" data-action="preview">${escapeHtml(item.title)}</div>
+        <div class="hub-card-author">
+          <span>${escapeHtml(item.creator_name || (item.is_local ? 'Local User' : 'External Video'))}</span>
+        </div>
+        <div class="hub-card-meta">
+          <span>${item.published_at ? escapeHtml(item.published_at.slice(0, 10)) : (item.created_at ? new Date(item.created_at * 1000).toLocaleDateString() : '')}</span>
+          <span>&bull;</span>
+          <span class="hub-tag-pill">${escapeHtml(item.category || 'Other')}</span>
+        </div>
+        ${tagsHtml ? `<div class="hub-card-tags">${tagsHtml}</div>` : ''}
+        ${notesHtml}
+        ${attachedHtml}
+      </div>
+      <div class="hub-card-actions">
+        <button class="sm ghost" data-action="preview" title="Preview video">Preview</button>
+        <button class="sm ghost" data-action="openExt" title="Open platform / link">&#8599;</button>
+        <button class="sm ${isSaved ? 'primary' : 'ghost'}" data-action="save" title="${isSaved ? 'Saved in Library' : 'Save to Library'}">
+          ${isSaved ? '&#9733; Saved' : '&#9734; Save'}
+        </button>
+        <div class="grow"></div>
+        <button class="sm ${item.is_local ? 'primary' : ''}" data-action="attach" title="Add to Recap Project">Add to Project</button>
+        ${isSaved ? '<button class="sm ghost" data-action="edit" title="Edit notes & tags">&#9998;</button>' : ''}
+        ${isSaved && hubState.activeTab === 'library' ? '<button class="sm ghost danger" data-action="delete" title="Remove from Library">&#128465;</button>' : ''}
+      </div>
+    `;
+
+    card.addEventListener('click', e => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (action === 'preview') {
+        openHubPreview(item);
+      } else if (action === 'openExt') {
+        openResourceExternal(item);
+      } else if (action === 'save') {
+        toggleSaveResource(item, btn);
+      } else if (action === 'attach') {
+        openHubAttachModal(item);
+      } else if (action === 'edit') {
+        openHubEditModal(item);
+      } else if (action === 'delete') {
+        deleteResourceFromLibrary(item);
+      }
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+async function toggleSaveResource(item, btn) {
+  const isSaved = hubState.libraryMap.has(item.canonical_url) || (item.local_file_path && hubState.libraryMap.has(item.local_file_path));
+  btn.disabled = true;
+  try {
+    if (isSaved) {
+      const saved = hubState.libraryMap.get(item.canonical_url) || hubState.libraryMap.get(item.local_file_path);
+      if (saved && saved.id) {
+        await request(`/api/resources/library/${saved.id}`, { method: 'DELETE' });
+        hubState.libraryMap.delete(item.canonical_url);
+        if (item.local_file_path) hubState.libraryMap.delete(item.local_file_path);
+        btn.classList.remove('primary');
+        btn.classList.add('ghost');
+        btn.innerHTML = '&#9734; Save';
+      }
+    } else {
+      const saved = await post('/api/resources/library', item);
+      hubState.libraryMap.set(saved.canonical_url, saved);
+      if (saved.local_file_path) hubState.libraryMap.set(saved.local_file_path, saved);
+      btn.classList.remove('ghost');
+      btn.classList.add('primary');
+      btn.innerHTML = '&#9733; Saved';
+    }
+    await updateLibraryBadge();
+    if (hubState.activeTab === 'library') loadLibraryItems(false);
+  } catch (err) {
+    alert('Failed to update library: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteResourceFromLibrary(item) {
+  if (!confirm(`Remove '${item.title}' from your saved library?`)) return;
+  try {
+    await request(`/api/resources/library/${item.id}`, { method: 'DELETE' });
+    hubState.libraryMap.delete(item.canonical_url);
+    if (item.local_file_path) hubState.libraryMap.delete(item.local_file_path);
+    await updateLibraryBadge();
+    loadLibraryItems(false);
+  } catch (err) {
+    alert('Failed to delete resource: ' + err.message);
+  }
+}
+
+function openResourceExternal(item) {
+  if (item.is_local && item.local_file_path) {
+    post('/api/reveal', { file: item.local_file_path }).catch(() => {});
+  } else if (item.canonical_url) {
+    if (window.api && window.api.openExternal) {
+      window.api.openExternal(item.canonical_url);
+    } else {
+      window.open(item.canonical_url, '_blank', 'noopener,noreferrer');
+    }
+  }
+}
+
+function openHubPreview(item) {
+  hubState.activePreviewItem = item;
+  $('hubPreviewTitle').textContent = item.title;
+  $('hubPreviewCreator').textContent = item.creator_name || (item.is_local ? 'Local User' : 'External Video');
+  $('hubPreviewMeta').textContent = [
+    item.published_at ? item.published_at.slice(0, 10) : '',
+    item.duration_seconds != null ? fmt(item.duration_seconds) : '',
+    item.category || 'Other'
+  ].filter(Boolean).join(' · ');
+
+  $('hubPreviewTypeBadge').innerHTML = item.is_local
+    ? '<span class="pill ok">📁 Local Media (Authorized for Processing)</span>'
+    : '<span class="pill warn">🔗 External Reference Bookmark</span>';
+
+  if (item.notes) {
+    $('hubPreviewNotesBox').classList.remove('hide');
+    $('hubPreviewNotesText').textContent = item.notes;
+  } else {
+    $('hubPreviewNotesBox').classList.add('hide');
+  }
+
+  const wrap = $('hubPreviewFrameWrap');
+  wrap.innerHTML = '';
+
+  if (item.provider === 'youtube') {
+    const vid = item.external_id || (item.canonical_url.match(/v=([a-zA-Z0-9_-]{11})/) || [])[1];
+    if (vid) {
+      wrap.innerHTML = `<iframe class="hub-preview-frame" src="https://www.youtube.com/embed/${vid}?autoplay=1&enablejsapi=1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+    }
+  } else if (item.provider === 'bilibili') {
+    const bvid = item.external_id;
+    if (bvid) {
+      wrap.innerHTML = `<iframe class="hub-preview-frame" src="https://player.bilibili.com/player.html?bvid=${bvid}&page=1" allowfullscreen></iframe>`;
+    }
+  } else if (item.is_local && item.local_file_path) {
+    const fileUrl = 'file:///' + item.local_file_path.replace(/\\/g, '/');
+    wrap.innerHTML = `<video class="hub-preview-video" src="${fileUrl}" controls autoplay></video>`;
+  } else {
+    wrap.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted)">Preview not supported for direct URL. Use 'Open Platform' above.</div>`;
+  }
+
+  const isSaved = hubState.libraryMap.has(item.canonical_url);
+  $('hubPreviewSaveBtn').textContent = isSaved ? '★ Saved' : 'Save to Library';
+  $('hubPreviewSaveBtn').onclick = () => toggleSaveResource(item, $('hubPreviewSaveBtn'));
+  $('hubPreviewAttachBtn').onclick = () => { shutModal('hubPreviewVeil'); openHubAttachModal(item); };
+
+  openModal('hubPreviewVeil');
+}
+
+function openHubAttachModal(item) {
+  hubState.activeAttachItem = item;
+  $('hubAttachResourceTitle').textContent = item.title;
+  $('hubAttachResourceType').innerHTML = item.is_local
+    ? '<span style="color:var(--ok)">📁 Local Media Asset (Authorized for Processing)</span>'
+    : '<span style="color:var(--warn)">🔗 External Video Reference</span>';
+
+  $('hubAttachNotice').innerHTML = item.is_local
+    ? `<div class="banner ok"><b>Ready to Process:</b> This local file will be assigned as the source video for the project and will immediately enter the Recap Pipeline.</div>`
+    : `<div class="banner warn"><b>External Reference:</b> Complies with platform terms. External references are linked as bookmarks. You will need to import an authorized local file that you own before running local AI transcription.</div>`;
+
+  const sel = $('hubAttachProjectSel');
+  sel.innerHTML = state.projects.map(p => {
+    return `<option value="${p.id}">${escapeHtml(p.title || p.id)} (${p.mode})</option>`;
+  }).join('');
+  if (!state.projects.length) {
+    sel.innerHTML = '<option value="">(No projects yet - switch to "Create New Project")</option>';
+  }
+
+  $('hubAttachNewTitle').value = item.title || 'New Recap';
+  $('hubAttachTabExisting').click();
+  showError($('hubAttachErr'), '');
+  openModal('hubAttachVeil');
+}
+
+function openHubImportModal(defaultProvider = '') {
+  $('hubImportUrlInput').value = '';
+  $('hubImportTitleInput').value = '';
+  $('hubImportTagsInput').value = '';
+  $('hubImportNotesInput').value = '';
+  showError($('hubImportErr'), '');
+  $('hubImportDetectedProvider').textContent = '';
+  openModal('hubImportVeil');
+  $('hubImportUrlInput').focus();
+}
+
+function openHubLocalPicker() {
+  $('hubLocalFileInput').value = '';
+  $('hubLocalFileInput').click();
+}
+
+function openHubEditModal(item) {
+  hubState.activeEditItem = item;
+  $('hubEditResourceTitle').textContent = item.title;
+  $('hubEditCategorySel').value = item.category || 'Other';
+  $('hubEditTagsInput').value = (item.tags || []).join(', ');
+  $('hubEditNotesInput').value = item.notes || '';
+  showError($('hubEditErr'), '');
+  openModal('hubEditVeil');
+}
+
+async function openHubSettingsModal() {
+  await loadHubSettings();
+  $('hubSettingYoutubeKey').value = '';
+  $('hubSettingYoutubeStatus').textContent = hubState.settings.youtube_api_key_configured
+    ? `Configured (${hubState.settings.youtube_api_key_masked})`
+    : 'Not configured';
+  $('hubSettingsMsg').textContent = '';
+  openModal('hubSettingsVeil');
+}
+
+function loadMoreResults() {
+  if (hubState.activeTab === 'library') {
+    hubState.libraryOffset += 24;
+    loadLibraryItems(true);
+  } else if (hubState.nextPageToken) {
+    executeHubSearch(hubState.query, hubState.nextPageToken, true);
+  }
+}
+
+function initResourceHub() {
+  // Navigation buttons
+  $('navProjectsBtn').onclick = () => showRecapWorkspace();
+  $('navResourceHubBtn').onclick = () => showResourceHubView();
+
+  // Header actions
+  $('hubImportUrlBtn').onclick = () => openHubImportModal();
+  $('hubBrowseLocalBtn').onclick = () => openHubLocalPicker();
+  $('localQuickBrowseBtn').onclick = () => openHubLocalPicker();
+  $('bilibiliQuickImportBtn').onclick = () => openHubImportModal('bilibili');
+  $('hubOpenSettingsBtn').onclick = () => openHubSettingsModal();
+  $('hubSetupKeyBtn').onclick = () => openHubSettingsModal();
+  $('hubEmptyAction').onclick = () => openHubImportModal();
+
+  // Search input & debouncing
+  $('hubSearchInput').oninput = () => {
+    const val = $('hubSearchInput').value;
+    $('hubSearchClear').classList.toggle('hide', !val);
+    hubState.query = val;
+    clearTimeout(hubState.debounceTimer);
+    hubState.debounceTimer = setTimeout(() => {
+      if (hubState.activeTab === 'library') loadLibraryItems(false);
+      else if (val.trim()) executeHubSearch(val, null, false);
+      else loadLibraryItems(false);
+    }, 350);
+  };
+
+  $('hubSearchInput').onkeydown = e => {
+    if (e.key === 'Enter') {
+      clearTimeout(hubState.debounceTimer);
+      hubState.query = $('hubSearchInput').value;
+      if (hubState.activeTab === 'library') loadLibraryItems(false);
+      else executeHubSearch(hubState.query, null, false);
+    }
+  };
+
+  $('hubSearchClear').onclick = () => {
+    $('hubSearchInput').value = '';
+    $('hubSearchClear').classList.add('hide');
+    hubState.query = '';
+    if (hubState.activeTab === 'library') loadLibraryItems(false);
+    else loadLibraryItems(false);
+  };
+
+  $('hubSearchBtn').onclick = () => {
+    clearTimeout(hubState.debounceTimer);
+    hubState.query = $('hubSearchInput').value;
+    if (hubState.activeTab === 'library') loadLibraryItems(false);
+    else executeHubSearch(hubState.query, null, false);
+  };
+
+  // Provider tabs
+  $('tabAll').onclick = () => switchHubTab('all');
+  $('tabYouTube').onclick = () => switchHubTab('youtube');
+  $('tabBilibili').onclick = () => switchHubTab('bilibili');
+  $('tabLocal').onclick = () => switchHubTab('local');
+  $('tabLibrary').onclick = () => switchHubTab('library');
+
+  // Filters
+  $('hubSortSel').onchange = () => {
+    if (hubState.activeTab === 'library') loadLibraryItems(false);
+    else if (hubState.query.trim()) executeHubSearch(hubState.query, null, false);
+  };
+  $('hubCategorySel').onchange = () => {
+    if (hubState.activeTab === 'library') loadLibraryItems(false);
+    else renderHubCards(filterItems(hubState.items));
+  };
+  $('hubDurationSel').onchange = () => {
+    renderHubCards(filterItems(hubState.items));
+  };
+  $('hubSavedFilterSel').onchange = () => {
+    renderHubCards(filterItems(hubState.items));
+  };
+  $('hubTagFilterInput').oninput = () => {
+    if (hubState.activeTab === 'library') {
+      clearTimeout(hubState.debounceTimer);
+      hubState.debounceTimer = setTimeout(() => loadLibraryItems(false), 300);
+    }
+  };
+
+  // Retry & Load More
+  $('hubRetryBtn').onclick = () => {
+    if (hubState.activeTab === 'library') loadLibraryItems(false);
+    else executeHubSearch(hubState.query, null, false);
+  };
+  $('hubLoadMoreBtn').onclick = () => loadMoreResults();
+
+  // Local File Input change
+  $('hubLocalFileInput').onchange = async () => {
+    const file = $('hubLocalFileInput').files[0];
+    if (!file) return;
+
+    const path = (window.api && window.api.pathForFile ? window.api.pathForFile(file) : '') || file.path || '';
+    if (!path) {
+      alert('The file path could not be resolved. Please run inside the Toolbox desktop app or select a video on disk.');
+      return;
+    }
+
+    try {
+      const scan = await post('/api/resources/local/scan', { path });
+      const item = await post('/api/resources/local/import', {
+        path: scan.path,
+        category: 'Other',
+        notes: `Imported local video (${fmt(scan.duration_seconds)}, ${scan.width || '?'}x${scan.height || '?'})`
+      });
+      await updateLibraryBadge();
+      switchHubTab('local');
+      if (confirm(`Imported '${scan.filename}' successfully.\nDuration: ${fmt(scan.duration_seconds)}\n\nAdd this video to a Recap Project now?`)) {
+        openHubAttachModal(item);
+      }
+    } catch (err) {
+      alert('Local video import failed: ' + err.message);
+    }
+  };
+
+  // Preview modal controls
+  $('hubPreviewClose').onclick = () => {
+    $('hubPreviewFrameWrap').innerHTML = '';
+    shutModal('hubPreviewVeil');
+  };
+  $('hubPreviewCopyUrl').onclick = () => {
+    if (hubState.activePreviewItem && hubState.activePreviewItem.canonical_url) {
+      navigator.clipboard.writeText(hubState.activePreviewItem.canonical_url);
+      $('hubPreviewCopyUrl').textContent = 'Copied!';
+      setTimeout(() => { $('hubPreviewCopyUrl').textContent = 'Copy URL'; }, 1500);
+    }
+  };
+  $('hubPreviewOpenExt').onclick = () => {
+    if (hubState.activePreviewItem) openResourceExternal(hubState.activePreviewItem);
+  };
+
+  // Import modal controls
+  $('hubImportUrlInput').oninput = () => {
+    const v = $('hubImportUrlInput').value.trim();
+    const det = $('hubImportDetectedProvider');
+    if (!v) { det.textContent = ''; return; }
+    if (v.includes('youtube.com') || v.includes('youtu.be')) {
+      det.textContent = 'Detected: YouTube Video Reference';
+      det.style.color = '#e02424';
+    } else if (v.includes('bilibili.com') || v.includes('b23.tv') || /BV[a-zA-Z0-9]{10}/i.test(v)) {
+      det.textContent = 'Detected: Bilibili Video Reference';
+      det.style.color = '#f43f5e';
+    } else {
+      det.textContent = 'Detected: Direct Video URL';
+      det.style.color = 'var(--accent)';
+    }
+  };
+  $('hubImportCancel').onclick = () => shutModal('hubImportVeil');
+  $('hubImportSubmit').onclick = async () => {
+    const url = $('hubImportUrlInput').value.trim();
+    if (!url) return showError($('hubImportErr'), 'Please enter a video URL.');
+    const title = $('hubImportTitleInput').value.trim();
+    const category = $('hubImportCategorySel').value;
+    const tags = $('hubImportTagsInput').value.split(',').map(s => s.trim()).filter(Boolean);
+    const notes = $('hubImportNotesInput').value.trim();
+
+    $('hubImportSubmit').disabled = true;
+    showError($('hubImportErr'), '');
+    try {
+      await post('/api/resources/import-url', { url, title: title || undefined, category, tags, notes });
+      await updateLibraryBadge();
+      shutModal('hubImportVeil');
+      switchHubTab('library');
+    } catch (err) {
+      showError($('hubImportErr'), err.message);
+    } finally {
+      $('hubImportSubmit').disabled = false;
+    }
+  };
+
+  // Attach modal controls
+  $('hubAttachTabExisting').onclick = () => {
+    $('hubAttachTabExisting').classList.add('on');
+    $('hubAttachTabNew').classList.remove('on');
+    $('hubAttachExistingSection').classList.remove('hide');
+    $('hubAttachNewSection').classList.add('hide');
+  };
+  $('hubAttachTabNew').onclick = () => {
+    $('hubAttachTabNew').classList.add('on');
+    $('hubAttachTabExisting').classList.remove('on');
+    $('hubAttachExistingSection').classList.add('hide');
+    $('hubAttachNewSection').classList.remove('hide');
+  };
+  $('hubAttachCancel').onclick = () => shutModal('hubAttachVeil');
+  $('hubAttachConfirm').onclick = async () => {
+    const item = hubState.activeAttachItem;
+    if (!item) return;
+    const isNew = $('hubAttachTabNew').classList.contains('on');
+    showError($('hubAttachErr'), '');
+    $('hubAttachConfirm').disabled = true;
+
+    try {
+      let targetPid = null;
+      if (isNew) {
+        const title = $('hubAttachNewTitle').value.trim() || item.title || 'New Recap';
+        const mode = $('hubAttachNewFormat').value || 'reels';
+        const lang = $('hubAttachNewLang').value || 'en';
+        const res = await post('/api/resources/create-project', {
+          resource_id: item.id,
+          mode,
+          language: lang,
+          content_type: 'recap'
+        });
+        targetPid = res.id;
+      } else {
+        const pid = $('hubAttachProjectSel').value;
+        if (!pid) throw new Error('Please select an existing project or choose "Create New Project".');
+        await post(`/api/resources/library/${item.id}/attach/${pid}`, {});
+        targetPid = pid;
+      }
+
+      state.projects = await request('/api/recap/projects');
+      state.current = targetPid;
+      shutModal('hubAttachVeil');
+      showRecapWorkspace();
+      renderList();
+      renderProject();
+    } catch (err) {
+      showError($('hubAttachErr'), err.message);
+    } finally {
+      $('hubAttachConfirm').disabled = false;
+    }
+  };
+
+  // Edit modal controls
+  $('hubEditCancel').onclick = () => shutModal('hubEditVeil');
+  $('hubEditSave').onclick = async () => {
+    const item = hubState.activeEditItem;
+    if (!item) return;
+    const category = $('hubEditCategorySel').value;
+    const tags = $('hubEditTagsInput').value.split(',').map(s => s.trim()).filter(Boolean);
+    const notes = $('hubEditNotesInput').value.trim();
+
+    $('hubEditSave').disabled = true;
+    showError($('hubEditErr'), '');
+    try {
+      const updated = await patch(`/api/resources/library/${item.id}`, { category, tags, notes });
+      hubState.libraryMap.set(updated.canonical_url, updated);
+      if (updated.local_file_path) hubState.libraryMap.set(updated.local_file_path, updated);
+      shutModal('hubEditVeil');
+      if (hubState.activeTab === 'library') loadLibraryItems(false);
+      else renderHubCards(hubState.items);
+    } catch (err) {
+      showError($('hubEditErr'), err.message);
+    } finally {
+      $('hubEditSave').disabled = false;
+    }
+  };
+
+  // Resource Hub Settings modal controls
+  $('hubSettingsCancel').onclick = () => shutModal('hubSettingsVeil');
+  $('hubSettingTestYoutube').onclick = async () => {
+    const key = $('hubSettingYoutubeKey').value.trim();
+    $('hubSettingTestYoutube').disabled = true;
+    $('hubSettingsMsg').textContent = 'Testing connection...';
+    try {
+      if (key) {
+        await post('/api/resources/settings', { youtube_api_key: key });
+        await loadHubSettings();
+      }
+      const res = await post('/api/resources/settings/test-youtube', {});
+      $('hubSettingsMsg').textContent = '✓ ' + res.message;
+      $('hubSettingsMsg').style.color = 'var(--ok)';
+    } catch (err) {
+      $('hubSettingsMsg').textContent = '✗ ' + err.message;
+      $('hubSettingsMsg').style.color = 'var(--err)';
+    } finally {
+      $('hubSettingTestYoutube').disabled = false;
+    }
+  };
+  $('hubSettingClearYoutube').onclick = async () => {
+    try {
+      await post('/api/resources/settings', { youtube_api_key: '' });
+      await loadHubSettings();
+      $('hubSettingYoutubeKey').value = '';
+      $('hubSettingYoutubeStatus').textContent = 'Not configured';
+      $('hubSettingsMsg').textContent = 'API key cleared.';
+      $('hubSettingsMsg').style.color = 'var(--muted)';
+    } catch (err) {
+      $('hubSettingsMsg').textContent = err.message;
+    }
+  };
+  $('hubSettingsSave').onclick = async () => {
+    const key = $('hubSettingYoutubeKey').value.trim();
+    if (key) {
+      try {
+        await post('/api/resources/settings', { youtube_api_key: key });
+        await loadHubSettings();
+        $('hubSettingsMsg').textContent = 'Saved successfully.';
+        setTimeout(() => shutModal('hubSettingsVeil'), 400);
+      } catch (err) {
+        $('hubSettingsMsg').textContent = err.message;
+      }
+    } else {
+      shutModal('hubSettingsVeil');
+    }
+  };
+
+  // Main Settings modal (setVeil) YouTube key controls
+  if ($('testYoutubeBtn')) {
+    $('testYoutubeBtn').onclick = async () => {
+      const key = $('youtubeKey').value.trim();
+      $('testYoutubeBtn').disabled = true;
+      $('youtubeKeyStatus').textContent = 'Testing...';
+      try {
+        if (key && !key.startsWith('*')) {
+          await post('/api/resources/settings', { youtube_api_key: key });
+        }
+        const res = await post('/api/resources/settings/test-youtube', {});
+        $('youtubeKeyStatus').textContent = '✓ ' + res.message;
+        $('youtubeKeyStatus').style.color = 'var(--ok)';
+      } catch (e) {
+        $('youtubeKeyStatus').textContent = '✗ ' + e.message;
+        $('youtubeKeyStatus').style.color = 'var(--err)';
+      } finally {
+        $('testYoutubeBtn').disabled = false;
+      }
+    };
+  }
+
+  if ($('clearYoutubeBtn')) {
+    $('clearYoutubeBtn').onclick = async () => {
+      await post('/api/resources/settings', { youtube_api_key: '' });
+      $('youtubeKey').value = '';
+      $('youtubeKeyStatus').textContent = 'Cleared.';
+    };
+  }
+
+  // Load initial settings and library data
+  loadHubSettings();
+  loadHubProviders();
+  updateLibraryBadge();
+}
+
 (async function boot() {
   try {
     await loadEnv();
@@ -5933,6 +7760,11 @@ function listen() {
     renderList();
     renderProject();
     listen();
+    try {
+      if (typeof initResourceHub === 'function') initResourceHub();
+    } catch (e) {
+      console.error('Failed to initialize Resource Hub:', e);
+    }
   } catch (e) {
     // Boot loads the settings, the projects and the content types in one go,
     // so if any of it fails everything downstream is skipped and the page just

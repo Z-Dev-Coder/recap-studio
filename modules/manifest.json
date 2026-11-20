@@ -2,11 +2,22 @@
   "comment": "Add a tool by dropping a folder in modules/ and adding an entry here. type 'page' loads entry in the module frame; type 'service-web' starts a local service and loads its URL.",
   "modules": [
     {
+      "id": "recap-studio",
+      "name": "Recap Studio",
+      "tagline": "AI recap pipeline, voice cloning, and Resource Hub",
+      "icon": "\u25ce",
+      "accent": "#6d8bff",
+      "type": "service-web",
+      "service": "ytdl",
+      "path": "/recap",
+      "enabled": true
+    },
+    {
       "id": "screen-recorder",
       "name": "Screen Recorder",
       "tagline": "Record your screen, webcam or audio",
       "icon": "\u25cf",
-      "accent": "#ff4d5e",
+      "accent": "#8b7cff",
       "type": "page",
       "entry": "modules/screen-recorder/index.html",
       "enabled": true
@@ -16,7 +27,7 @@
       "name": "Video Downloader",
       "tagline": "YouTube, Facebook, TikTok, Instagram and 1000+ sites",
       "icon": "\u2913",
-      "accent": "#4c8dff",
+      "accent": "#a78bfa",
       "type": "service-web",
       "service": "ytdl",
       "enabled": true

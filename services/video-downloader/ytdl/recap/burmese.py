@@ -236,7 +236,10 @@ def write(
             i = int(item.get("index", -1))
         except (TypeError, ValueError):
             continue
+        import re
         text = (item.get("my") or "").strip()
+        # The LLM sometimes hallucinates the input block structure into the output
+        text = re.sub(r'^\s*\d+\s+\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2},\d{3}\s*', '', text).strip()
         beat = by_index.get(i)
         if beat is not None and text:
             beat.my = text

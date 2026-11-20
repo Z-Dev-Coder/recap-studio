@@ -1,6 +1,6 @@
 {
   "name": "toolbox",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Personal toolbox - dashboard for screen recording, downloading and more",
   "main": "main.js",
   "scripts": {

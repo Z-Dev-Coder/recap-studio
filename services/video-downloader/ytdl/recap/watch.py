@@ -160,7 +160,6 @@ def describe(client, shots: list[Shot], on_progress=None, cancel=None,
                 prompt, _SCHEMA, temperature=0.2,
                 images=[("image/jpeg", s.blob) for s in batch],
                 cancel=cancel,
-                max_tokens=len(batch) * 120,
             )
         except Exception as exc:      # noqa: BLE001
             # A batch that fails leaves a gap in the description rather than

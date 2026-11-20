@@ -1,4 +1,4 @@
-/* Toolbox shell: dashboard, sidebar and the module host frame. */
+/* Toolbox shell: modern Bento Grid dashboard, glassmorphism sidebar, and module host frame. */
 const $ = id => document.getElementById(id);
 const qsa = s => Array.from(document.querySelectorAll(s));
 
@@ -13,6 +13,7 @@ function fmtSize(b) {
   if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
   return (b / 1073741824).toFixed(2) + ' GB';
 }
+
 function ago(ms) {
   const s = (Date.now() - ms) / 1000;
   if (s < 60) return 'just now';
@@ -21,6 +22,7 @@ function ago(ms) {
   if (s < 604800) return Math.floor(s / 86400) + ' d ago';
   return new Date(ms).toLocaleDateString();
 }
+
 function greeting() {
   const h = new Date().getHours();
   return h < 5 ? 'Still up?' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
@@ -34,8 +36,11 @@ function renderNav() {
     const b = document.createElement('button');
     b.className = 'nav-item';
     b.dataset.view = m.id;
-    b.innerHTML = '<span class="ic" style="color:' + m.accent + '">' + m.icon + '</span> ' +
-                  '<span class="lbl"></span><span class="dotc" data-svc="' + (m.service || '') + '"></span>';
+    b.setAttribute('aria-label', m.name);
+    b.innerHTML =
+      '<span class="ic" aria-hidden="true">' + m.icon + '</span> ' +
+      '<span class="lbl"></span>' +
+      '<span class="dotc" data-svc="' + (m.service || '') + '" aria-hidden="true"></span>';
     b.querySelector('.lbl').textContent = m.name;
     b.onclick = () => openModule(m.id);
     host.appendChild(b);
@@ -46,37 +51,88 @@ function renderNav() {
 function renderCards() {
   const grid = $('toolGrid');
   grid.innerHTML = '';
+
   modules.forEach(m => {
     const c = document.createElement('button');
     c.className = 'tool-card';
-    c.style.setProperty('--tint', m.accent || '#4c8dff');
+    c.style.setProperty('--tint', m.accent || 'var(--accent-start)');
+    c.setAttribute('aria-label', 'Open ' + m.name + ' — ' + (m.tagline || ''));
+
+    // Apply asymmetric Bento grid span classes
+    const isFeatured = m.id === 'recap-studio' || m.id === 'recap';
+    const isWide = m.id === 'screen-recorder' || m.id === 'youtube-downloader' ||
+                   m.id === 'recorder' || m.id === 'downloader';
+
+    if (isFeatured) {
+      c.classList.add('featured');
+    } else if (isWide) {
+      c.classList.add('wide');
+    }
+
+    let headHtml = '<div class="tool-card-head">' +
+                     '<div class="tool-ic" aria-hidden="true">' + m.icon + '</div>';
+    if (isFeatured) {
+      headHtml += '<span class="bento-badge">AI Studio</span>';
+    }
+    headHtml += '</div>';
+
+    let previewHtml = '';
+    if (isFeatured) {
+      previewHtml =
+        '<div class="bento-preview" aria-hidden="true">' +
+          '<div class="bento-bar bento-audio" title="Audio Layer"></div>' +
+          '<div class="bento-bar bento-text" title="AI Transcript & Script"></div>' +
+          '<div class="bento-bar bento-video" title="Recap Video Output"></div>' +
+        '</div>';
+    }
+
     c.innerHTML =
-      '<div class="tool-ic">' + m.icon + '</div>' +
+      headHtml +
       '<div class="tool-name"></div>' +
       '<div class="tool-tag"></div>' +
-      '<div class="tool-go">Open &#8594;</div>';
+      previewHtml +
+      '<div class="tool-go">Open <span aria-hidden="true">&#8594;</span></div>';
+
     c.querySelector('.tool-name').textContent = m.name;
     c.querySelector('.tool-tag').textContent = m.tagline || '';
+
+    // Click & Keyboard support
     c.onclick = () => openModule(m.id);
+    c.onkeydown = e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openModule(m.id);
+      }
+    };
+
     grid.appendChild(c);
   });
 
+  // "Add a tool" placeholder card
   const soon = document.createElement('div');
   soon.className = 'tool-card soon';
-  soon.style.setProperty('--tint', '#5f6b80');
+  soon.style.setProperty('--tint', 'var(--text-tertiary)');
+  soon.setAttribute('aria-label', 'Add a tool placeholder');
   soon.innerHTML =
-    '<div class="tool-ic">+</div>' +
+    '<div class="tool-card-head">' +
+      '<div class="tool-ic" aria-hidden="true">+</div>' +
+    '</div>' +
     '<div class="tool-name">Add a tool</div>' +
-    '<div class="tool-tag">Drop a folder in <b>modules\\</b> and add it to modules\\manifest.json.</div>';
+    '<div class="tool-tag">Drop a folder in <b>modules\\</b> and register it in <code>modules\\manifest.json</code>.</div>';
   grid.appendChild(soon);
 }
 
 function markActive(view) {
-  qsa('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  qsa('.nav-item').forEach(b => {
+    const isActive = b.dataset.view === view;
+    b.classList.toggle('active', isActive);
+    b.setAttribute('aria-current', isActive ? 'page' : 'false');
+  });
 }
 
 /* ---------- views ---------- */
 function showDashboard() {
+  current = null;
   $('view-dashboard').classList.add('active');
   $('view-module').classList.remove('active');
   markActive('dashboard');
@@ -91,7 +147,11 @@ async function openModule(id) {
   $('view-dashboard').classList.remove('active');
   $('view-module').classList.add('active');
   markActive(id);
-  $('moduleTitle').textContent = m.name;
+
+  const titleEl = $('moduleTitle');
+  titleEl.textContent = m.name;
+  titleEl.focus(); // Focus management for accessibility
+
   $('moduleState').textContent = '';
   $('moduleError').classList.add('hidden');
 
@@ -112,13 +172,9 @@ async function openModule(id) {
       return;
     }
     frame.dataset.module = m.id;
-    /* A fresh query each time, so the frame can never re-show a document it
-       already has. The service sends no-store, but a frame that is simply
-       never re-fetched keeps whatever it loaded first -- which is how an
-       updated page can sit on disk, be served correctly, and still not be
-       what is on screen. */
-    frame.src = res.url + (res.url.includes('?') ? '&' : '?') + 'v=' + Date.now();
-    frame.onload = () => { hideLoader(); $('moduleState').textContent = res.url; };
+    const targetUrl = res.url + (m.path || '');
+    frame.src = targetUrl + (targetUrl.includes('?') ? '&' : '?') + 'v=' + Date.now();
+    frame.onload = () => { hideLoader(); $('moduleState').textContent = targetUrl; };
     return;
   }
 
@@ -133,17 +189,22 @@ function showLoader(text) {
   $('loaderText').textContent = text;
   $('moduleLoader').classList.remove('hidden');
 }
-function hideLoader() { $('moduleLoader').classList.add('hidden'); }
+
+function hideLoader() {
+  $('moduleLoader').classList.add('hidden');
+}
 
 function showError(m, message) {
   const box = $('moduleError');
   box.classList.remove('hidden');
   box.innerHTML =
-    '<div class="err-box">' +
-      '<h3>' + m.name + ' could not start</h3>' +
+    '<div class="err-box" role="alertdialog" aria-labelledby="errTitle">' +
+      '<h3 id="errTitle">' + m.name + ' could not start</h3>' +
       '<pre></pre>' +
-      '<button class="ghost" id="retryModule">Try again</button> ' +
-      '<button class="ghost" id="errHome">Back to dashboard</button>' +
+      '<div class="row" style="margin-top:14px;gap:10px">' +
+        '<button class="primary-btn" id="retryModule">Try again</button> ' +
+        '<button class="ghost" id="errHome">Back to dashboard</button>' +
+      '</div>' +
     '</div>';
   box.querySelector('pre').textContent = message;
   $('retryModule').onclick = () => { box.classList.add('hidden'); openModule(m.id); };
@@ -158,7 +219,30 @@ $('moduleReload').onclick = () => {
   setTimeout(() => { f.src = src; }, 60);
 };
 
+// Global escape key handler to return to dashboard
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && current) {
+    showDashboard();
+  }
+});
+
 /* ---------- recent files ---------- */
+function renderRecentSkeletons(hostId) {
+  const host = $(hostId);
+  host.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const row = document.createElement('div');
+    row.className = 'rec-skeleton';
+    row.innerHTML =
+      '<div class="sk-box" style="width:32px;height:32px;flex-shrink:0"></div>' +
+      '<div style="flex:1;display:flex;flex-direction:column;gap:6px">' +
+        '<div class="sk-box" style="width:60%;height:12px"></div>' +
+        '<div class="sk-box" style="width:35%;height:10px"></div>' +
+      '</div>';
+    host.appendChild(row);
+  }
+}
+
 function renderRecent(hostId, items, emptyText) {
   const host = $(hostId);
   host.innerHTML = '';
@@ -169,27 +253,57 @@ function renderRecent(hostId, items, emptyText) {
   items.forEach(it => {
     const row = document.createElement('div');
     row.className = 'rec-row';
+    row.setAttribute('tabindex', '0');
+    row.setAttribute('role', 'article');
+    row.setAttribute('aria-label', it.name + ', size ' + fmtSize(it.size));
+
     const icon = ['.png', '.jpg'].includes(it.ext) ? '&#9635;'
                : ['.m4a', '.mp3'].includes(it.ext) ? '&#9834;' : '&#9654;';
     row.innerHTML =
-      '<div class="rec-ic">' + icon + '</div>' +
+      '<div class="rec-ic" aria-hidden="true">' + icon + '</div>' +
       '<div class="rec-txt"><div class="rec-name"></div><div class="rec-sub"></div></div>' +
-      '<button class="rec-btn">Folder</button>';
+      '<button class="rec-btn" aria-label="Reveal in folder">Folder</button>';
     row.querySelector('.rec-name').textContent = it.name;
     row.querySelector('.rec-sub').textContent = fmtSize(it.size) + '  ·  ' + ago(it.mtime);
+
     row.onclick = () => window.api.openFile(it.path);
-    row.querySelector('.rec-btn').onclick = e => { e.stopPropagation(); window.api.revealFile(it.path); };
+    row.onkeydown = e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        window.api.openFile(it.path);
+      }
+    };
+
+    const btn = row.querySelector('.rec-btn');
+    btn.onclick = e => { e.stopPropagation(); window.api.revealFile(it.path); };
+    btn.onkeydown = e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.stopPropagation();
+        e.preventDefault();
+        window.api.revealFile(it.path);
+      }
+    };
+
     host.appendChild(row);
   });
 }
 
 async function loadRecent() {
-  const r = await window.api.recentFiles(7);
-  renderRecent('recentRecordings', r.recordings, 'Nothing recorded yet.');
-  renderRecent('recentDownloads', r.downloads, 'Nothing downloaded yet.');
+  renderRecentSkeletons('recentRecordings');
+  renderRecentSkeletons('recentDownloads');
+  try {
+    const r = await window.api.recentFiles(7);
+    renderRecent('recentRecordings', r.recordings || [], 'Nothing recorded yet.');
+    renderRecent('recentDownloads', r.downloads || [], 'Nothing downloaded yet.');
+  } catch (err) {
+    renderRecent('recentRecordings', [], 'Could not load recordings.');
+    renderRecent('recentDownloads', [], 'Could not load downloads.');
+  }
 }
 
-qsa('[data-folder]').forEach(b => { b.onclick = () => window.api.openFolder(b.dataset.folder); });
+qsa('[data-folder]').forEach(b => {
+  b.onclick = () => window.api.openFolder(b.dataset.folder);
+});
 
 /* ---------- service indicators ---------- */
 function renderServices() {
@@ -199,7 +313,8 @@ function renderServices() {
     const st = svcState[m.service] || 'stopped';
     const d = document.createElement('div');
     d.className = 'svc';
-    d.innerHTML = '<i class="' + st + '"></i><span></span>';
+    d.setAttribute('role', 'status');
+    d.innerHTML = '<i class="' + st + '" aria-hidden="true"></i><span></span>';
     d.querySelector('span').textContent = m.name + ' · ' + st;
     host.appendChild(d);
     const dot = document.querySelector('.dotc[data-svc="' + m.service + '"]');
