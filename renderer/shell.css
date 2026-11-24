@@ -455,6 +455,9 @@ body::before {
 
 .rec-btn {
   opacity: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-secondary);

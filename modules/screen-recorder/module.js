@@ -748,14 +748,14 @@ async function loadLibrary() {
     card.innerHTML =
       '<div class="lib-thumb">' +
         (isImg ? '<img src="' + url + '" />' :
-         isAudio ? '<span>&#9834;</span>' :
+         isAudio ? '<span class="svg-ic"><svg class="svg-ic ic-24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>' :
          '<video src="' + url + '" muted preload="metadata"></video>') +
       '</div>' +
-      '<div class="lib-meta"><div class="lib-name"></div><div class="lib-sub"></div></div>' +
+      '<div class="lib-meta"><div class="lib-name"></div><div class="lib-sub tabular-nums"></div></div>' +
       '<div class="lib-btns">' +
-        '<button class="ghost small" data-a="open">Play</button>' +
-        '<button class="ghost small" data-a="reveal">Folder</button>' +
-        '<button class="ghost small danger" data-a="del">Delete</button>' +
+        '<button class="ghost small" data-a="open" title="Play recording"><svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg> Play</button>' +
+        '<button class="ghost small" data-a="reveal" title="Show in folder"><svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg> Folder</button>' +
+        '<button class="ghost small danger" data-a="del" title="Delete recording"><svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg> Delete</button>' +
       '</div>';
     card.querySelector('.lib-name').textContent = it.name;
     card.querySelector('.lib-sub').textContent =

@@ -1134,9 +1134,37 @@ img, video { transition: opacity .2s ease; }
   display: block;
 }
 .hub-thumb-placeholder {
-  font-size: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.hub-thumb-placeholder svg {
+  width: 36px;
+  height: 36px;
   color: var(--text-tertiary);
-  opacity: .5;
+  opacity: .65;
+}
+.hub-notice-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  color: var(--accent-start);
+  flex-shrink: 0;
+}
+.hub-notice-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.hub-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .hub-duration-badge {
   position: absolute;
@@ -1313,7 +1341,9 @@ img, video { transition: opacity .2s ease; }
 
   <aside class="side">
     <div class="side-head">
-      <div class="logo">&#9678;</div>
+      <div class="logo">
+        <svg class="svg-ic ic-20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m15 4 4 4"/><path d="m20 9-8.5 8.5a2.12 2.12 0 1 1-3-3L17 6"/><path d="m3 21 3-3"/><path d="M19 15v4"/><path d="M17 17h4"/><path d="M9 3v4"/><path d="M7 5h4"/></svg>
+      </div>
       <div class="brand">
         <h1>Recap Studio</h1>
         <p>video &rarr; post kit</p>
@@ -1322,16 +1352,25 @@ img, video { transition: opacity .2s ease; }
 
     <div class="side-nav-group">
       <button class="side-nav-btn active" id="navProjectsBtn">
-        <span class="nav-ic">&#9635;</span> <span class="grow" style="text-align:left">Projects</span>
+        <span class="nav-ic">
+          <svg class="svg-ic ic-16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+        </span>
+        <span class="grow" style="text-align:left">Projects</span>
       </button>
       <button class="side-nav-btn" id="navResourceHubBtn">
-        <span class="nav-ic">&#128269;</span> <span class="grow" style="text-align:left">Resource Hub</span>
-        <span class="hub-side-pill" id="hubSavedCountBadge">0</span>
+        <span class="nav-ic">
+          <svg class="svg-ic ic-16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </span>
+        <span class="grow" style="text-align:left">Resource Hub</span>
+        <span class="hub-side-pill tabular-nums" id="hubSavedCountBadge">0</span>
       </button>
     </div>
 
     <div style="padding:0 12px 6px">
-      <button class="primary" id="newBtn" style="width:100%;justify-content:center">+ New recap</button>
+      <button class="primary" id="newBtn" style="width:100%;justify-content:center">
+        <svg class="svg-ic ic-14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New recap
+      </button>
     </div>
 
     <div class="side-body">
@@ -1364,10 +1403,15 @@ img, video { transition: opacity .2s ease; }
         <button data-m="long">Long</button>
       </div>
       <button class="sm" id="runAll">Run all</button>
-      <button class="sm danger hide" id="stopBtn">&#9632; Stop</button>
+      <button class="sm danger hide" id="stopBtn">
+        <svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="currentColor"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+        Stop
+      </button>
       <div class="menu-wrap">
         <button class="ghost sm" id="moreBtn" aria-haspopup="true"
-                aria-expanded="false" title="Everything else">&#8943;</button>
+                aria-expanded="false" title="More options" aria-label="More options">
+          <svg class="svg-ic ic-16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+        </button>
         <div class="menu hide" id="moreMenu">
           <button class="sm" id="makeVariant"
                   title="Cut this same video a second way, sharing the download and the transcript">Also make a reel</button>
@@ -2441,23 +2485,36 @@ img, video { transition: opacity .2s ease; }
         <div class="hub-header-row">
           <div class="grow">
             <div class="hub-title-row">
-              <span class="hub-icon">&#128269;</span>
+              <span class="hub-icon">
+                <svg class="svg-ic ic-20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              </span>
               <h2 class="hub-title">Resource Hub</h2>
             </div>
             <div class="hub-subtitle">Discover, collect, and organize source videos for your recap projects.</div>
           </div>
           <div class="hub-header-actions">
-            <button class="sm ghost" id="hubImportUrlBtn"><span class="ic">&#128279;</span> Import URL</button>
-            <button class="sm ghost" id="hubBrowseLocalBtn"><span class="ic">&#128193;</span> Local Video</button>
-            <button class="sm ghost" id="hubOpenSettingsBtn"><span class="ic">&#9881;</span> API Settings</button>
+            <button class="sm ghost" id="hubImportUrlBtn">
+              <svg class="svg-ic ic-14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              Import URL
+            </button>
+            <button class="sm ghost" id="hubBrowseLocalBtn">
+              <svg class="svg-ic ic-14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              Local Video
+            </button>
+            <button class="sm ghost" id="hubOpenSettingsBtn">
+              <svg class="svg-ic ic-14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              API Settings
+            </button>
           </div>
         </div>
 
         <!-- Global Search Box -->
         <div class="hub-search-box">
-          <span class="hub-search-icon">&#128269;</span>
+          <span class="hub-search-icon">
+            <svg class="svg-ic ic-16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          </span>
           <input type="text" id="hubSearchInput" placeholder="Search movies, anime, documentaries, videos..." spellcheck="false" autocomplete="off">
-          <button class="hub-search-clear hide" id="hubSearchClear" title="Clear search">✕</button>
+          <button class="hub-search-clear hide" id="hubSearchClear" title="Clear search" aria-label="Clear search">✕</button>
           <button class="primary sm" id="hubSearchBtn">Search</button>
         </div>
 
@@ -2543,7 +2600,9 @@ img, video { transition: opacity .2s ease; }
         <!-- Notice for Bilibili Tab -->
         <div class="card hide" id="bilibiliNotice" style="margin-bottom:12px;background:var(--surface-2);border-color:var(--line)">
           <div class="row" style="align-items:center;gap:14px">
-            <div style="font-size:24px">&#128250;</div>
+            <div class="hub-notice-icon">
+              <svg class="svg-ic ic-24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="20" height="15" x="2" y="7" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
+            </div>
             <div class="grow">
               <div style="font-weight:600;font-size:13.5px">Bilibili URL Bookmarking &amp; Embed Preview</div>
               <div class="tiny" style="margin-top:2px;color:var(--muted)">
@@ -2557,7 +2616,9 @@ img, video { transition: opacity .2s ease; }
         <!-- Notice for Local Files Tab -->
         <div class="card hide" id="localFilesNotice" style="margin-bottom:12px;background:var(--surface-2);border-color:var(--line)">
           <div class="row" style="align-items:center;gap:14px">
-            <div style="font-size:24px">&#128193;</div>
+            <div class="hub-notice-icon">
+              <svg class="svg-ic ic-24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+            </div>
             <div class="grow">
               <div style="font-weight:600;font-size:13.5px">Authorized Local Media Files</div>
               <div class="tiny" style="margin-top:2px;color:var(--muted)">
@@ -2571,7 +2632,9 @@ img, video { transition: opacity .2s ease; }
         <!-- YouTube Missing Key Warning -->
         <div class="card hide" id="youtubeKeyWarning" style="margin-bottom:12px;border-color:var(--warn);background:var(--warn-soft)">
           <div class="row" style="align-items:center;gap:12px">
-            <div style="font-size:20px">&#9888;&#65039;</div>
+            <div style="color:var(--warn)">
+              <svg class="svg-ic ic-20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+            </div>
             <div class="grow">
               <div style="font-weight:600;color:var(--warn);font-size:13px">YouTube Data API Key Required</div>
               <div class="tiny" style="color:var(--text);margin-top:2px">Configure a free YouTube Data API v3 key from Google Cloud Console to enable official search.</div>
@@ -2589,7 +2652,9 @@ img, video { transition: opacity .2s ease; }
         <!-- Error Box -->
         <div class="card hide" id="hubErrorBox" style="border-color:var(--err);background:var(--err-soft);margin-bottom:16px">
           <div class="row" style="align-items:center;gap:12px">
-            <div style="font-size:20px">&#9888;&#65039;</div>
+            <div style="color:var(--err)">
+              <svg class="svg-ic ic-20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+            </div>
             <div class="grow">
               <div style="font-weight:600;color:var(--err)" id="hubErrorTitle">Search Error</div>
               <div class="tiny" id="hubErrorMsg" style="color:var(--text);margin-top:2px"></div>
@@ -2599,11 +2664,13 @@ img, video { transition: opacity .2s ease; }
         </div>
 
         <!-- Empty State -->
-        <div class="empty hide" id="hubEmptyBox" style="padding:48px 16px">
-          <div class="big" style="font-size:36px">&#128269;</div>
-          <div style="font-weight:600;margin-top:8px" id="hubEmptyTitle">No resources found</div>
-          <div class="note" id="hubEmptyMsg" style="margin-top:4px;max-width:440px">Try a different search term, change your filter, or import a direct video URL.</div>
-          <button class="sm ghost" id="hubEmptyAction" style="margin-top:14px">+ Import Video Link</button>
+        <div class="empty-state hide" id="hubEmptyBox">
+          <div class="empty-state-ic">
+            <svg class="svg-ic ic-28" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          </div>
+          <div class="empty-state-title" id="hubEmptyTitle">No resources found</div>
+          <div class="empty-state-desc" id="hubEmptyMsg">Try a different search term, change your filter, or import a direct video URL.</div>
+          <button class="sm ghost" id="hubEmptyAction">+ Import Video Link</button>
         </div>
 
         <!-- Media Cards Grid -->
@@ -2611,7 +2678,11 @@ img, video { transition: opacity .2s ease; }
 
         <!-- Load More / Pagination -->
         <div class="hub-load-more hide" id="hubLoadMoreWrap" style="text-align:center;padding:24px 0 12px">
-          <button class="ghost sm" id="hubLoadMoreBtn">Load more results &#8595;</button>
+          <button class="ghost sm" id="hubLoadMoreBtn">
+            Load more results
+            <svg class="svg-ic ic-14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+        </div>
         </div>
 
         <!-- Compliance Disclosure Footer -->
@@ -7192,22 +7263,34 @@ function renderHubCards(items) {
     else if (item.provider === 'direct') { pClass = 'hub-badge-direct'; pName = 'Direct'; }
 
     const typeBadge = item.is_local
-      ? '<span class="hub-type-badge hub-type-local" title="Local file ready for recap pipeline">📁 Local Media</span>'
-      : '<span class="hub-type-badge hub-type-ref" title="External link reference">🔗 Reference</span>';
+      ? '<span class="hub-type-badge hub-type-local" title="Local file ready for recap pipeline"><svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg> Local Media</span>'
+      : '<span class="hub-type-badge hub-type-ref" title="External link reference"><svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Reference</span>';
 
     const durBadge = item.duration_seconds != null
-      ? `<span class="hub-duration-badge">${fmt(item.duration_seconds)}</span>`
+      ? `<span class="hub-duration-badge tabular-nums">${fmt(item.duration_seconds)}</span>`
       : '';
 
+    const thumbPlaceholderIcon = item.provider === 'youtube'
+      ? '<svg class="svg-ic ic-24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>'
+      : item.provider === 'bilibili'
+      ? '<svg class="svg-ic ic-24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="20" height="15" x="2" y="7" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>'
+      : '<svg class="svg-ic ic-24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>';
+
     const thumbHtml = item.thumbnail_url
-      ? `<img src="${escapeHtml(item.thumbnail_url)}" loading="lazy" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><div class="hub-thumb-placeholder" style="display:none">&#9654;</div>`
-      : `<div class="hub-thumb-placeholder">${item.provider === 'youtube' ? '&#9654;' : item.provider === 'bilibili' ? '&#128250;' : '&#128193;'}</div>`;
+      ? `<img src="${escapeHtml(item.thumbnail_url)}" loading="lazy" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="hub-thumb-placeholder" style="display:none">${thumbPlaceholderIcon}</div>`
+      : `<div class="hub-thumb-placeholder">${thumbPlaceholderIcon}</div>`;
 
     const tagsHtml = (item.tags || []).slice(0, 4).map(t => `<span class="hub-tag-pill">#${escapeHtml(t)}</span>`).join('');
     const notesHtml = item.notes ? `<div class="hub-card-notes">${escapeHtml(item.notes)}</div>` : '';
 
     const attachedCount = (item.attached_projects || []).length;
-    const attachedHtml = attachedCount > 0 ? `<div class="hub-card-attached">&#10003; Attached to ${attachedCount} project(s)</div>` : '';
+    const attachedHtml = attachedCount > 0
+      ? `<div class="hub-card-attached"><svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg> Attached to ${attachedCount} project(s)</div>`
+      : '';
+
+    const saveBtnHtml = isSaved
+      ? '<svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Saved'
+      : '<svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Save';
 
     card.innerHTML = `
       <div class="hub-thumb-wrap" data-action="preview">
@@ -7222,7 +7305,7 @@ function renderHubCards(items) {
           <span>${escapeHtml(item.creator_name || (item.is_local ? 'Local User' : 'External Video'))}</span>
         </div>
         <div class="hub-card-meta">
-          <span>${item.published_at ? escapeHtml(item.published_at.slice(0, 10)) : (item.created_at ? new Date(item.created_at * 1000).toLocaleDateString() : '')}</span>
+          <span class="tabular-nums">${item.published_at ? escapeHtml(item.published_at.slice(0, 10)) : (item.created_at ? new Date(item.created_at * 1000).toLocaleDateString() : '')}</span>
           <span>&bull;</span>
           <span class="hub-tag-pill">${escapeHtml(item.category || 'Other')}</span>
         </div>
@@ -7232,14 +7315,16 @@ function renderHubCards(items) {
       </div>
       <div class="hub-card-actions">
         <button class="sm ghost" data-action="preview" title="Preview video">Preview</button>
-        <button class="sm ghost" data-action="openExt" title="Open platform / link">&#8599;</button>
+        <button class="sm ghost" data-action="openExt" title="Open platform link" aria-label="Open external link">
+          <svg class="svg-ic ic-14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>
+        </button>
         <button class="sm ${isSaved ? 'primary' : 'ghost'}" data-action="save" title="${isSaved ? 'Saved in Library' : 'Save to Library'}">
-          ${isSaved ? '&#9733; Saved' : '&#9734; Save'}
+          ${saveBtnHtml}
         </button>
         <div class="grow"></div>
         <button class="sm ${item.is_local ? 'primary' : ''}" data-action="attach" title="Add to Recap Project">Add to Project</button>
-        ${isSaved ? '<button class="sm ghost" data-action="edit" title="Edit notes & tags">&#9998;</button>' : ''}
-        ${isSaved && hubState.activeTab === 'library' ? '<button class="sm ghost danger" data-action="delete" title="Remove from Library">&#128465;</button>' : ''}
+        ${isSaved ? '<button class="sm ghost" data-action="edit" title="Edit notes & tags" aria-label="Edit notes and tags"><svg class="svg-ic ic-14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>' : ''}
+        ${isSaved && hubState.activeTab === 'library' ? '<button class="sm ghost danger" data-action="delete" title="Remove from Library" aria-label="Remove from library"><svg class="svg-ic ic-14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>' : ''}
       </div>
     `;
 
@@ -7278,7 +7363,7 @@ async function toggleSaveResource(item, btn) {
         if (item.local_file_path) hubState.libraryMap.delete(item.local_file_path);
         btn.classList.remove('primary');
         btn.classList.add('ghost');
-        btn.innerHTML = '&#9734; Save';
+        btn.innerHTML = '<svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Save';
       }
     } else {
       const saved = await post('/api/resources/library', item);
@@ -7286,7 +7371,7 @@ async function toggleSaveResource(item, btn) {
       if (saved.local_file_path) hubState.libraryMap.set(saved.local_file_path, saved);
       btn.classList.remove('ghost');
       btn.classList.add('primary');
-      btn.innerHTML = '&#9733; Saved';
+      btn.innerHTML = '<svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Saved';
     }
     await updateLibraryBadge();
     if (hubState.activeTab === 'library') loadLibraryItems(false);
@@ -7333,8 +7418,8 @@ function openHubPreview(item) {
   ].filter(Boolean).join(' · ');
 
   $('hubPreviewTypeBadge').innerHTML = item.is_local
-    ? '<span class="pill ok">📁 Local Media (Authorized for Processing)</span>'
-    : '<span class="pill warn">🔗 External Reference Bookmark</span>';
+    ? '<span class="pill ok"><svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg> Local Media (Authorized for Processing)</span>'
+    : '<span class="pill warn"><svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> External Reference Bookmark</span>';
 
   if (item.notes) {
     $('hubPreviewNotesBox').classList.remove('hide');
@@ -7364,7 +7449,9 @@ function openHubPreview(item) {
   }
 
   const isSaved = hubState.libraryMap.has(item.canonical_url);
-  $('hubPreviewSaveBtn').textContent = isSaved ? '★ Saved' : 'Save to Library';
+  $('hubPreviewSaveBtn').innerHTML = isSaved
+    ? '<svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Saved'
+    : '<svg class="svg-ic ic-12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Save to Library';
   $('hubPreviewSaveBtn').onclick = () => toggleSaveResource(item, $('hubPreviewSaveBtn'));
   $('hubPreviewAttachBtn').onclick = () => { shutModal('hubPreviewVeil'); openHubAttachModal(item); };
 
@@ -7375,8 +7462,8 @@ function openHubAttachModal(item) {
   hubState.activeAttachItem = item;
   $('hubAttachResourceTitle').textContent = item.title;
   $('hubAttachResourceType').innerHTML = item.is_local
-    ? '<span style="color:var(--ok)">📁 Local Media Asset (Authorized for Processing)</span>'
-    : '<span style="color:var(--warn)">🔗 External Video Reference</span>';
+    ? '<span style="color:var(--ok)"><svg class="svg-ic ic-14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg> Local Media Asset (Authorized for Processing)</span>'
+    : '<span style="color:var(--warn)"><svg class="svg-ic ic-14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> External Video Reference</span>';
 
   $('hubAttachNotice').innerHTML = item.is_local
     ? `<div class="banner ok"><b>Ready to Process:</b> This local file will be assigned as the source video for the project and will immediately enter the Recap Pipeline.</div>`

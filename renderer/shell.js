@@ -28,6 +28,20 @@ function greeting() {
   return h < 5 ? 'Still up?' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
+/* ---------- SVG Icons (UI-UX Pro Max Vector Standards) ---------- */
+function getModuleSvg(id, size = 18) {
+  if (id === 'recap-studio' || id === 'recap') {
+    return `<svg class="svg-ic ic-${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m15 4 4 4"/><path d="m20 9-8.5 8.5a2.12 2.12 0 1 1-3-3L17 6"/><path d="m3 21 3-3"/><path d="M19 15v4"/><path d="M17 17h4"/><path d="M9 3v4"/><path d="M7 5h4"/></svg>`;
+  }
+  if (id === 'screen-recorder' || id === 'recorder') {
+    return `<svg class="svg-ic ic-${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/><circle cx="9" cy="12" r="2" fill="currentColor"/></svg>`;
+  }
+  if (id === 'youtube-downloader' || id === 'downloader') {
+    return `<svg class="svg-ic ic-${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>`;
+  }
+  return `<svg class="svg-ic ic-${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`;
+}
+
 /* ---------- sidebar + cards ---------- */
 function renderNav() {
   const host = $('navModules');
@@ -38,7 +52,7 @@ function renderNav() {
     b.dataset.view = m.id;
     b.setAttribute('aria-label', m.name);
     b.innerHTML =
-      '<span class="ic" aria-hidden="true">' + m.icon + '</span> ' +
+      '<span class="ic" aria-hidden="true">' + getModuleSvg(m.id, 18) + '</span> ' +
       '<span class="lbl"></span>' +
       '<span class="dotc" data-svc="' + (m.service || '') + '" aria-hidden="true"></span>';
     b.querySelector('.lbl').textContent = m.name;
@@ -70,7 +84,7 @@ function renderCards() {
     }
 
     let headHtml = '<div class="tool-card-head">' +
-                     '<div class="tool-ic" aria-hidden="true">' + m.icon + '</div>';
+                     '<div class="tool-ic" aria-hidden="true">' + getModuleSvg(m.id, 24) + '</div>';
     if (isFeatured) {
       headHtml += '<span class="bento-badge">AI Studio</span>';
     }
@@ -91,7 +105,7 @@ function renderCards() {
       '<div class="tool-name"></div>' +
       '<div class="tool-tag"></div>' +
       previewHtml +
-      '<div class="tool-go">Open <span aria-hidden="true">&#8594;</span></div>';
+      '<div class="tool-go">Open <svg class="svg-ic ic-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>';
 
     c.querySelector('.tool-name').textContent = m.name;
     c.querySelector('.tool-tag').textContent = m.tagline || '';
@@ -115,7 +129,7 @@ function renderCards() {
   soon.setAttribute('aria-label', 'Add a tool placeholder');
   soon.innerHTML =
     '<div class="tool-card-head">' +
-      '<div class="tool-ic" aria-hidden="true">+</div>' +
+      '<div class="tool-ic" aria-hidden="true"><svg class="svg-ic ic-20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>' +
     '</div>' +
     '<div class="tool-name">Add a tool</div>' +
     '<div class="tool-tag">Drop a folder in <b>modules\\</b> and register it in <code>modules\\manifest.json</code>.</div>';
@@ -243,11 +257,19 @@ function renderRecentSkeletons(hostId) {
   }
 }
 
-function renderRecent(hostId, items, emptyText) {
+function renderRecent(hostId, items, emptyTitle, emptyDesc, iconType) {
   const host = $(hostId);
   host.innerHTML = '';
   if (!items.length) {
-    host.innerHTML = '<div class="empty">' + emptyText + '</div>';
+    const emptySvg = iconType === 'recordings'
+      ? '<svg class="svg-ic ic-24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg>'
+      : '<svg class="svg-ic ic-24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>';
+    host.innerHTML =
+      '<div class="empty-state" style="padding:28px 16px;border:none;background:transparent">' +
+        '<div class="empty-state-ic" style="width:44px;height:44px;margin-bottom:10px;">' + emptySvg + '</div>' +
+        '<div class="empty-state-title" style="font-size:13.5px;margin-bottom:4px;">' + emptyTitle + '</div>' +
+        '<div class="empty-state-desc" style="font-size:12px;margin-bottom:0;">' + emptyDesc + '</div>' +
+      '</div>';
     return;
   }
   items.forEach(it => {
@@ -257,12 +279,19 @@ function renderRecent(hostId, items, emptyText) {
     row.setAttribute('role', 'article');
     row.setAttribute('aria-label', it.name + ', size ' + fmtSize(it.size));
 
-    const icon = ['.png', '.jpg'].includes(it.ext) ? '&#9635;'
-               : ['.m4a', '.mp3'].includes(it.ext) ? '&#9834;' : '&#9654;';
+    const icon = ['.png', '.jpg'].includes(it.ext)
+      ? '<svg class="svg-ic ic-16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>'
+      : ['.m4a', '.mp3'].includes(it.ext)
+      ? '<svg class="svg-ic ic-16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
+      : '<svg class="svg-ic ic-16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>';
+
     row.innerHTML =
       '<div class="rec-ic" aria-hidden="true">' + icon + '</div>' +
-      '<div class="rec-txt"><div class="rec-name"></div><div class="rec-sub"></div></div>' +
-      '<button class="rec-btn" aria-label="Reveal in folder">Folder</button>';
+      '<div class="rec-txt"><div class="rec-name"></div><div class="rec-sub tabular-nums"></div></div>' +
+      '<button class="rec-btn" aria-label="Reveal in folder" title="Show in folder">' +
+        '<svg class="svg-ic ic-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>' +
+        '<span>Folder</span>' +
+      '</button>';
     row.querySelector('.rec-name').textContent = it.name;
     row.querySelector('.rec-sub').textContent = fmtSize(it.size) + '  ·  ' + ago(it.mtime);
 
@@ -293,11 +322,11 @@ async function loadRecent() {
   renderRecentSkeletons('recentDownloads');
   try {
     const r = await window.api.recentFiles(7);
-    renderRecent('recentRecordings', r.recordings || [], 'Nothing recorded yet.');
-    renderRecent('recentDownloads', r.downloads || [], 'Nothing downloaded yet.');
+    renderRecent('recentRecordings', r.recordings || [], 'No recordings yet', 'Capture your screen, webcam or audio to start.', 'recordings');
+    renderRecent('recentDownloads', r.downloads || [], 'No downloads yet', 'Paste video URLs to save high quality media.', 'downloads');
   } catch (err) {
-    renderRecent('recentRecordings', [], 'Could not load recordings.');
-    renderRecent('recentDownloads', [], 'Could not load downloads.');
+    renderRecent('recentRecordings', [], 'Could not load recordings', 'Check folder permissions or settings.', 'recordings');
+    renderRecent('recentDownloads', [], 'Could not load downloads', 'Check folder permissions or settings.', 'downloads');
   }
 }
 

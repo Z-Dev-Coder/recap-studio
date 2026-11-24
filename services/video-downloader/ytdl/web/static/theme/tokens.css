@@ -114,18 +114,65 @@
   --sidebar-width-collapsed: 64px;
 
   /* ===================================================================
-     LEGACY TOKEN BACKWARD-COMPATIBILITY ALIASES
+     LEGACY & W3C DTCG TOKEN COMPATIBILITY (UI-UX PRO MAX 3-LAYER TOKENS)
      =================================================================== */
-  --surface:       var(--surface-1);
+  /* Primitive Palette */
+  --palette-slate-950: #0a0d14;
+  --palette-slate-900: #0f172a;
+  --palette-slate-800: #1e293b;
+  --palette-slate-700: #334155;
+  --palette-indigo-500: #6366f1;
+  --palette-indigo-600: #4f46e5;
+  --palette-violet-500: #8b5cf6;
+  --palette-blue-500: #3b82f6;
+  --palette-emerald-500: #10b981;
+  --palette-amber-500: #f59e0b;
+  --palette-rose-500: #f43f5e;
+
+  /* Semantic UI Tokens */
+  --color-primary:          var(--accent-start);
+  --color-primary-hover:    var(--accent-mid);
+  --color-on-primary:       #ffffff;
+  --color-secondary:        var(--accent-mid);
+  --color-on-secondary:     #ffffff;
+  --color-accent:           var(--accent-start);
+  --color-on-accent:        #ffffff;
+  --color-background:       var(--bg);
+  --color-foreground:       var(--text-primary);
+  --color-card:             var(--surface-2);
+  --color-card-foreground:  var(--text-primary);
+  --color-muted:            var(--surface-1);
+  --color-muted-foreground: var(--text-secondary);
+  --color-border:           var(--border);
+  --color-border-strong:    var(--border-strong);
+  --color-destructive:      var(--danger);
+  --color-on-destructive:   #ffffff;
+  --color-ring:             var(--accent-start);
+  --font-heading:           var(--font-sans);
+  --font-body:              var(--font-sans);
+
+  /* Component Dimensions & Specs */
+  --btn-height-sm: 28px;
+  --btn-height-md: 36px;
+  --btn-height-lg: 44px;
+  --input-height: 40px;
+  --icon-sm: 14px;
+  --icon-md: 18px;
+  --icon-lg: 22px;
+  --focus-ring: 2px solid var(--color-ring);
+  --focus-ring-offset: 2px;
+
+  /* Legacy aliases */
+  --surface:        var(--surface-1);
   --surface-subtle: var(--surface-2);
-  --card:          var(--surface-2);
-  --card-2:        var(--surface-3);
-  --bg-2:          var(--surface-1);
-  --line:          var(--border);
-  --text:          var(--text-primary);
-  --muted:         var(--text-secondary);
-  --faint:         var(--text-tertiary);
-  --blue:          var(--info);
+  --card:           var(--surface-2);
+  --card-2:         var(--surface-3);
+  --bg-2:           var(--surface-1);
+  --line:           var(--border);
+  --text:           var(--text-primary);
+  --muted:          var(--text-secondary);
+  --faint:          var(--text-tertiary);
+  --blue:           var(--info);
 
   color-scheme: dark;
 }
